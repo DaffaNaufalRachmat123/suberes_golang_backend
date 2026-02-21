@@ -63,13 +63,13 @@ func (c *LayananServiceController) GetPopular(ctx *gin.Context) {
 func (c *LayananServiceController) Create(ctx *gin.Context) {
 	if err := c.LayananServiceService.Create(ctx); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status": "failure",
-			"error":  err.Error(),
+			"server_message": err.Error(),
+			"status":         "failure",
 		})
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "banner created",
+		"server_message": "Layanan created",
 		"status":         "success",
 	})
 }

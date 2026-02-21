@@ -1,8 +1,7 @@
 package models
 
 type Transaction struct {
-	BaseModel
-
+	ID           string `gorm:"primaryKey;size:36;column:id" json:"id"`
 	MitraID      string `gorm:"column:mitra_id" json:"mitra_id"`
 	CustomerID   string `gorm:"column:customer_id" json:"customer_id"`
 	OrderID      string `gorm:"column:order_id" json:"order_id"`
@@ -36,10 +35,13 @@ type Transaction struct {
 	MobileEwalletURL string `gorm:"column:mobile_ewallet_url" json:"mobile_ewallet_url"`
 	TimezoneCode     string `gorm:"column:timezone_code" json:"timezone_code"`
 
-	TransactionType   string `gorm:"column:transaction_type" json:"transaction_type"`
-	TransactionFor    string `gorm:"column:transaction_for" json:"transaction_for"`
-	TransactionStatus string `gorm:"column:transaction_status" json:"transaction_status"`
-	FailureCode       string `gorm:"column:failure_code" json:"failure_code"`
+	TransactionType    string `gorm:"column:transaction_type" json:"transaction_type"`
+	TransactionTypeFor string `gorm:"column:transaction_type_for" json:"transaction_type_for`
+	TransactionFor     string `gorm:"column:transaction_for" json:"transaction_for"`
+	TransactionStatus  string `gorm:"column:transaction_status" json:"transaction_status"`
+	FailureCode        string `gorm:"column:failure_code" json:"failure_code"`
 
 	TransactionDescription string `gorm:"column:transaction_description" json:"transaction_description"`
+	CreatedAt              string `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt              string `gorm:"column:updated_at" json:"updated_at"`
 }

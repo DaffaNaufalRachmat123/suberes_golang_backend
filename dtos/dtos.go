@@ -19,3 +19,20 @@ type LayananServiceRequest struct {
 	LayananDescription string `json:"layanan_description" binding:"required"`
 	IsActive           string `json:"is_active" binding:"required,oneof=0 1"`
 }
+type ServiceRequest struct {
+	ParentID           int64  `json:"parent_id" binding:"required"`
+	ServiceName        string `json:"service_name" binding:"required"`
+	ServiceDescription string `json:"service_description" binding:"required"`
+	ServiceType        string `json:"service_type" binding:"required"`
+	ServiceCategory    string `json:"service_category" binding:"required"`
+}
+type ServiceUpdateRequest struct {
+	ID                 int    `json:"id" binding:"required"`
+	ServiceName        string `json:"service_name" binding:"required"`
+	ServiceDescription string `json:"service_description" binding:"required"`
+	ServiceCategory    string `json:"service_category" binding:"required,oneof=Cleaning Disinfectant Fogging Borongan Lainnya"`
+	ServiceType        string `json:"service_type" binding:"required,oneof=Durasi 'Luas Ruangan' Single"`
+}
+type ServiceDeleteRequest struct {
+	Password string `json:"password" binding:"required"`
+}

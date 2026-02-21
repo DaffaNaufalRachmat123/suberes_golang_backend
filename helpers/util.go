@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/big"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -137,23 +138,39 @@ func ConvertMonthToString(m int) string {
 }
 
 func FormatRupiah(value int64) string {
+	isNegative := value < 0
+	if isNegative {
+		value = -value
+	}
+
 	s := fmt.Sprintf("%d", value)
 	n := len(s)
+
 	if n <= 3 {
+		if isNegative {
+			return "-Rp " + s
+		}
 		return "Rp " + s
 	}
 
-	var res []string
+	var result []string
 	for n > 3 {
-		res = append([]string{s[n-3:]}, res...)
+		result = append([]string{s[n-3:]}, result...)
 		s = s[:n-3]
 		n = len(s)
 	}
+
 	if n > 0 {
-		res = append([]string{s}, res...)
+		result = append([]string{s}, result...)
 	}
 
-	return "Rp " + strings.Join(res, ".")
+	formatted := "Rp " + strings.Join(result, ".")
+
+	if isNegative {
+		return "-" + formatted
+	}
+
+	return formatted
 }
 
 func GenerateRandomAlphaNum(n int) string {
@@ -332,11 +349,66 @@ func DeleteImageIfExists(imagePath string) error {
 
 	return os.Remove(fullPath)
 }
+func JSONError(ctx *gin.Context, code int, err error) {
+	statusCode := mapErrorCode(code)
+
+	ctx.JSON(statusCode, gin.H{
+		"server_message": err.Error(),
+		"status":         "failed",
+	})
+}
+
+// Map service code ke HTTP status
+func mapErrorCode(code int) int {
+	switch code {
+	case 400:
+		return http.StatusBadRequest
+	case 401:
+		return http.StatusUnauthorized
+	case 403:
+		return http.StatusForbidden
+	case 404:
+		return http.StatusNotFound
+	case 409:
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
+}
+func CopyFields(data map[string]interface{}, target map[string]interface{}) {
+	fields := []string{
+		"customer_id",
+		"mitra_id",
+		"order_id",
+		"sub_order_id",
+		"service_id",
+		"sub_service_id",
+		"transaction_id",
+		"notification_type",
+		"title",
+		"message",
+		"notif_type",
+	}
+
+	for _, f := range fields {
+		if val, ok := data[f]; ok {
+			switch f {
+			case "title":
+				target["notification_title"] = val
+			case "message":
+				target["notification_message"] = val
+			default:
+				target[f] = val
+			}
+		}
+	}
+}
 
 const (
-	CustomerRole = "customer"
-	MitraRole    = "mitra"
-	AdminRole    = "admin"
+	CustomerRole   = "customer"
+	MitraRole      = "mitra"
+	AdminRole      = "admin"
+	SuperAdminRole = "superadmin"
 )
 
-var AllRole = []string{CustomerRole, MitraRole, AdminRole}
+var AllRole = []string{CustomerRole, MitraRole, AdminRole, SuperAdminRole}

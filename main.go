@@ -8,7 +8,9 @@ import (
 	"suberes_golang/repositories"
 	"suberes_golang/routes"
 	"suberes_golang/services"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -19,10 +21,23 @@ func main() {
 
 	r := gin.Default()
 
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"}, // atau isi domain frontend kamu
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
 	userRepo := &repositories.UserRepository{DB: config.DB}
 	userOtpRepo := &repositories.UserOtpRepository{DB: config.DB}
 	bannerRepo := &repositories.BannerRepository{DB: config.DB}
 	layananServiceRepo := &repositories.LayananServiceRepository{DB: config.DB}
+	serviceRepo := &repositories.ServiceRepository{DB: config.DB}
+	orderTransactionRepo := &repositories.OrderTransactionRepository{DB: config.DB}
+	adminRepo := &repositories.AdminRepository{DB: config.DB}
+	mitraRepo := &repositories.MitraRepository{DB: config.DB}
 
 	customerService := &services.CustomerService{
 		UserRepo:    userRepo,
@@ -40,6 +55,25 @@ func main() {
 		DB:                 config.DB,
 	}
 
+	serviceService := &services.ServiceService{
+		ServiceRepo: serviceRepo,
+		DB:          config.DB,
+	}
+
+	adminService := &services.AdminService{
+		OrderRepo: orderTransactionRepo,
+		AdminRepo: adminRepo,
+		DB:        config.DB,
+	}
+
+	mitraService := &services.MitraService{
+		MitraRepository:            mitraRepo,
+		UserRepository:             userRepo,
+		UserOtpRepository:          userOtpRepo,
+		OrderTransactionRepository: orderTransactionRepo,
+		DB:                         config.DB,
+	}
+
 	CustomerController := &controllers.CustomerController{
 		CustomerService: customerService,
 	}
@@ -52,11 +86,26 @@ func main() {
 		LayananServiceService: layananServiceService,
 	}
 
+	ServiceController := &controllers.ServiceController{
+		ServiceService: serviceService,
+	}
+
+	AdminController := &controllers.AdminController{
+		AdminService: adminService,
+	}
+
+	MitraController := &controllers.MitraController{
+		MitraService: mitraService,
+	}
+
 	api := r.Group("/api")
 	{
 		routes.CustomerRoutes(api, CustomerController, config.DB)
 		routes.BannerRoutes(api, BannerController, config.DB)
 		routes.LayananServiceRoutes(api, LayananServiceController, config.DB)
+		routes.ServiceRoutes(api, ServiceController, config.DB)
+		routes.AdminRoutes(api, AdminController, config.DB)
+		routes.MitraRoutes(api, MitraController, config.DB)
 	}
 
 	port := os.Getenv("APP_PORT")

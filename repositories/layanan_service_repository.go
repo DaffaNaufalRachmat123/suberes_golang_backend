@@ -23,6 +23,7 @@ func (r *LayananServiceRepository) FindAllPagination(page, limit int) ([]models.
 	}
 	return layananServices, total, nil
 }
+
 func (r *LayananServiceRepository) FindPopular(limit int) ([]models.LayananService, error) {
 	var layananServices []models.LayananService
 	err := r.DB.Limit(limit).Find(&layananServices).Error

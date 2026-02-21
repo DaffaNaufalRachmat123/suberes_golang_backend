@@ -19,6 +19,24 @@ func (r *UserRepository) FindCustomerById(userId string) (*models.User, error) {
 	}
 	return &user, nil
 }
+
+func (r *UserRepository) FindMitraById(userId string) (*models.User, error) {
+	var user models.User
+	err := r.DB.Where("id = ? AND user_type = ?", userId, "mitra").First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *UserRepository) FindAdminById(userId string) (*models.User, error) {
+	var user models.User
+	err := r.DB.Where("id = ? AND user_type = ? OR user_type = ?", userId, "superadmin", "admin").First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
 func (r *UserRepository) CheckAvailability(payload map[string]interface{}) (*models.User, error) {
 	var user models.User
 	err := r.DB.Where(payload).First(&user).Error
@@ -39,6 +57,16 @@ func (r *UserRepository) FindCustomerByEmail(email string) (*models.User, error)
 	}
 	return &user, nil
 }
+
+func (r *UserRepository) FindMitraByEmail(email string) (*models.User, error) {
+	var user models.User
+	err := r.DB.Where("email = ? AND user_type = ?", email, "mitra").First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (r *UserRepository) FindPhoneByCustomerEmail(
 	phone, email string,
 ) (*models.User, error) {
@@ -70,6 +98,32 @@ func (r *UserRepository) CustomerProfile(userId string) (*models.User, error) {
 	}
 	return &user, nil
 }
+
+func (r *UserRepository) MitraProfile(userId string) (*models.User, error) {
+	var user models.User
+	err := r.DB.Table("users").Select(`
+		id,
+		user_profile_image,
+		complete_name,
+		email,
+		is_mitra_activated,
+		user_level,
+		color_code_level,
+		country_code,
+		phone_number,
+		user_rating,
+		user_gender,
+		place_of_birth,
+		TIMESTAMPDIFF(YEAR , date_of_birth , CURDATE()) as age
+	`).Where("id = ? AND user_type = ?", userId, "mitra").Take(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+	}
+	return &user, nil
+}
+
 func (r *UserRepository) FindCustomerOtpByEmail(email string) (*models.User, error) {
 	var user models.User
 	err := r.DB.Table("users").Select(`
@@ -104,15 +158,20 @@ func (r *UserRepository) UpdateSharedKeys(
 	}).Error
 }
 
+func (r *UserRepository) AddCustomerBalance(tx *gorm.DB, customerID string, grossAmount float64) error {
+	result := tx.Model(&models.User{}).Where("id = ? AND user_type = ?", customerID, "customer").Update("account_balance", gorm.Expr("account_balance + ?", grossAmount))
+	return result.Error
+}
+
 func (r *UserRepository) UpdateUserData(
 	tx *gorm.DB,
-	userId string,
+	where map[string]interface{},
 	payloadUpdate map[string]interface{},
 ) (*models.User, error) {
 
 	// 1. Update
 	if err := tx.Table("users").
-		Where("id = ?", userId).
+		Where(where).
 		Updates(payloadUpdate).Error; err != nil {
 		return nil, err
 	}
@@ -120,14 +179,17 @@ func (r *UserRepository) UpdateUserData(
 	// 2. Ambil ulang user
 	var user models.User
 	if err := tx.Table("users").
-		Where("id = ?", userId).
+		Where(where).
 		Take(&user).Error; err != nil {
 		return nil, err
 	}
 
 	return &user, nil
 }
-
 func (r *UserRepository) SetLoggedIn(tx *gorm.DB, userId string) error {
 	return tx.Table("users").Where("id = ? AND user_type = ?", userId, "customer").Update("is_logged_in", "1").Error
+}
+
+func (r *UserRepository) SetMitraLoggedIn(tx *gorm.DB, userId string) error {
+	return tx.Table("users").Where("id = ? AND user_type = ?", userId, "mitra").Update("is_logged_in", "1").Error
 }

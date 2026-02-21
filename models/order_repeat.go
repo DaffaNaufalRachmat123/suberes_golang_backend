@@ -1,9 +1,7 @@
 package models
 
 type OrderRepeat struct {
-	// Karena di JS tidak didefinisikan ID secara eksplisit, biasanya Sequelize menambah ID integer/UUID.
-	// Jika tabel ini punya ID, tambahkan field ID di sini. Jika tidak, gunakan gorm:"-" atau sesuaikan.
-	// Asumsi: Menggunakan ID bawaan.
+	BaseModel
 	ID uint `gorm:"primaryKey;column:id" json:"id"`
 
 	OrderID      string `gorm:"type:uuid;column:order_id" json:"order_id"`

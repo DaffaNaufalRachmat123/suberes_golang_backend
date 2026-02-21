@@ -78,7 +78,9 @@ func (s *CustomerService) OtpUpdatePhoneMail(
 	if MailChange {
 		payloadUpdate["email"] = Email
 	}
-	user, err := s.UserRepo.UpdateUserData(tx, ID, payloadUpdate)
+	user, err := s.UserRepo.UpdateUserData(tx, map[string]interface{}{
+		"id": ID,
+	}, payloadUpdate)
 	if err != nil {
 		return nil, 500, errors.New("Failed to update user data")
 	}
@@ -454,7 +456,9 @@ func (s *CustomerService) UpdateUserProfile(
 			return
 		}
 	}()
-	updatedUser, err := s.UserRepo.UpdateUserData(tx, ID, map[string]interface{}{
+	updatedUser, err := s.UserRepo.UpdateUserData(tx, map[string]interface{}{
+		"id": ID,
+	}, map[string]interface{}{
 		"complete_name": CompleteName,
 	})
 	return map[string]interface{}{
@@ -473,7 +477,9 @@ func (s *CustomerService) Logout(ID string) (map[string]interface{}, int, error)
 		return nil, 404, errors.New("Customer not found")
 	}
 	tx := s.DB.Begin()
-	_, err = s.UserRepo.UpdateUserData(tx, ID, map[string]interface{}{
+	_, err = s.UserRepo.UpdateUserData(tx, map[string]interface{}{
+		"id": ID,
+	}, map[string]interface{}{
 		"firebase_token": "",
 		"is_logged_in":   "0",
 	})

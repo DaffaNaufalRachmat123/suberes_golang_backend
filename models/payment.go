@@ -1,6 +1,7 @@
 package models
 
 type Payment struct {
+	BaseModel
 	ID       uint `gorm:"primaryKey"`
 	Icon     string
 	IsActive string

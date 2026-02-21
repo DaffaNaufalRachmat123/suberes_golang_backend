@@ -1,0 +1,99 @@
+package repositories
+
+import (
+	"suberes_golang/dtos"
+	"suberes_golang/models"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+type OrderTransactionRepository struct {
+	DB *gorm.DB
+}
+
+func (r *OrderTransactionRepository) FindRunningOrderByMitraID(mitraID string) (*models.OrderTransaction, error) {
+	var orderTransaction models.OrderTransaction
+	err := r.DB.Where("mitra_id = ? AND order_status IN (?)", mitraID, []string{"OTW", "ON_PROGRESS"}).First(&orderTransaction).Error
+	return &orderTransaction, err
+}
+func (r *OrderTransactionRepository) FindById(id string) (*models.OrderTransaction, error) {
+	var orderData models.OrderTransaction
+	err := r.DB.Where("id = ?", id).First(&orderData)
+	return &orderData, err.Error
+}
+
+func (r *OrderTransactionRepository) UpdateData(tx *gorm.DB, user *models.OrderTransaction, data map[string]interface{}) error {
+	return tx.Model(user).Updates(data).Error
+}
+
+func (r *OrderTransactionRepository) CountOrders(start time.Time, end time.Time) (int64, error) {
+	var count int64
+	err := r.DB.Model(&models.OrderTransaction{}).
+		Where("createdAt >= ? AND createdAt <= ?", start, end).
+		Count(&count).Error
+	return count, err
+}
+
+func (r *OrderTransactionRepository) CountFinishedOrders(start time.Time, end time.Time) (int64, error) {
+	var count int64
+	err := r.DB.Model(&models.OrderTransaction{}).
+		Where("createdAt >= ? AND createdAt <= ? AND order_status = 'FINISH'", start, end).
+		Count(&count).Error
+	return count, err
+}
+
+func (r *OrderTransactionRepository) SumRevenue(start time.Time, end time.Time) (int64, error) {
+	var total int64
+	err := r.DB.Model(&models.OrderTransaction{}).
+		Select("SUM(gross_amount_company)").
+		Where("createdAt >= ? AND createdAt <= ? AND order_status = 'FINISH'", start, end).
+		Row().Scan(&total)
+	return total, err
+}
+
+func (r *OrderTransactionRepository) TotalOrdersByMonth() ([]dtos.TotalOrdersByMonth, error) {
+	var result []dtos.TotalOrdersByMonth
+	err := r.DB.Model(&models.OrderTransaction{}).
+		Select("MONTH(createdAt) as month, CASE WHEN MONTH(createdAt) = 1 THEN 'Januari' WHEN MONTH(createdAt) = 2 THEN 'Februari' WHEN MONTH(createdAt) = 3 THEN 'Maret' WHEN MONTH(createdAt) = 4 THEN 'April' WHEN MONTH(createdAt) = 5 THEN 'Mei' WHEN MONTH(createdAt) = 6 THEN 'Juni' WHEN MONTH(createdAt) = 7 THEN 'Juli' WHEN MONTH(createdAt) = 8 THEN 'Agustus' WHEN MONTH(createdAt) = 9 THEN 'September' WHEN MONTH(createdAt) = 10 THEN 'Oktober' WHEN MONTH(createdAt) = 11 THEN 'November' WHEN MONTH(createdAt) = 12 THEN 'Desember' ELSE '' END as bulan, COUNT(id) as order_count").
+		Where("order_status = 'FINISH'").
+		Group("MONTH(createdAt), bulan").
+		Scan(&result).Error
+	return result, err
+}
+
+func (r *OrderTransactionRepository) OverviewMonthRevenue() ([]dtos.OverviewMonthRevenue, error) {
+	var result []dtos.OverviewMonthRevenue
+	err := r.DB.Model(&models.OrderTransaction{}).
+		Select("SUM(gross_amount_company) as total_revenue, MONTH(createdAt) as month_number, CASE WHEN MONTH(createdAt) = 1 THEN 'Januari' WHEN MONTH(createdAt) = 2 THEN 'Februari' WHEN MONTH(createdAt) = 3 THEN 'Maret' WHEN MONTH(createdAt) = 4 THEN 'April' WHEN MONTH(createdAt) = 5 THEN 'Mei' WHEN MONTH(createdAt) = 6 THEN 'Juni' WHEN MONTH(createdAt) = 7 THEN 'Juli' WHEN MONTH(createdAt) = 8 THEN 'Agustus' WHEN MONTH(createdAt) = 9 THEN 'September' WHEN MONTH(createdAt) = 10 THEN 'Oktober' WHEN MONTH(createdAt) = 11 THEN 'November' WHEN MONTH(createdAt) = 12 THEN 'Desember' ELSE '' END as bulan").
+		Where("order_status = 'FINISH'").
+		Group("MONTH(createdAt), month_number").
+		Scan(&result).Error
+	return result, err
+}
+
+func (r *OrderTransactionRepository) OverviewWeekRevenue() ([]dtos.OverviewWeekRevenue, error) {
+	var result []dtos.OverviewWeekRevenue
+	month := time.Now().Month()
+	err := r.DB.Raw("SELECT CONCAT(CASE WHEN MONTH(createdAt) = 1 THEN 'Januari' WHEN MONTH(createdAt) = 2 THEN 'Februari' WHEN MONTH(createdAt) = 3 THEN 'Maret' WHEN MONTH(createdAt) = 4 THEN 'April' WHEN MONTH(createdAt) = 5 THEN 'Mei' WHEN MONTH(createdAt) = 6 THEN 'Juni' WHEN MONTH(createdAt) = 7 THEN 'Juli' WHEN MONTH(createdAt) = 8 THEN 'Agustus' WHEN MONTH(createdAt) = 9 THEN 'September' WHEN MONTH(createdAt) = 10 THEN 'Oktober' WHEN MONTH(createdAt) = 11 THEN 'November' WHEN MONTH(createdAt) = 12 THEN 'Desember' ELSE '' END, ' Week ', FLOOR(((DAY(createdAt) - 1) / 7) + 1)) as month_week, SUM(gross_amount_company) AS total_transaction FROM order_transactions WHERE order_status = 'FINISH' AND MONTH(createdAt) = ? GROUP BY month_week ORDER BY month(createdAt), month_week", month).
+		Scan(&result).Error
+	return result, err
+}
+
+func (r *OrderTransactionRepository) FrequentlyUsedService() ([]dtos.FrequentlyUsedService, error) {
+	var result []dtos.FrequentlyUsedService
+	err := r.DB.Model(&models.Service{}).Order("service_count DESC").Scan(&result).Error
+	return result, err
+}
+
+func (r *OrderTransactionRepository) MitraOrderToday(start time.Time, end time.Time) ([]dtos.MitraOrderToday, error) {
+	var result []dtos.MitraOrderToday
+	err := r.DB.Model(&models.OrderTransaction{}).
+		Select("COUNT(mitra_id) as order_count, users.id, users.complete_name").
+		Joins("JOIN users ON users.id = order_transactions.mitra_id").
+		Where("order_transactions.createdAt >= ? AND order_transactions.createdAt <= ?", start, end).
+		Group("mitra_id").
+		Order("order_count DESC").
+		Scan(&result).Error
+	return result, err
+}

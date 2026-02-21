@@ -70,11 +70,11 @@ type User struct {
 	// === Running Order Info ===
 	// Pointer *int digunakan agar bisa NULL di database.
 	// Jika tidak di-set, nilainya NULL (bukan 0), ini behavior standar SQL.
-	OrderIDRunning      *int `gorm:"column:order_id_running" json:"order_id_running"`
-	SubOrderIDRunning   *int `gorm:"column:sub_order_id_running" json:"sub_order_id_running"`
-	CustomerIDRunning   *int `gorm:"column:customer_id_running" json:"customer_id_running"`
-	ServiceIDRunning    *int `gorm:"column:service_id_running" json:"service_id_running"`
-	SubServiceIDRunning *int `gorm:"column:sub_service_id_running" json:"sub_service_id_running"`
+	OrderIDRunning      string `gorm:"column:order_id_running" json:"order_id_running"`
+	SubOrderIDRunning   int    `gorm:"column:sub_order_id_running" json:"sub_order_id_running"`
+	CustomerIDRunning   string `gorm:"column:customer_id_running" json:"customer_id_running"`
+	ServiceIDRunning    int    `gorm:"column:service_id_running" json:"service_id_running"`
+	SubServiceIDRunning int    `gorm:"column:sub_service_id_running" json:"sub_service_id_running"`
 
 	// === Experience & Tools ===
 	WorkExperience         string `gorm:"type:text;column:work_experience" json:"work_experience"`
@@ -103,7 +103,7 @@ type User struct {
 	DisbursementPin           string `gorm:"type:text;column:disbursement_pin" json:"-"`
 	SharedPrime               int    `gorm:"column:shared_prime;default:0" json:"-"`
 	SharedBase                int    `gorm:"column:shared_base;default:0" json:"-"`
-	SharedSecret              int    `gorm:"column:shared_secret;default:0" json:"-"`
+	SharedSecret              int64  `gorm:"column:shared_secret;default:0" json:"-"`
 	PrivateKeyPayPin          string `gorm:"type:text;column:private_key_pay_pin" json:"-"`
 	PublicKeyPayPin           string `gorm:"type:text;column:public_key_pay_pin" json:"-"`
 	PrivateKeyDisbursementPin string `gorm:"type:text;column:private_key_disbursement_pin" json:"-"`
@@ -115,8 +115,8 @@ type User struct {
 	NoteInvited  string     `gorm:"type:text;column:note_invited" json:"note_invited"`
 
 	// === System Info ===
-	FirebaseToken        string `gorm:"type:text;column:firebase_token" json:"firebase_token"`
-	RegisteredFromMobile string `gorm:"type:enum('0','1');column:registered_from_mobile;default:'0'" json:"registered_from_mobile"`
+	FirebaseToken        *string `gorm:"type:text;column:firebase_token" json:"firebase_token"`
+	RegisteredFromMobile string  `gorm:"type:enum('0','1');column:registered_from_mobile;default:'0'" json:"registered_from_mobile"`
 
 	// Agar CreatedAt dan UpdatedAt dihandle MySQL (bukan Go), gunakan default:CURRENT_TIMESTAMP
 	CreatedAt time.Time `gorm:"column:createdAt;default:CURRENT_TIMESTAMP" json:"created_at"`

@@ -136,7 +136,7 @@ func (s *LayananServiceService) Update(ctx *gin.Context) error {
 	jsonData := ctx.PostForm("json_data")
 	var req dtos.LayananServiceRequest
 	if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
-		return errors.New("Invali data format")
+		return errors.New("Invalid request format")
 	}
 	fileHeader, err := ctx.FormFile("file")
 	if err != nil {
