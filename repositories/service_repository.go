@@ -62,6 +62,20 @@ func (r *ServiceRepository) FindLayananServices(id int) ([]models.LayananService
 
 	return layanan, nil
 }
+func (r *ServiceRepository) GetRunningService(serviceID, subServiceID int) (*models.Service, error) {
+	var service models.Service
+
+	err := r.DB.
+		Preload("SubServices", "id = ?", subServiceID).
+		Where("id = ?", serviceID).
+		First(&service).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &service, nil
+}
 func (r *ServiceRepository) FindServiceType(serviceID int) (*models.CategoryService, error) {
 	var category models.CategoryService
 

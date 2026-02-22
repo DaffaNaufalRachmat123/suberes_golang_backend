@@ -45,6 +45,156 @@ func (r *UserRepository) CheckAvailability(payload map[string]interface{}) (*mod
 	}
 	return &user, nil
 }
+func (r *UserRepository) GetOnlineAdminTokens(
+	tx *gorm.DB,
+) ([]string, error) {
+
+	var tokens []string
+
+	if err := tx.
+		Table("users").
+		Where("user_type = ? AND is_logged_in = ?", "admin", "1").
+		Where("firebase_token IS NOT NULL AND firebase_token <> ''").
+		Pluck("firebase_token", &tokens).Error; err != nil {
+		return nil, err
+	}
+
+	return tokens, nil
+}
+func (r *UserRepository) FindOneDynamicMap(
+	selectFields []string,
+	conditions map[string]interface{},
+) (map[string]interface{}, error) {
+
+	result := make(map[string]interface{})
+
+	query := r.DB.Table("users")
+
+	if len(selectFields) > 0 {
+		query = query.Select(selectFields)
+	}
+
+	if len(conditions) > 0 {
+		query = query.Where(conditions)
+	}
+
+	if err := query.Take(&result).Error; err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+func (r *UserRepository) FindMitraPagination(
+	page int,
+	limit int,
+	search string,
+) ([]models.User, int64, error) {
+
+	var users []models.User
+	var total int64
+
+	offset := (page - 1) * limit
+
+	query := r.DB.Model(&models.User{}).
+		Where("user_type = ?", "mitra").
+		Where("is_mitra_invited = ?", "1").
+		Where("is_mitra_accepted = ?", "1").
+		Where("is_mitra_activated IN ?", []string{"0", "1"}).
+		Where("is_suspended IN ?", []string{"0", "1"})
+
+	if search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where(
+			r.DB.Where("complete_name LIKE ?", searchPattern).
+				Or("email LIKE ?", searchPattern).
+				Or("phone_number LIKE ?", searchPattern),
+		)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := query.
+		Order("id DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+func (r *UserRepository) FindMitraWithFilter(
+	page int,
+	limit int,
+	search string,
+	filters map[string]string,
+) ([]models.User, int64, error) {
+
+	var users []models.User
+	var total int64
+
+	offset := (page - 1) * limit
+
+	query := r.DB.Model(&models.User{})
+
+	query = query.Where("is_mitra_activated = ?", "0").
+		Where("user_type = ?", "mitra")
+
+	for key, value := range filters {
+		if value != "" {
+			query = query.Where(key+" = ?", value)
+		}
+	}
+
+	if search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where(
+			r.DB.Where("complete_name LIKE ?", searchPattern).
+				Or("email LIKE ?", searchPattern).
+				Or("phone_number LIKE ?", searchPattern),
+		)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := query.
+		Order("id DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+func (r *UserRepository) FindGenderMitraExGoLife(id int) (*models.User, error) {
+	var user models.User
+
+	err := r.DB.
+		Select(`
+			users.*,
+			CASE user_gender 
+				WHEN 'male' THEN 'Pria' 
+				ELSE 'Wanita' 
+			END as user_gender,
+			CASE is_ex_golife 
+				WHEN '1' THEN 'Ya' 
+				ELSE 'Tidak' 
+			END as is_ex_golife
+		`).
+		Where("id = ? AND user_type = ?", id, "mitra").
+		First(&user).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
 func (r *UserRepository) UpdateFirebaseToken(tx *gorm.DB, userId, firebaseToken string) error {
 	return tx.Table("users").Where("id = ? AND user_type = ?", userId, "customer").Update("firebase_token", firebaseToken).Error
 }

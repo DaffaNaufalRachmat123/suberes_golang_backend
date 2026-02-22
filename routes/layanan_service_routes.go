@@ -17,25 +17,25 @@ func LayananServiceRoutes(r *gin.RouterGroup, controller *controllers.LayananSer
 			Method:  "GET",
 			Path:    "/index",
 			Handler: controller.Index,
-			Roles:   []string{helpers.AdminRole},
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 		{
 			Method:  "GET",
 			Path:    "/index/popular",
 			Handler: controller.GetPopular,
-			Roles:   []string{helpers.CustomerRole},
+			Roles:   []string{helpers.SuperAdminRole, helpers.CustomerRole},
 		},
 		{
 			Method:  "GET",
 			Path:    "/detail/:id",
 			Handler: controller.GetByID,
-			Roles:   []string{helpers.AdminRole},
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 		{
 			Method:  "PUT",
 			Path:    "/update/image/:id",
 			Handler: controller.Update,
-			Roles:   []string{helpers.AdminRole},
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 	}
 	helpers.RegisterProtectedRoutes(layananService, routes)

@@ -21,7 +21,7 @@ func AdminRoutes(r *gin.RouterGroup, controller *controllers.AdminController, db
 			Method:  "GET",
 			Path:    "/dashboard",
 			Handler: controller.GetDashboard,
-			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole, helpers.SuperAdminRole},
 		},
 		{
 			Method:  "GET",

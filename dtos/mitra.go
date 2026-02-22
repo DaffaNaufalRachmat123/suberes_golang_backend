@@ -35,7 +35,7 @@ type RegisterMitraRequest struct {
 }
 
 type UpdateMitraRequest struct {
-	MitraID                     uint   `json:"mitra_id" binding:"required"`
+	MitraID                     string `json:"mitra_id" binding:"required"`
 	Email                       string `json:"email" binding:"required,email"`
 	CountryCode                 string `json:"country_code" binding:"required"`
 	PhoneNumber                 string `json:"phone_number" binding:"required"`

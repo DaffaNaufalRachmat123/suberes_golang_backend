@@ -27,6 +27,59 @@ func (r *OrderTransactionRepository) UpdateData(tx *gorm.DB, user *models.OrderT
 	return tx.Model(user).Updates(data).Error
 }
 
+func (r *OrderTransactionRepository) GetTodayOrderSummary(mitraID int, start, end time.Time) (*dtos.OrderSummary, error) {
+	var result struct {
+		OrderCount int64
+		Pendapatan int64
+	}
+
+	err := r.DB.
+		Table("order_transactions").
+		Select("COUNT(id) as order_count, COALESCE(SUM(gross_amount_mitra),0) as pendapatan").
+		Where("mitra_id = ? AND order_status = ? AND order_time BETWEEN ? AND ?",
+			mitraID, "FINISH", start, end).
+		Scan(&result).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &dtos.OrderSummary{
+		OrderCount: result.OrderCount,
+		Pendapatan: result.Pendapatan,
+	}, nil
+}
+
+func (r *OrderTransactionRepository) FindDynamicOrderTransactionMap(
+	selectFields []string,
+	conditions map[string]interface{},
+	orQuery string,
+	orArgs []interface{},
+) (map[string]interface{}, error) {
+
+	result := make(map[string]interface{})
+
+	query := r.DB.Table("order_transactions")
+
+	if len(selectFields) > 0 {
+		query = query.Select(selectFields)
+	}
+
+	if len(conditions) > 0 {
+		query = query.Where(conditions)
+	}
+
+	if orQuery != "" {
+		query = query.Where(orQuery, orArgs...)
+	}
+
+	if err := query.Take(&result).Error; err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (r *OrderTransactionRepository) CountOrders(start time.Time, end time.Time) (int64, error) {
 	var count int64
 	err := r.DB.Model(&models.OrderTransaction{}).

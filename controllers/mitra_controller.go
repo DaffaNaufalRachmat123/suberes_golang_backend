@@ -1,9 +1,12 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
 	"suberes_golang/models"
@@ -149,6 +152,221 @@ func (c *MitraController) UpdateMitraStatus(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "Mitra status updated",
+		"status":         "success",
+	})
+}
+
+func (c *MitraController) UpdateMitraActive(ctx *gin.Context) {
+	mitraID := ctx.Param("id")
+	isActive := ctx.Param("isactive")
+	code, err := c.MitraService.UpdateMitraActive(mitraID, isActive)
+	if err != nil {
+		helpers.JSONError(ctx, code, err)
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "Mitra active status updated",
+		"status":         "success",
+	})
+}
+
+func (c *MitraController) UpdateMitraAutoBid(ctx *gin.Context) {
+	mitraID := ctx.Param("id")
+	isAutoBid := ctx.Param("isautobid")
+	code, err := c.MitraService.UpdateMitraAutoBid(mitraID, isAutoBid)
+	if err != nil {
+		helpers.JSONError(ctx, code, err)
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "Mitra auto bid status updated",
+		"status":         "success",
+	})
+}
+
+func (c *MitraController) UpdateMitraCoordinate(ctx *gin.Context) {
+	mitraID := ctx.Param("id")
+	latitude := ctx.Param("latitude")
+	longitude := ctx.Param("longitude")
+	latitudeConvert, err := strconv.ParseFloat(latitude, 64)
+
+	if err != nil {
+		fmt.Println("Error during conversion:", err)
+		helpers.APIErrorResponse(ctx, "Error during conversion : "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	longitudeConvert, err := strconv.ParseFloat(longitude, 64)
+
+	if err != nil {
+		helpers.APIErrorResponse(ctx, "Error during conversion : "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	code, err := c.MitraService.UpdateMitraCoordinate(mitraID, latitudeConvert, longitudeConvert)
+	if err != nil {
+		helpers.JSONError(ctx, code, err)
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "Mitra coordinate updated",
+		"status":         "success",
+	})
+}
+func (c *MitraController) AdminIndex(ctx *gin.Context) {
+	pageStr := ctx.DefaultQuery("page", "1")
+	limitStr := ctx.DefaultQuery("limit", "5")
+	search := ctx.DefaultQuery("search", "")
+
+	page, _ := strconv.Atoi(pageStr)
+	limit, _ := strconv.Atoi(limitStr)
+	mitra, total, err := c.MitraService.AdminIndex(page, limit, search)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	response := helpers.GetPaginationData(ctx, mitra, len(mitra), 1, 5, total)
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (c *MitraController) GetMitraDetail(ctx *gin.Context) {
+
+	idParam := ctx.Param("id")
+	status := ctx.Param("status")
+	timezone := ctx.DefaultQuery("timezone", "Asia/Jakarta")
+
+	id, _ := strconv.Atoi(idParam)
+
+	response, code, err := c.MitraService.GetMitraDetail(id, status, timezone)
+	if err != nil {
+		ctx.JSON(code, gin.H{
+			"server_message": err.Error(),
+			"status":         "failed",
+		})
+		return
+	}
+
+	ctx.JSON(code, response)
+}
+func (c *MitraController) AdminUpdate(ctx *gin.Context) {
+	var updateReq dtos.UpdateMitraRequest
+	if err := ctx.ShouldBindJSON(&updateReq); err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusBadRequest)
+	}
+	code, err := c.MitraService.AdminUpdate(updateReq)
+	if err != nil {
+		helpers.JSONError(ctx, code, err)
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "Mitra updated",
+		"status":         "success",
+	})
+}
+
+func (c *MitraController) AdminCandidate(ctx *gin.Context) {
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "5"))
+
+	search := ctx.Query("search")
+	isExGolife := ctx.Query("is_ex_golife")
+	kindOfMitra := ctx.Query("kind_of_mitra")
+
+	data, total, err := c.MitraService.GetFilteredMitra(
+		page,
+		limit,
+		search,
+		isExGolife,
+		kindOfMitra,
+	)
+	if err != nil {
+		helpers.JSONError(ctx, http.StatusInternalServerError, err)
+		return
+	}
+	response := helpers.GetPaginationData(ctx, data, len(data), page, limit, total)
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (c *MitraController) UpdateMitraCandidate(ctx *gin.Context) {
+
+	// 1️⃣ Parse JSON
+	jsonData := ctx.PostForm("json_data")
+
+	var req dtos.UpdateMitraCandidateRequest
+	if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
+		ctx.JSON(400, gin.H{"message": "Invalid data request"})
+		return
+	}
+
+	// 2️⃣ Get ID
+	idParam := ctx.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		ctx.JSON(400, gin.H{"message": "Invalid mitra id"})
+		return
+	}
+
+	// 3️⃣ Prepare upload directory
+	basePath := filepath.Join(
+		helpers.RootPath(),
+		os.Getenv("IMAGE_PATH_CONTROLLER"),
+		os.Getenv("MITRA_CANDIDATE_IMAGE_PATH"),
+	)
+
+	_ = os.MkdirAll(basePath, 0755)
+
+	now := time.Now()
+
+	savedFiles := []string{}
+	filePayload := map[string]string{}
+
+	handleUpload := func(field string, dbField string) error {
+		fileHeader, err := ctx.FormFile(field)
+		if err != nil {
+			return nil
+		}
+
+		filename := fmt.Sprintf(
+			"MITRA_CANDIDATE_IMG_%d-%02d-%02d_%02d-%02d-%02d_%s",
+			now.Year(), now.Month(), now.Day(),
+			now.Hour(), now.Minute(), now.Second(),
+			fileHeader.Filename,
+		)
+
+		fullPath := filepath.Join(basePath, filename)
+
+		if err := ctx.SaveUploadedFile(fileHeader, fullPath); err != nil {
+			return err
+		}
+
+		savedFiles = append(savedFiles, fullPath)
+		filePayload[dbField] = os.Getenv("MITRA_CANDIDATE_IMAGE_PATH") + filename
+
+		return nil
+	}
+
+	if err := handleUpload("ktp", "ktp_image"); err != nil {
+		ctx.JSON(500, gin.H{"message": err.Error()})
+		return
+	}
+	if err := handleUpload("kk", "kk_image"); err != nil {
+		ctx.JSON(500, gin.H{"message": err.Error()})
+		return
+	}
+	if err := handleUpload("profile_image", "user_profile_image"); err != nil {
+		ctx.JSON(500, gin.H{"message": err.Error()})
+		return
+	}
+
+	// 4️⃣ Call Service (NO ctx inside)
+	err = c.MitraService.UpdateMitraCandidate(
+		id,
+		req,
+		filePayload,
+		savedFiles,
+	)
+
+	if err != nil {
+		ctx.JSON(400, gin.H{"message": err.Error()})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"server_message": "mitra candidate data updated",
 		"status":         "success",
 	})
 }

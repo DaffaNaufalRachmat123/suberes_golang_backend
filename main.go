@@ -5,6 +5,7 @@ import (
 	"os"
 	"suberes_golang/config"
 	"suberes_golang/controllers"
+	"suberes_golang/realtime"
 	"suberes_golang/repositories"
 	"suberes_golang/routes"
 	"suberes_golang/services"
@@ -19,7 +20,12 @@ func main() {
 	godotenv.Load()
 	config.ConnectDB()
 
+	realtime.InitSocket()
+
 	r := gin.Default()
+
+	r.GET("/socket.io/*any", gin.WrapH(realtime.Server))
+	r.POST("/socket.io/*any", gin.WrapH(realtime.Server))
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"}, // atau isi domain frontend kamu
@@ -36,6 +42,7 @@ func main() {
 	layananServiceRepo := &repositories.LayananServiceRepository{DB: config.DB}
 	serviceRepo := &repositories.ServiceRepository{DB: config.DB}
 	orderTransactionRepo := &repositories.OrderTransactionRepository{DB: config.DB}
+	orderTransactionRepeatsRepo := &repositories.OrderTransactionRepeatsRepository{DB: config.DB}
 	adminRepo := &repositories.AdminRepository{DB: config.DB}
 	mitraRepo := &repositories.MitraRepository{DB: config.DB}
 
@@ -67,11 +74,12 @@ func main() {
 	}
 
 	mitraService := &services.MitraService{
-		MitraRepository:            mitraRepo,
-		UserRepository:             userRepo,
-		UserOtpRepository:          userOtpRepo,
-		OrderTransactionRepository: orderTransactionRepo,
-		DB:                         config.DB,
+		MitraRepository:                   mitraRepo,
+		UserRepository:                    userRepo,
+		UserOtpRepository:                 userOtpRepo,
+		OrderTransactionRepository:        orderTransactionRepo,
+		OrderTransactionRepeatsRepository: orderTransactionRepeatsRepo,
+		DB:                                config.DB,
 	}
 
 	CustomerController := &controllers.CustomerController{

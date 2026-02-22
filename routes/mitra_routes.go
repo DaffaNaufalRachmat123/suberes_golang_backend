@@ -10,7 +10,7 @@ import (
 )
 
 func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraController, db *gorm.DB) {
-	mitraRoutes := router.Group("/api/mitra")
+	mitraRoutes := router.Group("/mitra")
 	mitraRoutes.POST("/login", controller.Login)
 	mitraRoutes.POST("/register", controller.Register)
 	mitraRoutes.PUT("/change_forgot_password", controller.ChangeForgotPassword)
@@ -60,7 +60,55 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 			Method:  "PUT",
 			Path:    "/update_mitra_status/:id/:status",
 			Handler: controller.UpdateMitraStatus,
-			Roles:   []string{helpers.AdminRole},
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/update_mitra_active/:id/:isactive",
+			Handler: controller.UpdateMitraActive,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/update_mitra_auto_bid/:id/:isautobid",
+			Handler: controller.UpdateMitraAutoBid,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/update_mitra_coordinate/:id/:latitude/:longitude",
+			Handler: controller.UpdateMitraCoordinate,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/admin/index",
+			Handler: controller.AdminIndex,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/admin/detail/:id/:status",
+			Handler: controller.GetMitraDetail,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/admin/update",
+			Handler: controller.AdminUpdate,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/admin/candidate",
+			Handler: controller.AdminCandidate,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/admin/update/mitra_candidate/:id",
+			Handler: controller.UpdateMitraCandidate,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 	}
 	helpers.RegisterProtectedRoutes(protected, routes)

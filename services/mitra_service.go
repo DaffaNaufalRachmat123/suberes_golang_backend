@@ -8,9 +8,11 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"suberes_golang/constants"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
 	"suberes_golang/models"
+	"suberes_golang/realtime"
 	"suberes_golang/repositories"
 	"suberes_golang/service"
 	"time"
@@ -21,25 +23,21 @@ import (
 	"gorm.io/gorm"
 )
 
-type MitraService struct {
-	DB                         *gorm.DB
-	MitraRepository            *repositories.MitraRepository
-	UserRepository             *repositories.UserRepository
-	OrderTransactionRepository *repositories.OrderTransactionRepository
-	PaymentRepository          *repositories.PaymentRepository
-	SubPaymentRepository       *repositories.SubPaymentRepository
-	TransactionRepository      *repositories.TransactionRepository
-	UserOtpRepository          *repositories.UserOtpRepository
-}
+const (
+	MitraCandidateImgAlias = "MITRA_CANDIDATE_IMG_"
+)
 
-func NewMitraService(db *gorm.DB, mitraRepo *repositories.MitraRepository, userRepo *repositories.UserRepository, orderTransactionRepo *repositories.OrderTransactionRepository, userOtpRepo *repositories.UserOtpRepository) *MitraService {
-	return &MitraService{
-		DB:                         db,
-		MitraRepository:            mitraRepo,
-		UserRepository:             userRepo,
-		OrderTransactionRepository: orderTransactionRepo,
-		UserOtpRepository:          userOtpRepo,
-	}
+type MitraService struct {
+	DB                                *gorm.DB
+	MitraRepository                   *repositories.MitraRepository
+	UserRepository                    *repositories.UserRepository
+	OrderTransactionRepository        *repositories.OrderTransactionRepository
+	OrderTransactionRepeatsRepository *repositories.OrderTransactionRepeatsRepository
+	PaymentRepository                 *repositories.PaymentRepository
+	ServiceRepository                 *repositories.ServiceRepository
+	SubPaymentRepository              *repositories.SubPaymentRepository
+	TransactionRepository             *repositories.TransactionRepository
+	UserOtpRepository                 *repositories.UserOtpRepository
 }
 
 func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.MitraLoginResponseDTO, error) {
@@ -721,4 +719,321 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 	} else {
 		return 400, errors.New("No valid status provided")
 	}
+}
+func (s *MitraService) UpdateMitraActive(mitraID, isActive string) (int, error) {
+	mitra, err := s.UserRepository.FindMitraById(mitraID)
+	if err != nil {
+		return 500, err
+	}
+	if mitra == nil {
+		return 404, errors.New("Mitra not found")
+	}
+	if mitra.IsSuspended == "1" {
+		return 401, errors.New("Mitra is suspended")
+	}
+	tx := s.DB.Begin()
+	_, err = s.UserRepository.UpdateUserData(tx, map[string]interface{}{
+		"is_active": isActive,
+	}, map[string]interface{}{
+		"id":        mitraID,
+		"user_type": "mitra",
+	})
+	if err != nil {
+		tx.Rollback()
+		return 500, err
+	}
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+	tokens, err := s.UserRepository.GetOnlineAdminTokens(tx)
+	if err != nil {
+		return 500, err
+	}
+	payloadAdmin := map[string]interface{}{
+		"data": map[string]interface{}{
+			"notification_type": "MITRA_UPDATE_ACTIVE_NOTIFICATION",
+			"title":             "Status Aktif Mitra",
+			"message": fmt.Sprintf(
+				"Mitra %s telah %s",
+				mitra.CompleteName,
+				map[bool]string{true: "Aktif", false: "Nonaktif"}[isActive == "yes"],
+			),
+			"mitra_id":   mitra.ID,
+			"notif_type": "status",
+		},
+		"tokens": tokens,
+	}
+	_, err = service.SendMulticast(s.DB, "admin", payloadAdmin)
+	if err != nil {
+		log.Println("error:", err)
+	}
+	return 200, nil
+}
+func (s *MitraService) UpdateMitraAutoBid(mitraID, isAutoBid string) (int, error) {
+	mitra, err := s.UserRepository.FindMitraById(mitraID)
+	if err != nil {
+		return 500, err
+	}
+	if mitra == nil {
+		return 404, errors.New("Mitra not found")
+	}
+	tx := s.DB.Begin()
+	_, err = s.UserRepository.UpdateUserData(tx, map[string]interface{}{
+		"is_auto_bid": isAutoBid,
+	}, map[string]interface{}{
+		"id":        mitraID,
+		"user_type": "mitra",
+	})
+	if err != nil {
+		tx.Rollback()
+		return 500, err
+	}
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+	return 200, nil
+}
+func (s *MitraService) UpdateMitraCoordinate(mitraID string, latitude, longitude float64) (int, error) {
+	mitraData, err := s.UserRepository.FindOneDynamicMap(
+		[]string{"id", "is_busy", "order_id_running"},
+		map[string]interface{}{
+			"id":        mitraID,
+			"user_type": "mitra",
+		},
+	)
+	if err != nil {
+		return 500, err
+	}
+	if mitraData == nil {
+		return 404, errors.New("Mitra not found")
+	}
+	tx := s.DB.Begin()
+	_, err = s.UserRepository.UpdateUserData(tx, map[string]interface{}{
+		"latitude":  latitude,
+		"longitude": longitude,
+	}, map[string]interface{}{
+		"id":        mitraID,
+		"user_type": "mitra",
+	})
+	if err != nil {
+		tx.Rollback()
+		return 500, err
+	}
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+	if mitraData["is_busy"] == "yes" {
+		orderData, err := s.OrderTransactionRepository.FindDynamicOrderTransactionMap(
+			[]string{"coordinate_receiver_id"},
+			map[string]interface{}{
+				"id": mitraData["order_id_running"],
+			},
+			"order_status IN ?",
+			[]interface{}{[]string{"OTW", "ON_PROGRESS"}},
+		)
+		if err != nil {
+			return 500, err
+		}
+		if orderData == nil {
+			return 404, errors.New("Order not found")
+		}
+		if orderData["coordinate_receiver_id"] != nil && orderData["coordinate_receiver_id"] != "" {
+			realtime.Server.BroadcastToRoom(
+				"/",
+				orderData["coordinate_receiver_id"].(string),
+				constants.COORDINATE_UPDATE,
+				map[string]interface{}{
+					"mitra_latitude":  latitude,
+					"mitra_longitude": longitude,
+				},
+			)
+		}
+	}
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+	return 200, nil
+}
+func (s *MitraService) AdminIndex(page, limit int, search string) ([]models.User, int64, error) {
+	return s.UserRepository.FindMitraPagination(page, limit, search)
+}
+func (s *MitraService) GetMitraDetail(id int, status string, timezone string) (interface{}, int, error) {
+
+	// timezone handling
+	loc, _ := time.LoadLocation(timezone)
+	now := time.Now().In(loc)
+
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, loc)
+
+	user, err := s.UserRepository.FindGenderMitraExGoLife(id)
+	if err != nil {
+		return nil, 404, errors.New("Mitra data not found")
+	}
+
+	if status == "candidate" && user.IsMitraActivated == "1" {
+		return nil, 303, errors.New("see mitra detail page to see this data")
+	}
+
+	orderSummary, _ := s.OrderTransactionRepository.GetTodayOrderSummary(id, start, end)
+	repeatSummary, _ := s.OrderTransactionRepeatsRepository.GetTodayRepeatSummary(id, start, end)
+
+	totalOrder := orderSummary.OrderCount + repeatSummary.OrderCount
+	totalPendapatan := orderSummary.Pendapatan + repeatSummary.Pendapatan
+
+	orderData := map[string]interface{}{
+		"order_count":      totalOrder,
+		"pendapatan_order": totalPendapatan,
+	}
+
+	if user.IsBusy == "yes" && user.ServiceIDRunning != nil && user.SubServiceIDRunning != nil {
+		serviceData, _ := s.ServiceRepository.GetRunningService(*user.ServiceIDRunning, *user.SubServiceIDRunning)
+		orderData["service_data"] = serviceData
+	}
+
+	response := map[string]interface{}{
+		"server_message": "success",
+		"status":         "OK",
+		"data":           user,
+		"order_data":     orderData,
+	}
+
+	return response, 200, nil
+}
+func (s *MitraService) AdminUpdate(data dtos.UpdateMitraRequest) (int, error) {
+	mitra, err := s.UserRepository.FindMitraById(data.MitraID)
+	if err != nil {
+		return 500, err
+	}
+	if mitra == nil {
+		return 404, errors.New("Mitra not found")
+	}
+	tx := s.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			return
+		}
+	}()
+	if tx.Error != nil {
+		return 500, tx.Error
+	}
+	where := map[string]interface{}{
+		"id":        data.MitraID,
+		"user_type": "mitra",
+	}
+
+	// mapping DTO → update payload
+	payload := map[string]interface{}{
+		"email":                          data.Email,
+		"country_code":                   data.CountryCode,
+		"phone_number":                   data.PhoneNumber,
+		"user_gender":                    data.UserGender,
+		"domisili_address":               data.DomisiliAddress,
+		"address":                        data.Address,
+		"district":                       data.District,
+		"sub_district":                   data.SubDistrict,
+		"city":                           data.City,
+		"postal_code":                    data.PostalCode,
+		"is_ex_golife":                   data.IsExGoLife,
+		"work_experience_duration":       data.WorkExperienceDuration,
+		"emergency_contact_name":         data.EmergencyContactName,
+		"emergency_contact_relation":     data.EmergencyContactRelation,
+		"emergency_contact_country_code": data.EmergencyContactCountryCode,
+		"emergency_contact_phone":        data.EmergencyContactPhone,
+	}
+	_, err = s.UserRepository.UpdateUserData(tx, where, payload)
+	if err != nil {
+		tx.Rollback()
+		return 500, err
+	}
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+	return 200, nil
+}
+func (s *MitraService) GetFilteredMitra(
+	page int,
+	limit int,
+	search string,
+	isExGolife string,
+	kindOfMitra string,
+) ([]models.User, int64, error) {
+
+	filters := make(map[string]string)
+
+	if isExGolife == "1" {
+		filters["is_ex_golife"] = "1"
+	}
+
+	if kindOfMitra == "Dengan Alat" {
+		filters["kind_of_mitra"] = "Dengan Alat"
+	}
+
+	return s.UserRepository.FindMitraWithFilter(page, limit, search, filters)
+}
+func deleteFiles(files []string) {
+	for _, file := range files {
+		_ = os.Remove(file)
+	}
+}
+func (s *MitraService) UpdateMitraCandidate(
+	id int,
+	req dtos.UpdateMitraCandidateRequest,
+	filePayload map[string]string,
+	savedFiles []string,
+) error {
+
+	tx := s.DB.Begin()
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var user models.User
+	if err := tx.Where(
+		"id = ? AND user_type = ? AND is_mitra_activated = ?",
+		id, "mitra", "0",
+	).First(&user).Error; err != nil {
+
+		tx.Rollback()
+		deleteFiles(savedFiles)
+		return errors.New("mitra not found")
+	}
+
+	payload := map[string]interface{}{
+		"email":        req.Email,
+		"phone_number": req.PhoneNumber,
+		"address":      req.Address,
+	}
+
+	// mapping gender
+	if req.UserGender == "Pria" {
+		payload["user_gender"] = "male"
+	} else if req.UserGender == "Wanita" {
+		payload["user_gender"] = "female"
+	}
+
+	// mapping golife
+	if req.IsExGoLife == "Ya" {
+		payload["is_ex_golife"] = "1"
+	} else {
+		payload["is_ex_golife"] = "0"
+	}
+
+	// merge file payload
+	for k, v := range filePayload {
+		payload[k] = v
+	}
+
+	if err := tx.Model(&user).Updates(payload).Error; err != nil {
+		tx.Rollback()
+		deleteFiles(savedFiles)
+		return err
+	}
+
+	tx.Commit()
+	return nil
 }

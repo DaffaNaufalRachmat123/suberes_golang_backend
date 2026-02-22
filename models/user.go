@@ -73,8 +73,8 @@ type User struct {
 	OrderIDRunning      string `gorm:"column:order_id_running" json:"order_id_running"`
 	SubOrderIDRunning   int    `gorm:"column:sub_order_id_running" json:"sub_order_id_running"`
 	CustomerIDRunning   string `gorm:"column:customer_id_running" json:"customer_id_running"`
-	ServiceIDRunning    int    `gorm:"column:service_id_running" json:"service_id_running"`
-	SubServiceIDRunning int    `gorm:"column:sub_service_id_running" json:"sub_service_id_running"`
+	ServiceIDRunning    *int   `gorm:"column:service_id_running" json:"service_id_running"`
+	SubServiceIDRunning *int   `gorm:"column:sub_service_id_running" json:"sub_service_id_running"`
 
 	// === Experience & Tools ===
 	WorkExperience         string `gorm:"type:text;column:work_experience" json:"work_experience"`
