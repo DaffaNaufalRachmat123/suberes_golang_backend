@@ -1,21 +1,24 @@
 package models
 
-type OrderChatMessage struct {
-	ID                  string `gorm:"primaryKey;column:id" json:"id"` // STRING PK di JS
-	OrderChatID         string `gorm:"type:text;column:order_chat_id" json:"order_chat_id"`
-	Message             string `gorm:"type:text;column:message" json:"message"`
-	TypeMessage         string `gorm:"type:enum('text','image','video','audio');column:type_message" json:"type_message"`
-	MessageFilePath     string `gorm:"type:text;column:message_file_path" json:"message_file_path"`
-	BlurMessageFilePath string `gorm:"type:text;column:blur_message_file_path" json:"blur_message_file_path"`
-	MessageFileSize     string `gorm:"column:message_file_size" json:"message_file_size"`
-	FromMessage         string `gorm:"type:enum('customer','mitra');column:from_message" json:"from_message"`
-	IsMessageSent       string `gorm:"type:enum('0','1');column:is_message_sent" json:"is_message_sent"`
-	IsMessageRead       string `gorm:"type:enum('0','1');column:is_message_read" json:"is_message_read"`
-	IsMessageListened   string `gorm:"type:enum('0','1');column:is_message_listened" json:"is_message_listened"`
+import "time"
 
-	// Menggunakan string sesuai definisi JS: DataTypes.STRING(100)
-	CreatedAt string `gorm:"size:100;column:createdAt" json:"created_at"`
-	UpdatedAt string `gorm:"size:100;column:updatedAt" json:"updated_at"`
+type OrderChatMessage struct {
+	ID                  string    `gorm:"type:varchar(255);primaryKey" json:"id"`
+	OrderChatID         string    `gorm:"type:text" json:"order_chat_id"`
+	Message             string    `gorm:"type:text" json:"message"`
+	TypeMessage         string    `gorm:"type:varchar(10);check:type_message IN ('text','image','video' , 'audio')" json:"type_message"`
+	MessageFilePath     string    `gorm:"type:text" json:"message_file_path"`
+	BlurMessageFilePath string    `gorm:"type:text" json:"blur_message_file_path"`
+	MessageFileSize     string    `gorm:"type:varchar(255)" json:"message_file_size"`
+	FromMessage         string    `gorm:"type:varchar(10);check:from_message IN ('customer','mitra')" json:"from_message"`
+	IsMessageSent       string    `gorm:"type:varchar(1);check:is_message_sent IN ('0','1')" json:"is_message_sent"`
+	IsMessageRead       string    `gorm:"type:varchar(1);check:is_message_read IN ('0','1')" json:"is_message_read"`
+	IsMessageListened   string    `gorm:"type:varchar(1);check:is_message_listened IN ('0','1')" json:"is_message_listened"`
+	CreatedAt           time.Time `gorm:"type:timestamp;default:now()" json:"created_at"`
+	UpdatedAt           time.Time `gorm:"type:timestamp;default:now()" json:"updated_at"`
+
+	// Associations
+	OrderChat *OrderChat `gorm:"foreignKey:OrderChatID;references:ID" json:"order_chat,omitempty"`
 }
 
 func (OrderChatMessage) TableName() string {

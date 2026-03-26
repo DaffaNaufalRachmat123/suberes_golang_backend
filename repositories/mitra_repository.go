@@ -14,29 +14,29 @@ type MitraRepository struct {
 }
 
 type MitraSearchQuery struct {
-	Latitude              float64
-	Longitude             float64
-	IsActive              string
-	IsBusy                string
-	UserRating1           float64
-	UserRating2           float64
-	Distance              int
-	IsAutoBid             string
-	MinutesSubServices    int
-	UserGender            string
-	GrossAmountCompany    float64
-	Page                  int
-	Limit                 int
-	CustomerID            string
-	SubPaymentID          int
-	OrderType             string
-	ServiceDuration       int
-	CustomerTimezoneCode  string
-	CustomerTimeOrder     string
-	JsonOrderTimes        string
-	IsWithTime            bool
-	InitialRange          int
-	MaxRange              int
+	Latitude             float64
+	Longitude            float64
+	IsActive             string
+	IsBusy               string
+	UserRating1          float64
+	UserRating2          float64
+	Distance             int
+	IsAutoBid            string
+	MinutesSubServices   int
+	UserGender           string
+	GrossAmountCompany   float64
+	Page                 int
+	Limit                int
+	CustomerID           string
+	SubPaymentID         int
+	OrderType            string
+	ServiceDuration      int
+	CustomerTimezoneCode string
+	CustomerTimeOrder    string
+	JsonOrderTimes       string
+	IsWithTime           bool
+	InitialRange         int
+	MaxRange             int
 }
 
 type MitraSearchResult struct {
@@ -102,7 +102,7 @@ func (r *MitraRepository) GetTodayOrderRepeatCount(mitraID string, startTime tim
 
 func (r *MitraRepository) GetTotalCicilan(mitraID string) (int, error) {
 	var totalHutang int
-	err := r.DB.Model(&models.ToolsCredit{}).Select("SUM(0) - SUM(amount_paid)").Where("mitra_id = ?", mitraID).Row().Scan(&totalHutang)
+	err := r.DB.Model(&models.ToolCredit{}).Select("SUM(0) - SUM(amount_paid)").Where("mitra_id = ?", mitraID).Row().Scan(&totalHutang)
 	return totalHutang, err
 }
 

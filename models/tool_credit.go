@@ -1,14 +1,17 @@
 package models
 
-type ToolsCredit struct {
-	ID      uint   `gorm:"primaryKey;column:id" json:"id"`
-	ToolID  int    `gorm:"column:tool_id" json:"tool_id"`
-	MitraID string `gorm:"size:36;column:mitra_id" json:"mitra_id"`
+type ToolCredit struct {
+	ID      uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	ToolID  int    `gorm:"type:integer" json:"tool_id"`
+	MitraID string `gorm:"type:varchar(36)" json:"mitra_id"`
 
-	// Relations
-	SubToolsCredits []SubToolsCredit `gorm:"foreignKey:ToolsCreditsID;references:ID" json:"sub_tools_credits"`
+	// Associations
+	Tool            *Tool            `gorm:"foreignKey:ToolID;references:ID" json:"tool,omitempty"`
+	Mitra           *User            `gorm:"foreignKey:MitraID;references:ID" json:"mitra,omitempty"`
+	SubToolCredits  []SubToolCredit  `gorm:"foreignKey:ToolsCreditsID" json:"sub_tool_credits,omitempty"`
+	Transactions    []Transaction    `gorm:"foreignKey:ToolsCreditsID" json:"transactions,omitempty"`
 }
 
-func (ToolsCredit) TableName() string {
+func (ToolCredit) TableName() string {
 	return "tools_credits"
 }

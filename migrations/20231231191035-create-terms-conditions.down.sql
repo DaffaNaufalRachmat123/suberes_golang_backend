@@ -1,1 +1,0 @@
-DROP TABLE terms_conditions;

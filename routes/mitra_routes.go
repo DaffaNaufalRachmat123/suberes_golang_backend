@@ -110,6 +110,12 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 			Handler: controller.UpdateMitraCandidate,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
+		{
+			Method:  "PUT",
+			Path:    "/document_status",
+			Handler: controller.UpdateDocumentStatus,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
 	}
 	helpers.RegisterProtectedRoutes(protected, routes)
 }

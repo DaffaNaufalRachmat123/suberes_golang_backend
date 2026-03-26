@@ -1,9 +1,15 @@
 package helpers
 
 import (
+	"bytes"
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"image"
@@ -21,7 +27,195 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
+
+var ctx = context.Background()
+
+var RedisClient = redis.NewClient(&redis.Options{
+	Addr:     "localhost:6379",
+	Password: "",
+	DB:       0,
+})
+
+func SetValue(key string, value string) error {
+	return RedisClient.Set(ctx, key, value, 0).Err()
+}
+
+func GetValue(key string) (string, error) {
+	return RedisClient.Get(ctx, key).Result()
+}
+
+func DeleteValue(key string) error {
+	return RedisClient.Del(ctx, key).Err()
+}
+
+func GenerateRsaKey() (publicKeyPEM string, privateKeyPEM string, err error) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		return "", "", err
+	}
+
+	passphrase := []byte(os.Getenv("PASSPHRASE_RSA"))
+
+	privBytes := x509.MarshalPKCS1PrivateKey(privateKey)
+
+	encBlock, err := x509.EncryptPEMBlock(
+		rand.Reader,
+		"RSA PRIVATE KEY",
+		privBytes,
+		passphrase,
+		x509.PEMCipherAES256,
+	)
+	if err != nil {
+		return "", "", err
+	}
+
+	privateKeyPEM = string(pem.EncodeToMemory(encBlock))
+
+	pubBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return "", "", err
+	}
+
+	pubBlock := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubBytes,
+	}
+
+	publicKeyPEM = string(pem.EncodeToMemory(pubBlock))
+
+	return
+}
+
+func GeneratePublicKey(sharedPrime, sharedBase, secret int64) string {
+	p := big.NewInt(sharedPrime)
+	g := big.NewInt(sharedBase)
+	s := big.NewInt(secret)
+
+	result := new(big.Int).Exp(g, s, p)
+	return result.String()
+}
+
+func GenerateSharedSecret(publicKey string, secret int64, prime int64) string {
+	pub := new(big.Int)
+	pub.SetString(publicKey, 10)
+
+	s := big.NewInt(secret)
+	p := big.NewInt(prime)
+
+	result := new(big.Int).Exp(pub, s, p)
+	return Clean(result.String())
+}
+
+func GetFormattedYearMonthDateTimeZone(date interface{}, timezoneCode string) string {
+	d, ok := date.(time.Time)
+	if !ok {
+		return ""
+	}
+
+	loc, err := time.LoadLocation(timezoneCode)
+	if err != nil {
+		return ""
+	}
+
+	converted := d.In(loc)
+	return converted.Format("2006-01-02 15:04:05")
+}
+
+func Clean(number string) string {
+	runes := []rune(number)
+	n := len(runes)
+
+	for i := 0; i < n/2; i++ {
+		runes[i], runes[n-1-i] = runes[n-1-i], runes[i]
+	}
+	return string(runes)
+}
+
+func EncryptAES256(password string, data string) (string, error) {
+	key := sha256.Sum256([]byte(password))
+	iv := bytes.Repeat([]byte("0"), aes.BlockSize)
+
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return "", err
+	}
+
+	padding := aes.BlockSize - len(data)%aes.BlockSize
+	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
+	plaintext := append([]byte(data), padtext...)
+
+	ciphertext := make([]byte, len(plaintext))
+
+	mode := cipher.NewCBCEncrypter(block, iv)
+	mode.CryptBlocks(ciphertext, plaintext)
+
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+func DecryptAES256(password string, encrypted string) (string, error) {
+	key := sha256.Sum256([]byte(password))
+	iv := bytes.Repeat([]byte("0"), aes.BlockSize)
+
+	cipherData, err := base64.StdEncoding.DecodeString(encrypted)
+	if err != nil {
+		return "", err
+	}
+
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return "", err
+	}
+
+	mode := cipher.NewCBCDecrypter(block, iv)
+	mode.CryptBlocks(cipherData, cipherData)
+
+	padding := int(cipherData[len(cipherData)-1])
+	plaintext := cipherData[:len(cipherData)-padding]
+
+	return string(plaintext), nil
+}
+
+func DecryptRSA(privateKeyPEM string, encrypted string) ([]byte, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return nil, fmt.Errorf("invalid private key")
+	}
+
+	passphrase := []byte(os.Getenv("PASSPHRASE_RSA"))
+
+	der, err := x509.DecryptPEMBlock(block, passphrase)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey, err := x509.ParsePKCS1PrivateKey(der)
+	if err != nil {
+		return nil, err
+	}
+
+	cipherData, err := base64.StdEncoding.DecodeString(encrypted)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsa.DecryptPKCS1v15(rand.Reader, privateKey, cipherData)
+}
+
+func FindPercentageFromDifferentValue(number1, number2 float64) float64 {
+	if number1-number2 == 0 {
+		return 0
+	}
+
+	result := 100 * math.Abs((number1-number2)/number2)
+	result = math.Round(result*100) / 100
+
+	if number1 > number2 {
+		return -result
+	}
+	return result
+}
 
 var Days = []string{
 	"Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu",
@@ -173,6 +367,100 @@ func FormatRupiah(value int64) string {
 	return formatted
 }
 
+func GetTimezoneNowDateReturnDate(timezone string) (time.Time, error) {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	now := time.Now().In(loc)
+	return now, nil
+}
+func GetTimezoneNowDate(timezone string) string {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	now := time.Now().In(loc)
+
+	year := now.Year()
+	month := int(now.Month())
+	day := now.Day()
+	hour := now.Hour()
+	minute := now.Minute()
+	second := now.Second()
+
+	return fmt.Sprintf(
+		"%04d-%02d-%02d %02d:%02d:%02d",
+		year,
+		month,
+		day,
+		hour,
+		minute,
+		second,
+	)
+}
+func RandomString(length int) string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[n.Int64()]
+	}
+
+	return string(b)
+}
+
+var monthMappingLetters = map[int]string{
+	1:  "Januari",
+	2:  "Feberuari",
+	3:  "Maret",
+	4:  "April",
+	5:  "Mei",
+	6:  "Juni",
+	7:  "Juli",
+	8:  "Agustus",
+	9:  "September",
+	10: "Oktober",
+	11: "November",
+	12: "Desember",
+}
+
+func ConvertNumberToMonthString(number string) string {
+	n, err := strconv.Atoi(number)
+	if err != nil {
+		return ""
+	}
+
+	if month, ok := monthMappingLetters[n]; ok {
+		return month
+	}
+
+	return ""
+}
+func GetFormattedYearMonthDate(date time.Time) string {
+	if !date.IsZero() {
+		year := date.Year()
+		month := int(date.Month())
+		day := date.Day()
+		hour := date.Hour()
+		minute := date.Minute()
+		second := date.Second()
+
+		return fmt.Sprintf(
+			"%04d-%02d-%02d %02d:%02d:%02d",
+			year,
+			month,
+			day,
+			hour,
+			minute,
+			second,
+		)
+	}
+	return ""
+}
 func GenerateRandomAlphaNum(n int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, n)

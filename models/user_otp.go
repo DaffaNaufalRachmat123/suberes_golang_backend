@@ -3,14 +3,14 @@ package models
 import "time"
 
 type UserOTP struct {
-	UsersID     string    `gorm:"primaryKey;size:36;column:users_id" json:"users_id"`
-	OTPCode     string    `gorm:"column:otp_code" json:"otp_code"`
-	OTPType     string    `gorm:"column:otp_type" json:"otp_type"`
-	SessionTime time.Time `gorm:"column:session_time" json:"session_time"`
+	BaseModel
+	UsersID     string    `gorm:"type:varchar(36);primaryKey" json:"users_id"`
+	OTPCode     string    `gorm:"type:text" json:"otp_code"`
+	OTPType     string    `gorm:"type:varchar(50);check:otp_type IN ('login_code','email_verification_code','change_data','change_pin','change_phone_number','forgot_password')" json:"otp_type"`
+	SessionTime time.Time `gorm:"type:time" json:"session_time"`
 
-	// Perbaikan: column:createdAt menjadi column:created_at
-	CreatedAt time.Time `gorm:"column:createdAt;autoCreateTime:true" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updatedAt;autoUpdateTime:true" json:"updated_at"`
+	// Associations
+	User *User `gorm:"foreignKey:UsersID;references:ID" json:"user,omitempty"`
 }
 
 func (UserOTP) TableName() string {

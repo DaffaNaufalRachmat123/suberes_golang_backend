@@ -10,15 +10,31 @@ import (
 	"os"
 	"sync" // Import sync untuk menangani Singleton
 
+	"encoding/json"
+	"time"
+
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+
+	"github.com/hibiken/asynq"
 )
+
+type EmailPayload struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
+}
+
+const TypeEmailDelivery = "email:send"
 
 // --- Global Variable untuk Token Caching ---
 var (
 	globalTokenSource oauth2.TokenSource
 	tokenOnce         sync.Once
+	asynqClient       *asynq.Client
+	asynqServer       *asynq.Server
 )
 
 // Config menampung konfigurasi OAuth2
@@ -27,6 +43,80 @@ type Config struct {
 	ClientID     string
 	ClientSecret string
 	RefreshToken string
+}
+
+func enqueueEmail(from, to, subject, body string) {
+
+	payload, err := json.Marshal(EmailPayload{
+		From:    from,
+		To:      to,
+		Subject: subject,
+		Body:    body,
+	})
+	if err != nil {
+		log.Println("Failed marshal email:", err)
+		return
+	}
+
+	task := asynq.NewTask(TypeEmailDelivery, payload)
+
+	_, err = asynqClient.Enqueue(
+		task,
+		asynq.MaxRetry(5),
+		asynq.Timeout(30*time.Second),
+		asynq.Queue("critical"),
+	)
+
+	if err != nil {
+		log.Println("Failed enqueue email:", err)
+	}
+}
+
+func handleEmailTask(ctx context.Context, t *asynq.Task) error {
+
+	var p EmailPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return err
+	}
+
+	log.Printf("📨 Sending email to %s", p.To)
+
+	err := sendMail(p.From, p.To, p.Subject, p.Body)
+	if err != nil {
+		log.Printf("❌ Failed email to %s: %v", p.To, err)
+		return err // otomatis retry
+	}
+
+	log.Printf("✅ Email sent to %s", p.To)
+	return nil
+}
+
+func InitEmailQueue(redisAddr string) {
+
+	asynqClient = asynq.NewClient(asynq.RedisClientOpt{
+		Addr: redisAddr,
+	})
+
+	asynqServer = asynq.NewServer(
+		asynq.RedisClientOpt{Addr: redisAddr},
+		asynq.Config{
+			Concurrency: 10,
+			Queues: map[string]int{
+				"critical": 6,
+				"default":  3,
+				"low":      1,
+			},
+		},
+	)
+
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(TypeEmailDelivery, handleEmailTask)
+
+	go func() {
+		if err := asynqServer.Run(mux); err != nil {
+			log.Fatal(err)
+		}
+	}()
 }
 
 // LoadConfig mengambil env variables
@@ -177,11 +267,7 @@ func SendInvitedMailMitra(from, to, subject, name, timeInvited, placeInvited str
 		return
 	}
 
-	if err := sendMail(from, to, subject, htmlBody); err != nil {
-		log.Println("Error sending invited mail:", err)
-	} else {
-		log.Println("Invited mail sent successfully to", to)
-	}
+	enqueueEmail(from, to, subject, htmlBody)
 }
 
 func SendAcceptedMailMitra(from, to, subject, email, password string) {
@@ -195,11 +281,7 @@ func SendAcceptedMailMitra(from, to, subject, email, password string) {
 		return
 	}
 
-	if err := sendMail(from, to, subject, htmlBody); err != nil {
-		log.Println("Error sending accepted mitra mail:", err)
-	} else {
-		log.Println("Accepted mitra mail sent successfully to", to)
-	}
+	enqueueEmail(from, to, subject, htmlBody)
 }
 
 func SendAcceptedAdminAccount(from, to, subject, email, password string) {
@@ -213,11 +295,7 @@ func SendAcceptedAdminAccount(from, to, subject, email, password string) {
 		return
 	}
 
-	if err := sendMail(from, to, subject, htmlBody); err != nil {
-		log.Println("Error sending accepted admin mail:", err)
-	} else {
-		log.Println("Accepted admin mail sent successfully to", to)
-	}
+	enqueueEmail(from, to, subject, htmlBody)
 }
 
 func SendActiveAdminAccount(from, to, subject, completeName, userType, userTypeCapital, email, password, reason string) {
@@ -235,11 +313,7 @@ func SendActiveAdminAccount(from, to, subject, completeName, userType, userTypeC
 		return
 	}
 
-	if err := sendMail(from, to, subject, htmlBody); err != nil {
-		log.Println("Error sending active admin mail:", err)
-	} else {
-		log.Println("Active admin mail sent successfully to", to)
-	}
+	enqueueEmail(from, to, subject, htmlBody)
 }
 
 func SendNonactiveAdminAccount(from, to, subject, completeName, userType, userTypeCapital, email, reason string) {
@@ -256,11 +330,7 @@ func SendNonactiveAdminAccount(from, to, subject, completeName, userType, userTy
 		return
 	}
 
-	if err := sendMail(from, to, subject, htmlBody); err != nil {
-		log.Println("Error sending nonactive admin mail:", err)
-	} else {
-		log.Println("Nonactive admin mail sent successfully to", to)
-	}
+	enqueueEmail(from, to, subject, htmlBody)
 }
 
 func SendRemoveAdminAccount(from, to, subject, completeName, userTypeCapital, email, reason string) {
@@ -276,11 +346,7 @@ func SendRemoveAdminAccount(from, to, subject, completeName, userTypeCapital, em
 		return
 	}
 
-	if err := sendMail(from, to, subject, htmlBody); err != nil {
-		log.Println("Error sending remove admin mail:", err)
-	} else {
-		log.Println("Remove admin mail sent successfully to", to)
-	}
+	enqueueEmail(from, to, subject, htmlBody)
 }
 
 func SendOtpCodeMail(from, to, subject, otpCode string) {
@@ -293,11 +359,7 @@ func SendOtpCodeMail(from, to, subject, otpCode string) {
 		return
 	}
 
-	if err := sendMail(from, to, subject, htmlBody); err != nil {
-		log.Println("Error sending OTP mail:", err)
-	} else {
-		log.Println("OTP mail sent successfully to", to)
-	}
+	enqueueEmail(from, to, subject, htmlBody)
 }
 
 func SendMitraStatus(from, to, subject, mitraStatus, email, text string) {
@@ -318,11 +380,7 @@ func SendMitraStatus(from, to, subject, mitraStatus, email, text string) {
 		return
 	}
 
-	if err := sendMail(from, to, subject, htmlBody); err != nil {
-		log.Println("Error sending mitra status mail:", err)
-	} else {
-		log.Println("Mitra status mail sent successfully to", to)
-	}
+	enqueueEmail(from, to, subject, htmlBody)
 }
 
 func main() {

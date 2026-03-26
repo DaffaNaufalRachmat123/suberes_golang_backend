@@ -1,1 +1,0 @@
-DROP TABLE privacy_policies;

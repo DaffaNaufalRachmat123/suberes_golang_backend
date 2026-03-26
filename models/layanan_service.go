@@ -3,18 +3,21 @@ package models
 import "time"
 
 type LayananService struct {
-	BaseModel // Asumsi ada ID auto increment
+	BaseModel
+	CreatorID             string    `gorm:"type:varchar(36)" json:"creator_id"`
+	LayananTitle          string    `gorm:"type:varchar(255)" json:"layanan_title"`
+	LayananDescription    string    `gorm:"type:text" json:"layanan_description"`
+	LayananImage          string    `gorm:"type:text" json:"layanan_image"`
+	LayananImageSize      string    `gorm:"type:varchar(255)" json:"layanan_image_size"`
+	LayananImageDimension string    `gorm:"type:varchar(255)" json:"layanan_image_dimension"`
+	IsActive              string    `gorm:"type:varchar(1);check:is_active IN ('0','1')" json:"is_active"`
+	CreatedAt             time.Time `gorm:"type:timestamp;default:now()" json:"created_at"`
+	UpdatedAt             time.Time `gorm:"type:timestamp;default:now()" json:"updated_at"`
 
-	CreatorID             string `gorm:"column:creator_id" json:"creator_id"`
-	LayananTitle          string `gorm:"column:layanan_title" json:"layanan_title"`
-	LayananDescription    string `gorm:"type:text;column:layanan_description" json:"layanan_description"`
-	LayananImage          string `gorm:"type:text;column:layanan_image" json:"layanan_image"`
-	LayananImageSize      string `gorm:"column:layanan_image_size" json:"layanan_image_size"`
-	LayananImageDimension string `gorm:"column:layanan_image_dimension" json:"layanan_image_dimension"`
-	IsActive              string `gorm:"type:enum('0','1');column:is_active" json:"is_active"`
-
-	CreatedAt time.Time `gorm:"column:createdAt" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updatedAt" json:"updated_at"`
+	// Associations
+	Creator          *User             `gorm:"foreignKey:CreatorID;references:ID" json:"creator,omitempty"`
+	CategoryServices []CategoryService `gorm:"foreignKey:LayananID" json:"category_services,omitempty"`
+	UserRatings      []UserRating      `gorm:"foreignKey:LayananID" json:"user_ratings,omitempty"`
 }
 
 func (LayananService) TableName() string {

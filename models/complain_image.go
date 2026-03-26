@@ -2,11 +2,13 @@ package models
 
 type ComplainImage struct {
 	BaseModel
+	ComplainID         string `gorm:"type:varchar(36)" json:"complain_id"`
+	ImageName          string `gorm:"type:text" json:"image_name"`
+	ImageSize          string `gorm:"type:varchar(255)" json:"image_size"`
+	ImageSizeDimension string `gorm:"type:varchar(255)" json:"image_size_dimension"`
 
-	ComplainID         string `gorm:"size:36;column:complain_id" json:"complain_id"`
-	ImageName          string `gorm:"type:text;column:image_name" json:"image_name"`
-	ImageSize          string `gorm:"column:image_size" json:"image_size"`
-	ImageSizeDimension string `gorm:"column:image_size_dimension" json:"image_size_dimension"`
+	// Associations
+	Complain *Complain `gorm:"foreignKey:ComplainID;references:ID" json:"complain,omitempty"`
 }
 
 func (ComplainImage) TableName() string {

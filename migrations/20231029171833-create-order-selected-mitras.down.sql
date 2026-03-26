@@ -1,1 +1,0 @@
-DROP TABLE order_selected_mitras;

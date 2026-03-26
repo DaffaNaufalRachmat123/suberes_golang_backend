@@ -1,11 +1,17 @@
 package controllers
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"suberes_golang/dtos"
+	"suberes_golang/helpers"
 	"suberes_golang/models"
 	"suberes_golang/services"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -51,21 +57,41 @@ func (c *AdminController) IndexAdmin(ctx *gin.Context) {
 
 func (c *AdminController) CreateAdmin(ctx *gin.Context) {
 	var req dtos.CreateAdminRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
+	jsonData := ctx.Request.FormValue("json_data")
+	if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	_, err := ctx.FormFile("file")
+	file, err := ctx.FormFile("file")
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
 		return
 	}
 
-	// TODO: save file
-	filePath := ""
+	pathString := filepath.Join(
+		helpers.RootPath(),
+		os.Getenv("IMAGE_PATH_CONTROLLER"),
+	)
+	if _, err := os.Stat(pathString); os.IsNotExist(err) {
+		os.Mkdir(pathString, os.ModePerm)
+	}
 
-	admin, err := c.AdminService.CreateAdmin(&req, filePath)
+	adminImagePath := pathString + os.Getenv("ADMIN_IMAGE_PATH")
+	if _, err := os.Stat(adminImagePath); os.IsNotExist(err) {
+		os.Mkdir(adminImagePath, os.ModePerm)
+	}
+
+	filePath := fmt.Sprintf("ADMIN_IMG_%d_%s", time.Now().UnixNano(), file.Filename)
+	if err := ctx.SaveUploadedFile(file, adminImagePath+filePath); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
+		return
+	}
+
+	dbFilePath := os.Getenv("ADMIN_IMAGE_PATH") + filePath
+
+	admin, err := c.AdminService.CreateAdmin(&req, dbFilePath)
+	fmt.Printf("%+v\n", admin)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"server_message": err.Error(),

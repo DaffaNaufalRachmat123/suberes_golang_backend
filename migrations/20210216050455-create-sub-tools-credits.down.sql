@@ -1,1 +1,0 @@
-DROP TABLE sub_tools_credits;

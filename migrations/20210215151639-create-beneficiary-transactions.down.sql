@@ -1,1 +1,0 @@
-DROP TABLE beneficiary_transactions;

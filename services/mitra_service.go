@@ -82,7 +82,7 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.MitraLoginRespo
 		return nil, err
 	}
 
-	var sharedPrimeCustomer int
+	var sharedPrimeCustomer int64
 	if order != nil {
 		customer, err := s.UserRepository.FindCustomerById(string(order.CustomerID))
 		if err != nil {
@@ -186,7 +186,9 @@ func (s *MitraService) Register(registerDTO dtos.MitraRegisterDTO, files map[str
 		UserType:                    "mitra",
 		IsMitraInvited:              "0",
 		IsMitraRejected:             "0",
+		IsBusy:                      "no",
 		IsMitraActivated:            "0",
+		IsDocumentCompleted:         "0",
 		KTPImage:                    files["ktp"],
 		KKImage:                     files["kk"],
 		CoverSavingsBook:            files["cover_saving_book"],
@@ -497,7 +499,7 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 			return 500, tx.Error
 		}
 		if mitra.IsBusy == "yes" {
-			orderData, err := s.OrderTransactionRepository.FindById(mitra.OrderIDRunning)
+			orderData, err := s.OrderTransactionRepository.FindById(*mitra.OrderIDRunning)
 			if err != nil {
 				tx.Rollback()
 				return 500, err
@@ -586,7 +588,7 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 			if err != nil {
 				panic(err)
 			}
-			transactionDate := time.Now().UTC().In(loc).Format("2006-01-02 15:04:05")
+			transactionDate := time.Now().UTC().In(loc)
 			transPayload := models.Transaction{
 				ID:                 orderData.ID,
 				MitraID:            orderData.MitraID,
@@ -857,7 +859,7 @@ func (s *MitraService) UpdateMitraCoordinate(mitraID string, latitude, longitude
 func (s *MitraService) AdminIndex(page, limit int, search string) ([]models.User, int64, error) {
 	return s.UserRepository.FindMitraPagination(page, limit, search)
 }
-func (s *MitraService) GetMitraDetail(id int, status string, timezone string) (interface{}, int, error) {
+func (s *MitraService) GetMitraDetail(id string, status string, timezone string) (interface{}, int, error) {
 
 	// timezone handling
 	loc, _ := time.LoadLocation(timezone)
@@ -865,7 +867,7 @@ func (s *MitraService) GetMitraDetail(id int, status string, timezone string) (i
 
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, loc)
-
+	fmt.Println("Mitra ID : ", id)
 	user, err := s.UserRepository.FindGenderMitraExGoLife(id)
 	if err != nil {
 		return nil, 404, errors.New("Mitra data not found")
@@ -1036,4 +1038,42 @@ func (s *MitraService) UpdateMitraCandidate(
 
 	tx.Commit()
 	return nil
+}
+func (s *MitraService) UpdateDocumentStatus(data dtos.DocumentStatusRequest) (int, error) {
+	mitra, err := s.UserRepository.FindMitraById(data.ID)
+	if err != nil {
+		return 500, err
+	}
+	if mitra == nil {
+		return 404, errors.New("Mitra not found")
+	}
+	tx := s.DB.Begin()
+	if data.Status == "1" {
+		_, err = s.UserRepository.UpdateUserData(tx,
+			map[string]interface{}{
+				"id":        data.ID,
+				"user_type": "mitra",
+			},
+			map[string]interface{}{
+				"is_document_completed": data.Status,
+			})
+		if err != nil {
+			tx.Rollback()
+			return 500, err
+		}
+	} else {
+		err = s.UserRepository.DeleteByConditions(tx, map[string]interface{}{
+			"id":        data.ID,
+			"user_type": "mitra",
+		})
+		if err != nil {
+			tx.Rollback()
+			return 500, err
+		}
+	}
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+	helpers.SendInvitedMailMitra(os.Getenv("SUPPORT_EMAIL"), mitra.Email, "Data Tidak Lengkap", "Data anda kurang lengkap, silahkan submit ulang", "", "")
+	return 200, nil
 }

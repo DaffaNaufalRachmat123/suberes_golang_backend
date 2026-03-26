@@ -1,1 +1,0 @@
-DROP TABLE sub_service_addeds;

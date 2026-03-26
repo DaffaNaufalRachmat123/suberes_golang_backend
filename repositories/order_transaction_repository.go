@@ -17,6 +17,24 @@ func (r *OrderTransactionRepository) FindRunningOrderByMitraID(mitraID string) (
 	err := r.DB.Where("mitra_id = ? AND order_status IN (?)", mitraID, []string{"OTW", "ON_PROGRESS"}).First(&orderTransaction).Error
 	return &orderTransaction, err
 }
+func (r *OrderTransactionRepository) CountRunningOrders() (int64, error) {
+	var count int64
+
+	err := r.DB.Model(&models.OrderTransaction{}).
+		Where("order_status IN ?", []string{"OTW", "ON_PROGRESS"}).
+		Count(&count).Error
+
+	return count, err
+}
+func (r *OrderTransactionRepository) CountWaitingOrders() (int64, error) {
+	var count int64
+
+	err := r.DB.Model(&models.OrderTransaction{}).
+		Where("order_status = ?", "WAITING_FOR_SELECTED_MITRA").
+		Count(&count).Error
+
+	return count, err
+}
 func (r *OrderTransactionRepository) FindById(id string) (*models.OrderTransaction, error) {
 	var orderData models.OrderTransaction
 	err := r.DB.Where("id = ?", id).First(&orderData)
@@ -27,7 +45,7 @@ func (r *OrderTransactionRepository) UpdateData(tx *gorm.DB, user *models.OrderT
 	return tx.Model(user).Updates(data).Error
 }
 
-func (r *OrderTransactionRepository) GetTodayOrderSummary(mitraID int, start, end time.Time) (*dtos.OrderSummary, error) {
+func (r *OrderTransactionRepository) GetTodayOrderSummary(mitraID string, start, end time.Time) (*dtos.OrderSummary, error) {
 	var result struct {
 		OrderCount int64
 		Pendapatan int64
@@ -78,6 +96,13 @@ func (r *OrderTransactionRepository) FindDynamicOrderTransactionMap(
 	}
 
 	return result, nil
+}
+
+func (r *OrderTransactionRepository) CreateOrderData(tx *gorm.DB, data models.OrderTransaction) (*models.OrderTransaction, error) {
+	if err := tx.Create(&data).Error; err != nil {
+		return nil, err
+	}
+	return &data, nil
 }
 
 func (r *OrderTransactionRepository) CountOrders(start time.Time, end time.Time) (int64, error) {
@@ -149,4 +174,65 @@ func (r *OrderTransactionRepository) MitraOrderToday(start time.Time, end time.T
 		Order("order_count DESC").
 		Scan(&result).Error
 	return result, err
+}
+
+func (r *OrderTransactionRepository) FindOrderByPaymentID(tx *gorm.DB, paymentID string) (*models.OrderTransaction, error) {
+	var order models.OrderTransaction
+	err := tx.Where("payment_id_pay = ?", paymentID).First(&order).Error
+	if err != nil {
+		return nil, err
+	}
+	return &order, nil
+}
+
+func (r *OrderTransactionRepository) UpdateOrderStatus(tx *gorm.DB, orderID string, currentStatus string, updates map[string]interface{}) error {
+	return tx.Model(&models.OrderTransaction{}).Where("id = ? AND order_status = ?", orderID, currentStatus).UpdateColumns(updates).Error
+}
+
+func (r *OrderTransactionRepository) UpdateWithConditions(
+	tx *gorm.DB,
+	where map[string]interface{},
+	updates map[string]interface{},
+) error {
+
+	query := tx.Model(&models.OrderTransaction{})
+
+	// Handle AND conditions
+	if andMap, ok := where["AND"].(map[string]interface{}); ok {
+		for key, value := range andMap {
+			switch v := value.(type) {
+			case []string, []int, []interface{}:
+				query = query.Where(key+" IN ?", v)
+			default:
+				query = query.Where(key+" = ?", v)
+			}
+		}
+	}
+
+	// Handle OR conditions
+	if orMap, ok := where["OR"].(map[string]interface{}); ok {
+		for key, value := range orMap {
+			switch v := value.(type) {
+			case []string, []int, []interface{}:
+				query = query.Or(key+" IN ?", v)
+			default:
+				query = query.Or(key+" = ?", v)
+			}
+		}
+	}
+
+	return query.Updates(updates).Error
+}
+
+func (r *OrderTransactionRepository) FindVoidableOrder(tx *gorm.DB, paymentID string) (*models.OrderTransaction, error) {
+	var order models.OrderTransaction
+	err := tx.Where("payment_id_pay = ? AND order_status = ?", paymentID, "CANCELED_VOID").First(&order).Error
+	if err != nil {
+		return nil, err
+	}
+	return &order, nil
+}
+
+func (r *OrderTransactionRepository) UpdateVoidStatus(tx *gorm.DB, orderID, status string) error {
+	return tx.Model(&models.OrderTransaction{}).Where("id = ?", orderID).Update("void_status", status).Error
 }

@@ -1,1 +1,0 @@
-DROP TABLE banner_lists;

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 type MitraController struct {
@@ -43,15 +44,41 @@ func (c *MitraController) Login(ctx *gin.Context) {
 }
 
 func (c *MitraController) Register(ctx *gin.Context) {
+
 	var registerDTO dtos.MitraRegisterDTO
-	if err := ctx.ShouldBind(&registerDTO); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+	// ambil json_data dari form
+	jsonData := ctx.PostForm("json_data")
+
+	if jsonData == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "json_data is required",
+		})
 		return
 	}
 
+	// parse json string -> struct
+	if err := json.Unmarshal([]byte(jsonData), &registerDTO); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid json_data format",
+		})
+		return
+	}
+
+	// validasi struct (optional kalau pakai binding tag)
+	if err := validator.New().Struct(registerDTO); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// ambil file multipart
 	form, err := ctx.MultipartForm()
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid form data"})
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid form data",
+		})
 		return
 	}
 
@@ -60,23 +87,44 @@ func (c *MitraController) Register(ctx *gin.Context) {
 
 	for key, fileHeaders := range files {
 		if len(fileHeaders) > 0 {
+
 			file := fileHeaders[0]
+
 			date := time.Now()
-			dateImage := fmt.Sprintf("%d-%d-%d_%d-%d-%d", date.Year(), date.Month(), date.Day(), date.Hour(), date.Minute(), date.Second())
-			filename := fmt.Sprintf("MITRA_CANDIDATE_IMAGE%s_%s", dateImage, file.Filename)
+			dateImage := fmt.Sprintf(
+				"%d-%d-%d_%d-%d-%d",
+				date.Year(),
+				date.Month(),
+				date.Day(),
+				date.Hour(),
+				date.Minute(),
+				date.Second(),
+			)
+
+			filename := fmt.Sprintf(
+				"MITRA_CANDIDATE_IMAGE%s_%s",
+				dateImage,
+				file.Filename,
+			)
+
 			path := filepath.Join("images/mitra_candidate", filename)
 
 			if err := ctx.SaveUploadedFile(file, path); err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save file: %s", err.Error())})
+				ctx.JSON(http.StatusInternalServerError, gin.H{
+					"error": fmt.Sprintf("Failed to save file: %s", err.Error()),
+				})
 				return
 			}
+
 			filePaths[key] = path
 		}
 	}
 
 	createdMitra, err := c.MitraService.Register(registerDTO, filePaths)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
@@ -230,9 +278,7 @@ func (c *MitraController) GetMitraDetail(ctx *gin.Context) {
 	status := ctx.Param("status")
 	timezone := ctx.DefaultQuery("timezone", "Asia/Jakarta")
 
-	id, _ := strconv.Atoi(idParam)
-
-	response, code, err := c.MitraService.GetMitraDetail(id, status, timezone)
+	response, code, err := c.MitraService.GetMitraDetail(idParam, status, timezone)
 	if err != nil {
 		ctx.JSON(code, gin.H{
 			"server_message": err.Error(),
@@ -282,8 +328,6 @@ func (c *MitraController) AdminCandidate(ctx *gin.Context) {
 }
 
 func (c *MitraController) UpdateMitraCandidate(ctx *gin.Context) {
-
-	// 1️⃣ Parse JSON
 	jsonData := ctx.PostForm("json_data")
 
 	var req dtos.UpdateMitraCandidateRequest
@@ -292,7 +336,6 @@ func (c *MitraController) UpdateMitraCandidate(ctx *gin.Context) {
 		return
 	}
 
-	// 2️⃣ Get ID
 	idParam := ctx.Param("id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
@@ -300,7 +343,6 @@ func (c *MitraController) UpdateMitraCandidate(ctx *gin.Context) {
 		return
 	}
 
-	// 3️⃣ Prepare upload directory
 	basePath := filepath.Join(
 		helpers.RootPath(),
 		os.Getenv("IMAGE_PATH_CONTROLLER"),
@@ -367,6 +409,22 @@ func (c *MitraController) UpdateMitraCandidate(ctx *gin.Context) {
 
 	ctx.JSON(200, gin.H{
 		"server_message": "mitra candidate data updated",
+		"status":         "success",
+	})
+}
+
+func (c *MitraController) UpdateDocumentStatus(ctx *gin.Context) {
+	var req dtos.DocumentStatusRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		helpers.JSONError(ctx, http.StatusBadRequest, err)
+		return
+	}
+	code, err := c.MitraService.UpdateDocumentStatus(req)
+	if err != nil {
+		helpers.JSONError(ctx, code, err)
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "Document status updated",
 		"status":         "success",
 	})
 }

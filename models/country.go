@@ -2,7 +2,9 @@ package models
 
 type Country struct {
 	BaseModel
-	CountryName string
+	CountryName string `gorm:"type:varchar(255)" json:"country_name"`
 
-	Regions []Region `gorm:"foreignKey:CountryID"`
+	// Associations
+	Coverages []Coverage `gorm:"foreignKey:CountryID" json:"coverages,omitempty"`
+	Region    *Region    `gorm:"foreignKey:CountryID" json:"region,omitempty"`
 }

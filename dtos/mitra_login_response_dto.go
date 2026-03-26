@@ -7,6 +7,6 @@ type MitraLoginResponseDTO struct {
 	Status        string      `json:"status"`
 	Token         string      `json:"token"`
 	Data          models.User `json:"data"`
-	SharedPrime   int         `json:"shared_prime"`
+	SharedPrime   int64       `json:"shared_prime"`
 	SharedSecret  int64       `json:"shared_secret"`
 }

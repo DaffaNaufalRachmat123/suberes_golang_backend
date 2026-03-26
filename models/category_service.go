@@ -1,13 +1,14 @@
 package models
 
 type CategoryService struct {
-	ID              uint   `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
-	LayananID       int    `gorm:"column:layanan_id" json:"layanan_id"`
-	CreatorID       int    `gorm:"column:creator_id" json:"creator_id"`
-	CategoryService string `gorm:"type:text;column:category_service" json:"category_service"` // Nama field sama dengan nama tabel di JS, disesuaikan
+	ID              uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	LayananID       int    `gorm:"type:integer" json:"layanan_id"`
+	CreatorID       string `gorm:"type:varchar(36)" json:"creator_id"`
+	CategoryService string `gorm:"type:text" json:"category_service"`
 
-	// Relations
-	Services []Service `gorm:"foreignKey:ParentID;references:ID" json:"services"` // Asumsi ada model Service
+	// Associations
+	LayananService *LayananService `gorm:"foreignKey:LayananID;references:ID" json:"layanan_service,omitempty"`
+	Services       []Service       `gorm:"foreignKey:parent_id;references:ID" json:"services,omitempty"`
 }
 
 func (CategoryService) TableName() string {

@@ -1,9 +1,0 @@
-CREATE TABLE order_selected_mitras (
-  id INT NOT NULL AUTO_INCREMENT,
-  order_id CHAR(36) NOT NULL,
-  mitra_id CHAR(36) NOT NULL,
-  offer_status ENUM('SELECTED', 'CANCELED', 'RECEIVED', 'ACCEPTED', 'REJECTED') NOT NULL DEFAULT 'SELECTED',
-  "createdAt" DATETIME NOT NULL,
-  "updatedAt" DATETIME NOT NULL,
-  PRIMARY KEY (id)
-);

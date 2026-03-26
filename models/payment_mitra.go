@@ -2,13 +2,12 @@ package models
 
 type PaymentMitra struct {
 	BaseModel
+	Title string `gorm:"type:varchar(255)" json:"title"`
+	Desc  string `gorm:"type:text" json:"desc"`
+	Icon  string `gorm:"type:text" json:"icon"`
 
-	Title string `gorm:"column:title" json:"title"`
-	Desc  string `gorm:"type:text;column:desc" json:"desc"`
-	Icon  string `gorm:"type:text;column:icon" json:"icon"`
-
-	// Relations
-	PaymentAccounts []PaymentAccount `gorm:"foreignKey:PaymentID;references:ID" json:"payment_accounts"`
+	// Associations
+	PaymentAccounts []PaymentAccount `gorm:"foreignKey:PaymentID" json:"payment_accounts,omitempty"`
 }
 
 func (PaymentMitra) TableName() string {

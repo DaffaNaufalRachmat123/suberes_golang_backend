@@ -20,6 +20,24 @@ func (r *UserRepository) FindCustomerById(userId string) (*models.User, error) {
 	return &user, nil
 }
 
+func (r *UserRepository) FindOnlineAdmins() ([]string, error) {
+
+	var socketIDs []string
+
+	err := r.DB.
+		Model(&models.User{}).
+		Select("socket_id").
+		Where("user_type IN ?", []string{"admin", "superadmin"}).
+		Where("is_logged_in = ?", "1").
+		Pluck("socket_id", &socketIDs).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return socketIDs, nil
+}
+
 func (r *UserRepository) FindMitraById(userId string) (*models.User, error) {
 	var user models.User
 	err := r.DB.Where("id = ? AND user_type = ?", userId, "mitra").First(&user).Error
@@ -171,7 +189,7 @@ func (r *UserRepository) FindMitraWithFilter(
 
 	return users, total, nil
 }
-func (r *UserRepository) FindGenderMitraExGoLife(id int) (*models.User, error) {
+func (r *UserRepository) FindGenderMitraExGoLife(id string) (*models.User, error) {
 	var user models.User
 
 	err := r.DB.
@@ -342,4 +360,38 @@ func (r *UserRepository) SetLoggedIn(tx *gorm.DB, userId string) error {
 
 func (r *UserRepository) SetMitraLoggedIn(tx *gorm.DB, userId string) error {
 	return tx.Table("users").Where("id = ? AND user_type = ?", userId, "mitra").Update("is_logged_in", "1").Error
+}
+func (r *UserRepository) DeleteByConditions(
+	tx *gorm.DB,
+	conditions map[string]interface{},
+) error {
+
+	query := tx.Table("users")
+
+	for key, value := range conditions {
+		query = query.Where(key+" = ?", value)
+	}
+
+	return query.Delete(nil).Error
+}
+
+func (r *UserRepository) FindUserForTransaction(tx *gorm.DB, transaction *models.Transaction) (*models.User, error) {
+	var user models.User
+	userID := transaction.CustomerID
+	userType := "customer"
+
+	if userID == "" || userID == "NULL" {
+		userID = transaction.MitraID
+		userType = "mitra"
+	}
+
+	err := tx.Where("id = ? AND user_type = ?", userID, userType).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *UserRepository) UpdateUserBalance(tx *gorm.DB, userID string, amount int64) error {
+	return tx.Model(&models.User{}).Where("id = ?", userID).Update("account_balance", gorm.Expr("account_balance + ?", amount)).Error
 }

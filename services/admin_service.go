@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"suberes_golang/dtos"
+	"suberes_golang/helpers"
 	"suberes_golang/models"
 	"suberes_golang/repositories"
 	"time"
@@ -124,11 +126,16 @@ func (s *AdminService) CreateAdmin(req *dtos.CreateAdminRequest, fileHeader stri
 		tx.Rollback()
 		return nil, err
 	}
+	if len(req.UserType) > 0 {
+		userType := strings.ToUpper(req.UserType[:1]) + req.UserType[1:]
+		helpers.SendAcceptedAdminAccount(os.Getenv("SUPPORT_EMAIL"), req.Email, userType, req.Email, plainPass)
+	}
 
-	// TODO: send email
-	// await sendmail.sendAcceptedAdminAccount(process.env.SUPPORT_EMAIL , data.email , `Akun ${data.user_type.charAt(0).toUpperCase() + data.user_type.slice(1)}` , data.email , plainPass)
-
-	tx.Commit()
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		panic(err)
+		return nil, err
+	}
 	return newUser, nil
 }
 

@@ -5,6 +5,8 @@ import (
 	"os"
 	"suberes_golang/config"
 	"suberes_golang/controllers"
+	"suberes_golang/database"
+	"suberes_golang/queue"
 	"suberes_golang/realtime"
 	"suberes_golang/repositories"
 	"suberes_golang/routes"
@@ -19,6 +21,7 @@ import (
 func main() {
 	godotenv.Load()
 	config.ConnectDB()
+	database.AutoMigrate()
 
 	realtime.InitSocket()
 
@@ -45,6 +48,14 @@ func main() {
 	orderTransactionRepeatsRepo := &repositories.OrderTransactionRepeatsRepository{DB: config.DB}
 	adminRepo := &repositories.AdminRepository{DB: config.DB}
 	mitraRepo := &repositories.MitraRepository{DB: config.DB}
+	serviceRepo = &repositories.ServiceRepository{DB: config.DB}
+	subServiceRepo := &repositories.SubServiceRepository{DB: config.DB}
+	paymentRepo := &repositories.PaymentRepository{DB: config.DB}
+	subPaymentRepo := &repositories.SubPaymentRepository{DB: config.DB}
+	subServiceAddedRepo := &repositories.SubServiceAddedRepository{DB: config.DB}
+	orderRepo := &repositories.OrderRepository{DB: config.DB}
+	orderChatRepo := &repositories.OrderChatRepository{DB: config.DB}
+	orderOfferRepo := &repositories.OrderOfferRepository{DB: config.DB}
 
 	customerService := &services.CustomerService{
 		UserRepo:    userRepo,
@@ -82,6 +93,22 @@ func main() {
 		DB:                                config.DB,
 	}
 
+	orderCashService := &services.OrderCashService{
+		DB:                         config.DB,
+		UserRepo:                   userRepo,
+		ServiceRepo:                serviceRepo,
+		SubServiceRepo:             subServiceRepo,
+		LayananServiceRepo:         layananServiceRepo,
+		SubPaymentRepo:             subPaymentRepo,
+		SubServiceAddedRepo:        subServiceAddedRepo,
+		PaymentRepo:                paymentRepo,
+		OrderRepo:                  orderRepo,
+		OrderChatRepo:              orderChatRepo,
+		OrderOfferRepo:             orderOfferRepo,
+		OrderTransactionRepo:       orderTransactionRepo,
+		OrderTransactionRepeatRepo: orderTransactionRepeatsRepo,
+	}
+
 	CustomerController := &controllers.CustomerController{
 		CustomerService: customerService,
 	}
@@ -106,6 +133,10 @@ func main() {
 		MitraService: mitraService,
 	}
 
+	OrderController := &controllers.OrderController{
+		OrderCashService: orderCashService,
+	}
+
 	api := r.Group("/api")
 	{
 		routes.CustomerRoutes(api, CustomerController, config.DB)
@@ -114,6 +145,7 @@ func main() {
 		routes.ServiceRoutes(api, ServiceController, config.DB)
 		routes.AdminRoutes(api, AdminController, config.DB)
 		routes.MitraRoutes(api, MitraController, config.DB)
+		routes.OrderRoutes(api, OrderController, config.DB)
 	}
 
 	port := os.Getenv("APP_PORT")
@@ -123,4 +155,8 @@ func main() {
 
 	log.Println("Server running on port", port)
 	r.Run(":" + port)
+
+	queue.InitAsynq()
+
+	queue.StartWorker()
 }
