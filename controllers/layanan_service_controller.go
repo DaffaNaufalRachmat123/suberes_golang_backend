@@ -90,6 +90,39 @@ func (c *LayananServiceController) Update(ctx *gin.Context) {
 }
 
 // DELETE /api/banner/remove/:id
+func (c *LayananServiceController) GetDetail(ctx *gin.Context) {
+	layananID, err := strconv.Atoi(ctx.Param("layanan_id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"server_message": "Invalid layanan_id",
+			"status":         "failure",
+		})
+		return
+	}
+
+	page, err := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
+	if err != nil || limit < 1 {
+		limit = 10
+	}
+
+	categoryServices, total, err := c.LayananServiceService.GetCategoryServiceByLayananID(layananID, page, limit)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"server_message": "Internal server error",
+			"status":         "failure",
+		})
+		return
+	}
+
+	response := helpers.GetPaginationData(ctx, categoryServices, len(categoryServices), page, limit, total)
+	ctx.JSON(http.StatusOK, response)
+}
+
 func (c *LayananServiceController) Delete(ctx *gin.Context) {
 	id, _ := strconv.Atoi(ctx.Param("id"))
 	if err := c.LayananServiceService.Delete(uint(id)); err != nil {

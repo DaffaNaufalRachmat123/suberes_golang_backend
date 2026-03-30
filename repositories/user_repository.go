@@ -238,13 +238,22 @@ func (r *UserRepository) FindMitraByEmail(email string) (*models.User, error) {
 func (r *UserRepository) FindPhoneByCustomerEmail(
 	phone, email string,
 ) (*models.User, error) {
+
 	var user models.User
-	err := r.DB.Where(
-		"phone_number = ? AND email = ? AND user_type = ?", phone, email, "customer",
-	).First(&user).Error
+	err := r.DB.
+		Where(
+			"(phone_number = ? OR email = ?) AND user_type = ?",
+			phone, email, "customer",
+		).
+		First(&user).Error
+
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil // penting: tidak dianggap error
+		}
 		return nil, err
 	}
+
 	return &user, nil
 }
 func (r *UserRepository) CreateUser(tx *gorm.DB, user *models.User) error {

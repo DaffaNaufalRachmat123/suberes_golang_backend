@@ -19,6 +19,7 @@ import (
 
 type LayananServiceService struct {
 	LayananServiceRepo *repositories.LayananServiceRepository
+	CategoryServiceRepo *repositories.CategoryServiceRepository
 	DB                 *gorm.DB
 }
 
@@ -29,6 +30,11 @@ const (
 func (s *LayananServiceService) GetLayananService(page, limit int) ([]models.LayananService, int64, error) {
 	return s.LayananServiceRepo.FindAllPagination(page, limit)
 }
+
+func (s *LayananServiceService) GetCategoryServiceByLayananID(layananID, page, limit int) ([]models.CategoryService, int64, error) {
+	return s.CategoryServiceRepo.FindAllByLayananIDPagination(layananID, page, limit)
+}
+
 func (s *LayananServiceService) GetLayananByID(id uint) (*models.LayananService, error) {
 	return s.LayananServiceRepo.FindByID(id)
 }
@@ -39,7 +45,7 @@ func (s *LayananServiceService) Create(ctx *gin.Context) error {
 	jsonData := ctx.PostForm("json_data")
 	var req dtos.LayananServiceRequest
 	if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
-		return errors.New("Invali data format")
+		return errors.New("Invalid data format")
 	}
 	fileHeader, err := ctx.FormFile("file")
 	if err != nil {

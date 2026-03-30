@@ -7,7 +7,7 @@ type Payment struct {
 	Icon      string `gorm:"type:varchar(255)" json:"icon"`
 	IsActive  string `gorm:"type:varchar(1);check:is_active IN ('0','1')" json:"is_active"`
 	Title     string `gorm:"type:varchar(255)" json:"title"`
-	Type      string `gorm:"type:varchar(20);check:type IN ('tunai','virtual account','transfer')" json:"type"`
+	Type      string `gorm:"type:varchar(20);check:type IN ('tunai','virtual account','transfer' , 'ewallet','balance')" json:"type"`
 	Desc      string `gorm:"type:varchar(255)" json:"desc"`
 	CreatedAt time.Time
 	UpdatedAt time.Time

@@ -133,7 +133,6 @@ func (s *AdminService) CreateAdmin(req *dtos.CreateAdminRequest, fileHeader stri
 
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		panic(err)
 		return nil, err
 	}
 	return newUser, nil

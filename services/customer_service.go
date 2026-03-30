@@ -213,8 +213,12 @@ func (s *CustomerService) Register(
 			tx.Rollback()
 		}
 	}()
-	_, err := s.UserRepo.FindPhoneByCustomerEmail(phoneNumber, email)
+	userData, err := s.UserRepo.FindPhoneByCustomerEmail(phoneNumber, email)
 	if err == nil {
+		tx.Rollback()
+		return errors.New("Phone number or email already registered")
+	}
+	if userData != nil {
 		tx.Rollback()
 		return errors.New("Phone number or email already registered")
 	}

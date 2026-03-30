@@ -48,7 +48,6 @@ func main() {
 	orderTransactionRepeatsRepo := &repositories.OrderTransactionRepeatsRepository{DB: config.DB}
 	adminRepo := &repositories.AdminRepository{DB: config.DB}
 	mitraRepo := &repositories.MitraRepository{DB: config.DB}
-	serviceRepo = &repositories.ServiceRepository{DB: config.DB}
 	subServiceRepo := &repositories.SubServiceRepository{DB: config.DB}
 	paymentRepo := &repositories.PaymentRepository{DB: config.DB}
 	subPaymentRepo := &repositories.SubPaymentRepository{DB: config.DB}
@@ -56,6 +55,9 @@ func main() {
 	orderRepo := &repositories.OrderRepository{DB: config.DB}
 	orderChatRepo := &repositories.OrderChatRepository{DB: config.DB}
 	orderOfferRepo := &repositories.OrderOfferRepository{DB: config.DB}
+	bantuanRepo := &repositories.BantuanRepository{DB: config.DB}
+	transactionRepo := &repositories.TransactionRepository{DB: config.DB}
+	scheduleRepo := &repositories.ScheduleRepository{DB: config.DB}
 
 	customerService := &services.CustomerService{
 		UserRepo:    userRepo,
@@ -68,8 +70,11 @@ func main() {
 		DB:         config.DB,
 	}
 
+	categoryServiceRepo := &repositories.CategoryServiceRepository{DB: config.DB}
+
 	layananServiceService := &services.LayananServiceService{
 		LayananServiceRepo: layananServiceRepo,
+		CategoryServiceRepo: categoryServiceRepo,
 		DB:                 config.DB,
 	}
 
@@ -109,6 +114,17 @@ func main() {
 		OrderTransactionRepeatRepo: orderTransactionRepeatsRepo,
 	}
 
+	orderService := services.NewOrderService(orderTransactionRepo)
+
+	bantuanService := &services.BantuanService{
+		BantuanRepo: bantuanRepo,
+		DB:          config.DB,
+	}
+
+	transactionService := services.NewTransactionService(transactionRepo)
+
+	scheduleService := services.NewScheduleService(scheduleRepo, userRepo, config.DB)
+
 	CustomerController := &controllers.CustomerController{
 		CustomerService: customerService,
 	}
@@ -133,20 +149,27 @@ func main() {
 		MitraService: mitraService,
 	}
 
-	OrderController := &controllers.OrderController{
-		OrderCashService: orderCashService,
+	OrderController := controllers.NewOrderController(orderCashService, orderService)
+
+	BantuanController := &controllers.BantuanController{
+		BantuanService: bantuanService,
 	}
 
+	TransactionController := controllers.NewTransactionController(transactionService)
+
+	ScheduleController := controllers.NewScheduleController(scheduleService)
+
 	api := r.Group("/api")
-	{
-		routes.CustomerRoutes(api, CustomerController, config.DB)
-		routes.BannerRoutes(api, BannerController, config.DB)
-		routes.LayananServiceRoutes(api, LayananServiceController, config.DB)
-		routes.ServiceRoutes(api, ServiceController, config.DB)
-		routes.AdminRoutes(api, AdminController, config.DB)
-		routes.MitraRoutes(api, MitraController, config.DB)
-		routes.OrderRoutes(api, OrderController, config.DB)
-	}
+	routes.CustomerRoutes(api, CustomerController, config.DB)
+	routes.BannerRoutes(api, BannerController, config.DB)
+	routes.LayananServiceRoutes(api, LayananServiceController, config.DB)
+	routes.ServiceRoutes(api, ServiceController, config.DB)
+	routes.AdminRoutes(api, AdminController, config.DB)
+	routes.MitraRoutes(api, MitraController, config.DB)
+	routes.OrderRoutes(api, OrderController, config.DB)
+	routes.BantuanRoutes(api, BantuanController, config.DB)
+	routes.TransactionRoutes(api, TransactionController, config.DB)
+	routes.ScheduleRoutes(api, ScheduleController, config.DB)
 
 	port := os.Getenv("APP_PORT")
 	if port == "" {

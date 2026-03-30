@@ -27,9 +27,9 @@ func LayananServiceRoutes(r *gin.RouterGroup, controller *controllers.LayananSer
 		},
 		{
 			Method:  "GET",
-			Path:    "/detail/:id",
-			Handler: controller.GetByID,
-			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+			Path:    "/detail/:layanan_id",
+			Handler: controller.GetDetail,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole, helpers.CustomerRole},
 		},
 		{
 			Method:  "PUT",

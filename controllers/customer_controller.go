@@ -185,10 +185,7 @@ func (c *CustomerController) Register(ctx *gin.Context) {
 	}
 
 	if err := c.CustomerService.Register(req.CompleteName, req.Email, req.PhoneNumber, req.CountryCode, "customer"); err != nil {
-		ctx.JSON(http.StatusConflict, gin.H{
-			"server_message": err.Error(),
-			"status":         "failure",
-		})
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusConflict)
 		return
 	}
 

@@ -13,6 +13,7 @@ func ServiceRoutes(r *gin.RouterGroup, controller *controllers.ServiceController
 	service := r.Group("/services")
 	protected := service.Group("/")
 	protected.Use(middleware.AuthMiddleware(db))
+	service.GET("/detail/:id", controller.GetDetail)
 	routes := []helpers.ProtectedRoute{
 		{
 			Method:  "GET",
@@ -30,12 +31,6 @@ func ServiceRoutes(r *gin.RouterGroup, controller *controllers.ServiceController
 			Method:  "GET",
 			Path:    "/popular",
 			Handler: controller.Popular,
-			Roles:   []string{helpers.CustomerRole, helpers.SuperAdminRole, helpers.AdminRole},
-		},
-		{
-			Method:  "GET",
-			Path:    "/detail/:id",
-			Handler: controller.GetDetail,
 			Roles:   []string{helpers.CustomerRole, helpers.SuperAdminRole, helpers.AdminRole},
 		},
 		{

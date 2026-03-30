@@ -285,6 +285,10 @@ func (s *ServiceService) UpdateImage(ctx *gin.Context) error {
 	return nil
 }
 
+func (s *ServiceService) GetServiceDetail(id int) (*models.Service, error) {
+	return s.ServiceRepo.FindServiceWithSubServicesByID(id)
+}
+
 func (s *ServiceService) Delete(id int, userId string, password string) error {
 	service, err := s.ServiceRepo.FindByID(id)
 	if err != nil {

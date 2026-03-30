@@ -17,7 +17,7 @@ type Service struct {
 
 	// Associations
 	CategoryService         *CategoryService         `gorm:"foreignKey:ParentID;references:ID" json:"category_service,omitempty"`
-	SubServices             []SubService             `gorm:"foreignKey:ServiceID" json:"sub_services,omitempty"`
+	SubServices             []SubService             `gorm:"foreignKey:ServiceID" json:"sub_services"`
 	OrderTransactions       []OrderTransaction       `gorm:"foreignKey:ServiceID" json:"order_transactions,omitempty"`
 	ServicePromos           []ServicePromo           `gorm:"foreignKey:ServiceID" json:"service_promos,omitempty"`
 	OrderTransactionRepeats []OrderTransactionRepeat `gorm:"foreignKey:ServiceID" json:"order_transaction_repeats,omitempty"`

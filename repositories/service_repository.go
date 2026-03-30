@@ -105,6 +105,19 @@ func (r *ServiceRepository) Create(tx *gorm.DB, service *models.Service) error {
 func (r *ServiceRepository) Update(tx *gorm.DB, id int, data map[string]interface{}) error {
 	return tx.Model(&models.Service{}).Where("id = ?", id).Updates(data).Error
 }
+func (r *ServiceRepository) FindServiceWithSubServicesByID(id int) (*models.Service, error) {
+	var service models.Service
+
+	if err := r.DB.
+		Preload("SubServices").
+		Preload("SubServices.SubServiceAdditionals").
+		First(&service, id).Error; err != nil {
+		return nil, err
+	}
+
+	return &service, nil
+}
+
 func (r *ServiceRepository) Delete(tx *gorm.DB, id int) error {
 	return tx.Delete(&models.Service{}, id).Error
 }

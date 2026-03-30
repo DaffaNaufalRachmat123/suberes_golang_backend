@@ -14,7 +14,7 @@ func (r *LayananServiceRepository) FindAllPagination(page, limit int) ([]models.
 	var layananServices []models.LayananService
 	var total int64
 	offset := (page - 1) * limit
-	query := r.DB.Model(models.LayananService{}).Preload("CategoryServices").Order("createdAt DESC")
+	query := r.DB.Model(models.LayananService{}).Preload("CategoryServices").Order("created_at DESC")
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

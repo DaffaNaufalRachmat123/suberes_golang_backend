@@ -236,3 +236,38 @@ func (r *OrderTransactionRepository) FindVoidableOrder(tx *gorm.DB, paymentID st
 func (r *OrderTransactionRepository) UpdateVoidStatus(tx *gorm.DB, orderID, status string) error {
 	return tx.Model(&models.OrderTransaction{}).Where("id = ?", orderID).Update("void_status", status).Error
 }
+
+func (r *OrderTransactionRepository) FindAllByStatusWithPagination(status string, page, limit int, search string) ([]models.OrderTransaction, int64, error) {
+	var orders []models.OrderTransaction
+	var total int64
+
+	query := r.DB.Model(&models.OrderTransaction{})
+
+	if search != "" {
+		query = query.Where("id_transaction LIKE ?", "%"+search+"%")
+	}
+
+	switch status {
+	case "RUNNING":
+		query = query.Where("order_status IN ?", []string{"OTW", "ON_PROGRESS"})
+	case "REPEAT":
+		query = query.Where("order_type = ?", "repeat")
+	case "CANCELED":
+		query = query.Where("order_status IN ?", []string{"CANCELED", "CANCELED_LATE_PAYMENT", "CANCELED_BY_SYSTEM", "CANCELED_VOID", "CANCELED_VOID_BY_SYSTEM"})
+	default:
+		query = query.Where("order_status = ?", status)
+	}
+
+	err := query.Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err = query.Preload("Mitra").Preload("Customer").Preload("Service").Preload("SubService").Limit(limit).Offset(offset).Order("created_at DESC").Find(&orders).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return orders, total, nil
+}

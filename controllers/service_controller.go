@@ -83,7 +83,7 @@ func (c *ServiceController) GetDetail(ctx *gin.Context) {
 		})
 		return
 	}
-	service, err := c.ServiceService.GetServiceByID(id)
+	service, err := c.ServiceService.GetServiceDetail(id)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"server_message": err.Error(),
