@@ -1,7 +1,7 @@
 package dtos
 
 type NewsRequest struct {
-	CreatorID    int    `json:"creator_id"`
+	CreatorID    string `json:"creator_id"`
 	CreatorName  string `json:"creator_name"`
 	NewsTitle    string `json:"news_title" validate:"required"`
 	NewsBody     string `json:"news_body" validate:"required"`

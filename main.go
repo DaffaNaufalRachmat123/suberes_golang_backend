@@ -27,6 +27,8 @@ func main() {
 
 	r := gin.Default()
 
+	r.SetTrustedProxies(nil)
+
 	r.GET("/socket.io/*any", gin.WrapH(realtime.Server))
 	r.POST("/socket.io/*any", gin.WrapH(realtime.Server))
 
@@ -59,6 +61,7 @@ func main() {
 	transactionRepo := &repositories.TransactionRepository{DB: config.DB}
 	scheduleRepo := &repositories.ScheduleRepository{DB: config.DB}
 	newsRepo := &repositories.NewsRepository{DB: config.DB}
+	termsConditionRepo := &repositories.TermsConditionRepository{DB: config.DB}
 
 	customerService := &services.CustomerService{
 		UserRepo:    userRepo,
@@ -131,6 +134,15 @@ func main() {
 		NewsService: newsService,
 	}
 
+	termsConditionService := &services.TermsConditionService{
+		TermsConditionRepo: termsConditionRepo,
+		DB:                 config.DB,
+	}
+
+	termsConditionController := &controllers.TermsConditionController{
+		TermsConditionService: termsConditionService,
+	}
+
 	transactionService := services.NewTransactionService(transactionRepo)
 
 	scheduleService := services.NewScheduleService(scheduleRepo, userRepo, config.DB)
@@ -181,6 +193,7 @@ func main() {
 	routes.TransactionRoutes(api, TransactionController, config.DB)
 	routes.ScheduleRoutes(api, ScheduleController, config.DB)
 	routes.NewsRoutes(api, newsController, config.DB)
+	routes.TermsConditionRoutes(api, termsConditionController, config.DB)
 
 	port := os.Getenv("APP_PORT")
 	if port == "" {

@@ -9,9 +9,13 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewsRoutes(router *gin.RouterGroup, controller *controllers.NewsController, db *gorm.DB) {
-	news := router.Group("/news")
-	news.Use(middleware.AuthMiddleware(db))
+func TermsConditionRoutes(router *gin.RouterGroup, controller *controllers.TermsConditionController, db *gorm.DB) {
+	termsCondition := router.Group("/toc")
+
+	termsCondition.GET("/user/:toc_type/:toc_user_type", controller.GetByTypeAndUserType)
+
+	termsCondition.Use(middleware.AuthMiddleware(db))
+
 	routes := []helpers.ProtectedRoute{
 		{
 			Method:  "GET",
@@ -22,19 +26,25 @@ func NewsRoutes(router *gin.RouterGroup, controller *controllers.NewsController,
 		{
 			Method:  "GET",
 			Path:    "/detail/:id",
-			Handler: controller.GetByID,
+			Handler: controller.Detail,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 		{
 			Method:  "POST",
-			Path:    "/create",
+			Path:    "/create/:force",
 			Handler: controller.Create,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 		{
 			Method:  "PUT",
-			Path:    "/update/:id",
+			Path:    "/update/:id/:force",
 			Handler: controller.Update,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/update/status/:id",
+			Handler: controller.UpdateStatus,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 		{
@@ -44,5 +54,6 @@ func NewsRoutes(router *gin.RouterGroup, controller *controllers.NewsController,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 	}
-	helpers.RegisterProtectedRoutes(news, routes)
+
+	helpers.RegisterProtectedRoutes(termsCondition, routes)
 }

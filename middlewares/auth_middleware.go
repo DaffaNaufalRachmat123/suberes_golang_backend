@@ -20,9 +20,13 @@ type JWTClaims struct {
 
 func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		fmt.Println("kesini deh daf")
+		for k, v := range c.Request.Header {
+			fmt.Println(k, v)
+		}
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Unauthorized", "status": "failure"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "UNAUTHORIZED", "status": "failure"})
 			return
 		}
 
