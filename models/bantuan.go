@@ -13,5 +13,5 @@ type Bantuan struct {
 }
 
 func (Bantuan) TableName() string {
-	return "help_table"
+	return "help_tables"
 }

@@ -62,6 +62,7 @@ func main() {
 	scheduleRepo := &repositories.ScheduleRepository{DB: config.DB}
 	newsRepo := &repositories.NewsRepository{DB: config.DB}
 	termsConditionRepo := &repositories.TermsConditionRepository{DB: config.DB}
+	panduanRepo := &repositories.PanduanRepository{DB: config.DB}
 
 	customerService := &services.CustomerService{
 		UserRepo:    userRepo,
@@ -143,6 +144,15 @@ func main() {
 		TermsConditionService: termsConditionService,
 	}
 
+	panduanService := &services.PanduanService{
+		PanduanRepo: panduanRepo,
+		DB:          config.DB,
+	}
+
+	panduanController := &controllers.PanduanController{
+		PanduanService: panduanService,
+	}
+
 	transactionService := services.NewTransactionService(transactionRepo)
 
 	scheduleService := services.NewScheduleService(scheduleRepo, userRepo, config.DB)
@@ -194,6 +204,7 @@ func main() {
 	routes.ScheduleRoutes(api, ScheduleController, config.DB)
 	routes.NewsRoutes(api, newsController, config.DB)
 	routes.TermsConditionRoutes(api, termsConditionController, config.DB)
+	routes.PanduanRoutes(api, panduanController, config.DB)
 
 	port := os.Getenv("APP_PORT")
 	if port == "" {

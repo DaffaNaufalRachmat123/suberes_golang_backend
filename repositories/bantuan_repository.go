@@ -47,13 +47,13 @@ func (r *BantuanRepository) FindById(id uint) (*models.Bantuan, error) {
 }
 
 func (r *BantuanRepository) Create(tx *gorm.DB, bantuan *models.Bantuan) error {
-	return tx.Table("help_table").Create(bantuan).Error
+	return tx.Table("help_tables").Create(bantuan).Error
 }
 
 func (r *BantuanRepository) Update(tx *gorm.DB, bantuan *models.Bantuan) error {
-	return tx.Table("help_table").Save(bantuan).Error
+	return tx.Table("help_tables").Save(bantuan).Error
 }
 
 func (r *BantuanRepository) Delete(tx *gorm.DB, bantuan *models.Bantuan) error {
-	return tx.Table("help_table").Delete(bantuan).Error
+	return tx.Table("help_tables").Delete(bantuan).Error
 }
