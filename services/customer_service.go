@@ -214,9 +214,9 @@ func (s *CustomerService) Register(
 		}
 	}()
 	userData, err := s.UserRepo.FindPhoneByCustomerEmail(phoneNumber, email)
-	if err == nil {
+	if err != nil {
 		tx.Rollback()
-		return errors.New("Phone number or email already registered")
+		return err
 	}
 	if userData != nil {
 		tx.Rollback()
@@ -276,6 +276,8 @@ func (s *CustomerService) Register(
 		tx.Rollback()
 		return err
 	}
+
+	fmt.Println(otpCode)
 
 	// kirim OTP async
 	go helpers.SendOtpCodeMail(

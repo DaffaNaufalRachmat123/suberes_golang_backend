@@ -1,17 +1,23 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"suberes_golang/config"
 	"suberes_golang/controllers"
 	"suberes_golang/database"
+	"suberes_golang/helpers"
 	"suberes_golang/queue"
 	"suberes_golang/realtime"
 	"suberes_golang/repositories"
 	"suberes_golang/routes"
 	"suberes_golang/services"
-	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -51,6 +57,7 @@ func main() {
 	adminRepo := &repositories.AdminRepository{DB: config.DB}
 	mitraRepo := &repositories.MitraRepository{DB: config.DB}
 	subServiceRepo := &repositories.SubServiceRepository{DB: config.DB}
+	subServiceAdditionalRepo := &repositories.SubServiceAdditionalRepository{DB: config.DB}
 	paymentRepo := &repositories.PaymentRepository{DB: config.DB}
 	subPaymentRepo := &repositories.SubPaymentRepository{DB: config.DB}
 	subServiceAddedRepo := &repositories.SubServiceAddedRepository{DB: config.DB}
@@ -117,6 +124,17 @@ func main() {
 		OrderOfferRepo:             orderOfferRepo,
 		OrderTransactionRepo:       orderTransactionRepo,
 		OrderTransactionRepeatRepo: orderTransactionRepeatsRepo,
+	}
+
+	subServiceService := &services.SubServiceService{
+		SubServiceRepo:           subServiceRepo,
+		SubServiceAdditionalRepo: subServiceAdditionalRepo,
+		UserRepo:                 userRepo,
+		DB:                       config.DB,
+	}
+
+	subServiceController := &controllers.SubServiceController{
+		SubServiceService: subServiceService,
 	}
 
 	orderService := services.NewOrderService(orderTransactionRepo)
@@ -196,6 +214,7 @@ func main() {
 	routes.BannerRoutes(api, BannerController, config.DB)
 	routes.LayananServiceRoutes(api, LayananServiceController, config.DB)
 	routes.ServiceRoutes(api, ServiceController, config.DB)
+	routes.SubServiceRoutes(api, subServiceController, config.DB)
 	routes.AdminRoutes(api, AdminController, config.DB)
 	routes.MitraRoutes(api, MitraController, config.DB)
 	routes.OrderRoutes(api, OrderController, config.DB)
@@ -206,15 +225,51 @@ func main() {
 	routes.TermsConditionRoutes(api, termsConditionController, config.DB)
 	routes.PanduanRoutes(api, panduanController, config.DB)
 
+	queue.InitAsynq()
+
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		redisHost = "127.0.0.1"
+	}
+	redisPort := os.Getenv("REDIS_PORT")
+	if redisPort == "" {
+		redisPort = "6379"
+	}
+	helpers.InitEmailQueue(redisHost + ":" + redisPort)
+
+	go queue.StartWorker()
+
 	port := os.Getenv("APP_PORT")
 	if port == "" {
 		port = "8080"
 	}
 
 	log.Println("Server running on port", port)
-	r.Run(":" + port)
 
-	queue.InitAsynq()
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
+	}
 
-	queue.StartWorker()
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	queue.StopWorker()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exiting")
 }

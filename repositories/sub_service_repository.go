@@ -12,6 +12,20 @@ type SubServiceRepository struct {
 
 func (r *SubServiceRepository) FindByID(id int) (*models.SubService, error) {
 	var subService models.SubService
-	err := r.DB.Where("id = ?", id).First(&subService).Error
-	return &subService, err
+	if err := r.DB.First(&subService, id).Error; err != nil {
+		return nil, err
+	}
+	return &subService, nil
+}
+
+func (r *SubServiceRepository) Create(tx *gorm.DB, subService *models.SubService) error {
+	return tx.Create(subService).Error
+}
+
+func (r *SubServiceRepository) Update(tx *gorm.DB, id int, data map[string]interface{}) error {
+	return tx.Model(&models.SubService{}).Where("id = ?", id).Updates(data).Error
+}
+
+func (r *SubServiceRepository) Delete(tx *gorm.DB, id int) error {
+	return tx.Delete(&models.SubService{}, id).Error
 }

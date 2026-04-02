@@ -81,7 +81,7 @@ func handleEmailTask(ctx context.Context, t *asynq.Task) error {
 
 	log.Printf("📨 Sending email to %s", p.To)
 
-	err := sendMail(p.From, p.To, p.Subject, p.Body)
+	err := SendMail(p.From, p.To, p.Subject, p.Body)
 	if err != nil {
 		log.Printf("❌ Failed email to %s: %v", p.To, err)
 		return err // otomatis retry
@@ -155,7 +155,7 @@ func getGlobalTokenSource() oauth2.TokenSource {
 }
 
 // sendMail mengirim email menggunakan token yang sudah di-cache
-func sendMail(from, to, subject, htmlBody string) error {
+func SendMail(from, to, subject, htmlBody string) error {
 	// 1. Ambil TokenSource global (Instan, tidak bikin baru)
 	tokenSource := getGlobalTokenSource()
 

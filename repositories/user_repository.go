@@ -242,8 +242,8 @@ func (r *UserRepository) FindPhoneByCustomerEmail(
 	var user models.User
 	err := r.DB.
 		Where(
-			"(phone_number = ? OR email = ?) AND user_type = ?",
-			phone, email, "customer",
+			"email = ? OR (phone_number = ? AND user_type = ?)",
+			email, phone, "customer",
 		).
 		First(&user).Error
 

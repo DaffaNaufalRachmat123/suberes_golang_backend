@@ -63,3 +63,15 @@ func StartWorker() {
 		log.Fatalf("could not run task server: %v", err)
 	}
 }
+
+func StopWorker() {
+	if AsynqServer != nil {
+		AsynqServer.Shutdown()
+	}
+	if AsynqClient != nil {
+		AsynqClient.Close()
+	}
+	if Inspector != nil {
+		Inspector.Close()
+	}
+}

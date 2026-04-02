@@ -21,6 +21,12 @@ func NewsRoutes(router *gin.RouterGroup, controller *controllers.NewsController,
 		},
 		{
 			Method:  "GET",
+			Path:    "/index/popular",
+			Handler: controller.GetPopular,
+			Roles:   []string{helpers.CustomerRole},
+		},
+		{
+			Method:  "GET",
 			Path:    "/detail/:id",
 			Handler: controller.GetByID,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
