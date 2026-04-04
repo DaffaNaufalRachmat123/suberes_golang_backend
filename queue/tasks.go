@@ -3,11 +3,62 @@ package queue
 import "encoding/json"
 
 const (
-	TypeOrderQueueCash       = "order:cash"
-	TypeOrderQueueVA         = "order:va"
-	TypeOrderOfferExpired    = "order:offer_expired"
-	TypeOrderSelectedExpired = "order:selected_expired"
+	TypeOrderQueueCash            = "order:cash"
+	TypeOrderQueueVA              = "order:va"
+	TypeOrderOfferExpired         = "order:offer_expired"
+	TypeOrderSelectedExpired      = "order:selected_expired"
+	TypeOrderOnProgressToFinish   = "order:on_progress_to_finish"
+	TypeOrderEwalletNotifyExpired = "order:ewallet_notify_expired"
+	TypeOrderComingSoonRun        = "order:coming_soon_run"
+	TypeOrderComingSoonWarning    = "order:coming_soon_warning"
 )
+
+type OrderEwalletNotifyExpiredPayload struct {
+	OrderID    string `json:"order_id"`
+	CustomerID string `json:"customer_id"`
+}
+
+func NewOrderEwalletNotifyExpiredTask(orderID, customerID string) ([]byte, error) {
+	return json.Marshal(OrderEwalletNotifyExpiredPayload{
+		OrderID:    orderID,
+		CustomerID: customerID,
+	})
+}
+
+type OrderComingSoonRunPayload struct {
+	OrderID string `json:"order_id"`
+}
+
+func NewOrderComingSoonRunTask(orderID string) ([]byte, error) {
+	return json.Marshal(OrderComingSoonRunPayload{OrderID: orderID})
+}
+
+type OrderComingSoonWarningPayload struct {
+	OrderID string `json:"order_id"`
+}
+
+func NewOrderComingSoonWarningTask(orderID string) ([]byte, error) {
+	return json.Marshal(OrderComingSoonWarningPayload{OrderID: orderID})
+}
+
+type OrderOnProgressToFinishPayload struct {
+	ID           string `json:"id"`
+	CustomerID   string `json:"customer_id"`
+	MitraID      string `json:"mitra_id"`
+	ServiceID    int    `json:"service_id"`
+	SubServiceID int    `json:"sub_service_id"`
+}
+
+func NewOrderOnProgressToFinishTask(id, customerID, mitraID string, serviceID, subServiceID int) ([]byte, error) {
+	payload := OrderOnProgressToFinishPayload{
+		ID:           id,
+		CustomerID:   customerID,
+		MitraID:      mitraID,
+		ServiceID:    serviceID,
+		SubServiceID: subServiceID,
+	}
+	return json.Marshal(payload)
+}
 
 type OrderQueueCashPayload struct {
 	OrderID    string `json:"order_id"`

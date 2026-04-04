@@ -6,7 +6,7 @@ type OrderTransactionRepeat struct {
 	ID                 int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	OrderID            string    `gorm:"type:varchar(36)" json:"order_id"`
 	CustomerID         string    `gorm:"type:varchar(36)" json:"customer_id"`
-	MitraID            string    `gorm:"type:varchar(36)" json:"mitra_id"`
+	MitraID            *string   `gorm:"type:varchar(36)" json:"mitra_id"`
 	ServiceID          int       `gorm:"type:integer" json:"service_id"`
 	SubServiceID       int       `gorm:"type:integer" json:"sub_service_id"`
 	CustomerName       string    `gorm:"type:varchar(255)" json:"customer_name"`
@@ -14,7 +14,7 @@ type OrderTransactionRepeat struct {
 	OrderTime          time.Time `gorm:"type:timestamp" json:"order_time"`
 	OrderTimestamp     string    `gorm:"type:varchar(255)" json:"order_timestamp"`
 	CanceledReason     string    `gorm:"type:text" json:"canceled_reason"`
-	CanceledUser       string    `gorm:"type:varchar(10);check:canceled_user IN ('customer','mitra')" json:"canceled_user"`
+	CanceledUser       *string   `gorm:"type:varchar(10);check:canceled_user IN ('customer','mitra')" json:"canceled_user"`
 	OrderNote          string    `gorm:"type:text" json:"order_note"`
 	PaymentID          int       `gorm:"type:integer" json:"payment_id"`
 	SubPaymentID       int       `gorm:"type:integer" json:"sub_payment_id"`

@@ -591,7 +591,7 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 			transactionDate := time.Now().UTC().In(loc)
 			transPayload := models.Transaction{
 				ID:                 orderData.ID,
-				MitraID:            orderData.MitraID,
+				MitraID:            helpers.DerefStr(orderData.MitraID),
 				OrderID:            orderData.ID,
 				RefundAmount:       orderData.GrossAmount,
 				RefundType:         "full refund",

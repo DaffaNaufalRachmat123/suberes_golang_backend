@@ -1,13 +1,18 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
 
 type OrderTransaction struct {
 	ID                               string    `gorm:"type:varchar(36);primaryKey" json:"id"`
 	NotificationID                   int       `gorm:"type:integer" json:"notification_id"`
 	TempID                           string    `gorm:"type:varchar(255)" json:"temp_id"`
 	CustomerID                       string    `gorm:"type:varchar(36)" json:"customer_id"`
-	MitraID                          string    `gorm:"type:varchar(36)" json:"mitra_id"`
+	MitraID                          *string   `gorm:"type:varchar(36)" json:"mitra_id"`
 	ServiceID                        int       `gorm:"type:integer" json:"service_id"`
 	SubServiceID                     int       `gorm:"type:integer" json:"sub_service_id"`
 	OrderRadius                      int       `gorm:"type:integer" json:"order_radius"`
@@ -21,14 +26,14 @@ type OrderTransaction struct {
 	OrderOriginSoonTime              string    `gorm:"type:varchar(255)" json:"order_origin_soon_time"`
 	OrderTimestamp                   string    `gorm:"type:varchar(255)" json:"order_timestamp"`
 	Address                          string    `gorm:"type:varchar(255)" json:"address"`
-	CanceledUser                     string    `gorm:"type:varchar(20);check:canceled_user IN ('customer','mitra','admin','superadmin')" json:"canceled_user"`
+	CanceledUser                     *string   `gorm:"type:varchar(20);check:canceled_user IN ('customer','mitra','admin','superadmin')" json:"canceled_user"`
 	CanceledReason                   string    `gorm:"type:text" json:"canceled_reason"`
 	OrderNote                        string    `gorm:"type:varchar(255)" json:"order_note"`
 	PaymentID                        int       `gorm:"type:integer" json:"payment_id"`
 	SubPaymentID                     int       `gorm:"type:integer" json:"sub_payment_id"`
 	PaymentType                      string    `gorm:"type:varchar(20);check:payment_type IN ('tunai','balance','ewallet','virtual account')" json:"payment_type"`
 	OrderStatus                      string    `gorm:"type:varchar(50);check:order_status IN ('WAITING_PAYMENT','WAIT_SCHEDULE','OTW','ON_PROGRESS','FINISH','CANCELED','CANCELED_CANT_FIND_MITRA','CANCELED_BY_SYSTEM','CANCELED_VOID','CANCELED_VOID_BY_SYSTEM','CANCELED_REFUND','CANCELED_LATE_PAYMENT','CANCELED_FAILED_PAYMENT','FINDING_MITRA','PROCESSING_PAYMENT','WAITING_FOR_SELECTED_MITRA')" json:"order_status"`
-	VoidStatus                       string    `gorm:"type:varchar(20);check:void_status IN ('VOID_PENDING','VOID_SUCCEEDED','VOID_FAILED')" json:"void_status"`
+	VoidStatus                       *string   `gorm:"type:varchar(20);check:void_status IN ('VOID_PENDING','VOID_SUCCEEDED','VOID_FAILED')" json:"void_status"`
 	VoidDescription                  string    `gorm:"type:text" json:"void_description"`
 	IDTransaction                    string    `gorm:"type:varchar(255)" json:"id_transaction"`
 	IsRated                          string    `gorm:"type:varchar(1);check:is_rated IN ('0','1')" json:"is_rated"`
@@ -54,12 +59,12 @@ type OrderTransaction struct {
 	TotalWaitingRepeat               int       `gorm:"type:integer" json:"total_waiting_repeat"`
 	TotalDoneRepeat                  int       `gorm:"type:integer" json:"total_done_repeat"`
 	IsPaidCustomer                   string    `gorm:"type:varchar(1);check:is_paid_customer IN ('0','1')" json:"is_paid_customer"`
-	PrivateKeyRSA                    string    `gorm:"type:varchar(255)" json:"private_key_rsa"`
-	PublicKeyRSA                     string    `gorm:"type:varchar(255)" json:"public_key_rsa"`
+	PrivateKeyRSA                    string    `gorm:"type:varchar(255)" json:"-"`
+	PublicKeyRSA                     string    `gorm:"type:varchar(255)" json:"-"`
 	PublicKeyMitra                   int64     `gorm:"type:bigint" json:"public_key_mitra"`
 	PublicKeyCustomer                int64     `gorm:"type:bigint" json:"public_key_customer"`
-	MitraSecret                      int64     `gorm:"type:bigint" json:"mitra_secret"`
-	CustomerSecret                   int64     `gorm:"type:bigint" json:"customer_secret"`
+	MitraSecret                      int64     `gorm:"type:bigint" json:"-"`
+	CustomerSecret                   int64     `gorm:"type:bigint" json:"-"`
 	TimezoneCode                     string    `gorm:"type:varchar(255)" json:"timezone_code"`
 	CustomerLatitude                 float64   `gorm:"type:float" json:"customer_latitude"`
 	CustomerLongitude                float64   `gorm:"type:float" json:"customer_longitude"`
@@ -107,24 +112,31 @@ type OrderTransaction struct {
 	UpdatedAt                        time.Time `gorm:"type:timestamp;default:now()" json:"updated_at"`
 
 	// Associations
-	Customer                *User                    `gorm:"foreignKey:CustomerID;references:ID" json:"customer,omitempty"`
-	Mitra                   *User                    `gorm:"foreignKey:MitraID;references:ID" json:"mitra,omitempty"`
-	Service                 *Service                 `gorm:"foreignKey:ServiceID;references:ID" json:"service,omitempty"`
-	SubService              *SubService              `gorm:"foreignKey:SubServiceID;references:ID" json:"sub_service,omitempty"`
-	Payment                 *Payment                 `gorm:"foreignKey:PaymentID;references:ID" json:"payment,omitempty"`
-	SubPayment              *SubPayment              `gorm:"foreignKey:SubPaymentID;references:ID" json:"sub_payment,omitempty"`
-	OrderRepeats            []OrderRepeat            `gorm:"foreignKey:OrderID" json:"order_repeats,omitempty"`
-	OrderRejects            []OrderRejected          `gorm:"foreignKey:OrderID" json:"order_rejects,omitempty"`
-	UserRatings             []UserRating             `gorm:"foreignKey:OrderID" json:"user_ratings,omitempty"`
-	OrderTransactionRepeats []OrderTransactionRepeat `gorm:"foreignKey:OrderID" json:"order_transaction_repeats,omitempty"`
-	SubServiceAddeds        []SubServiceAdded        `gorm:"foreignKey:OrderID" json:"sub_service_addeds,omitempty"`
-	Transactions            []Transaction            `gorm:"foreignKey:OrderID" json:"transactions,omitempty"`
-	OrderChat               *OrderChat               `gorm:"foreignKey:OrderID" json:"order_chat,omitempty"`
-	OrderOffer              *OrderOffer              `gorm:"foreignKey:OrderID" json:"order_offer,omitempty"`
-	Notifications           []Notification           `gorm:"foreignKey:OrderID" json:"notifications,omitempty"`
-	OrderSelectedMitras     []OrderSelectedMitra     `gorm:"foreignKey:OrderID" json:"order_selected_mitras,omitempty"`
+	Customer                *User                    `gorm:"foreignKey:CustomerID;references:ID" json:"customer"`
+	Mitra                   *User                    `gorm:"foreignKey:MitraID;references:ID" json:"mitra"`
+	Service                 *Service                 `gorm:"foreignKey:ServiceID;references:ID" json:"service"`
+	SubService              *SubService              `gorm:"foreignKey:SubServiceID;references:ID" json:"sub_service"`
+	Payment                 *Payment                 `gorm:"foreignKey:PaymentID;references:ID" json:"payment"`
+	SubPayment              *SubPayment              `gorm:"foreignKey:SubPaymentID;references:ID" json:"sub_payment"`
+	OrderRepeats            []OrderRepeat            `gorm:"foreignKey:OrderID" json:"order_repeats"`
+	OrderRejects            []OrderRejected          `gorm:"foreignKey:OrderID" json:"order_rejects"`
+	UserRatings             []UserRating             `gorm:"foreignKey:OrderID" json:"user_ratings"`
+	OrderTransactionRepeats []OrderTransactionRepeat `gorm:"foreignKey:OrderID" json:"order_transaction_repeats"`
+	SubServiceAddeds        []SubServiceAdded        `gorm:"foreignKey:OrderID" json:"sub_service_addeds"`
+	Transactions            []Transaction            `gorm:"foreignKey:OrderID" json:"transactions"`
+	OrderChat               *OrderChat               `gorm:"foreignKey:OrderID" json:"order_chat"`
+	OrderOffer              *OrderOffer              `gorm:"foreignKey:OrderID" json:"order_offer"`
+	Notifications           []Notification           `gorm:"foreignKey:OrderID" json:"notifications"`
+	OrderSelectedMitras     []OrderSelectedMitra     `gorm:"foreignKey:OrderID" json:"order_selected_mitras"`
 }
 
 func (OrderTransaction) TableName() string {
 	return "order_transactions"
+}
+
+func (o *OrderTransaction) BeforeCreate(tx *gorm.DB) error {
+	if o.ID == "" {
+		o.ID = uuid.New().String()
+	}
+	return nil
 }

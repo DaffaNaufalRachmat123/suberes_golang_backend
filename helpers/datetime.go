@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"errors"
 	"time"
 )
 
@@ -28,13 +29,35 @@ func IsScheduleDateValid(scheduleDateTimeStr string, timezoneCode string) (bool,
 	}
 
 	now := time.Now().In(loc)
-	now = now.AddDate(0, 0, 1) // Add one day
 
-	layout := "2006-01-02 15:04"
-	scheduleDateTime, err := time.ParseInLocation(layout, scheduleDateTimeStr, loc)
-	if err != nil {
-		return false, err
+	layouts := []string{
+		"2006-01-02 15:04:05.000",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
 	}
 
-	return scheduleDateTime.After(now), nil
+	var scheduleDateTime time.Time
+	var parseErr error
+	for _, layout := range layouts {
+		scheduleDateTime, parseErr = time.ParseInLocation(layout, scheduleDateTimeStr, loc)
+		if parseErr == nil {
+			break
+		}
+	}
+	if parseErr != nil {
+		return false, parseErr
+	}
+
+	// Must not be in the past or equal to current time
+	if !scheduleDateTime.After(now) {
+		return false, nil
+	}
+
+	// Time of day must be between 06:00 and 23:59
+	totalMinutes := scheduleDateTime.Hour()*60 + scheduleDateTime.Minute()
+	if totalMinutes < 6*60 || totalMinutes > 23*60+59 {
+		return false, errors.New("schedule time must be between 06:00 and 23:59")
+	}
+
+	return true, nil
 }

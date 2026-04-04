@@ -9,60 +9,66 @@ import (
 )
 
 func searchQueryNowCash(latitude float64, longitude float64, isActive string, isBusy string, distance float64, isAutoBid string, minutesSubServices int, userGender string, grossAmountCompany float64, page int, limit int) string {
-	timeZone := "Asia/Jakarta"
-	searchStringWithoutRating := fmt.Sprintf(`SELECT
-		COALESCE((SELECT SUM(CASE WHEN TIMESTAMPDIFF(MINUTE, CONVERT_TZ(CONVERT_TZ(NOW(), '%s', b.timezone_code), b.timezone_code, 'UTC'), b.order_time) > 0 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(CONVERT_TZ(NOW(), '%s', b.timezone_code), b.timezone_code, 'UTC'), b.order_time) < %d THEN 1 ELSE 0 END) FROM order_transactions b WHERE b.mitra_id = a.id AND b.order_status = "WAIT_SCHEDULE"),0) AS count_order,
-		COALESCE((SELECT SUM(CASE WHEN TIMESTAMPDIFF(MINUTE, CONVERT_TZ(CONVERT_TZ(NOW(), '%s', b.timezone_code), b.timezone_code, 'UTC'), c.order_time) > 0 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(CONVERT_TZ(NOW(), '%s', b.timezone_code), b.timezone_code, 'UTC'), c.order_time) < %d THEN 1 ELSE 0 END) FROM order_transactions b LEFT JOIN order_transaction_repeats c ON c.order_id = b.id WHERE c.order_id = b.id AND c.mitra_id = a.id),0) AS count_order_repeat,
-		a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
-		(SELECT COALESCE(SUM(c.debt_per_week),0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
-		(6371 * acos(cos(radians(%f)) * cos(radians(latitude)) * cos(radians(longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(latitude)))) AS distance,
-		(a.account_balance - COALESCE((SELECT SUM(x.gross_amount_company) FROM order_transactions x WHERE x.order_status = 'WAIT_SCHEDULE'),0)) AS money_left
+	searchStringWithoutRating := fmt.Sprintf(`SELECT * FROM (
+		SELECT
+			COALESCE((SELECT SUM(CASE WHEN EXTRACT(EPOCH FROM (b.order_time - NOW())) / 60 > 0 AND EXTRACT(EPOCH FROM (b.order_time - NOW())) / 60 < %d THEN 1 ELSE 0 END) FROM order_transactions b WHERE b.mitra_id = a.id AND b.order_status = 'WAIT_SCHEDULE'), 0) AS count_order,
+			COALESCE((SELECT SUM(CASE WHEN EXTRACT(EPOCH FROM (c.order_time - NOW())) / 60 > 0 AND EXTRACT(EPOCH FROM (c.order_time - NOW())) / 60 < %d THEN 1 ELSE 0 END) FROM order_transactions b LEFT JOIN order_transaction_repeats c ON c.order_id = b.id WHERE c.order_id = b.id AND c.mitra_id = a.id), 0) AS count_order_repeat,
+			a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
+			(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
+			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude)) * cos(radians(a.longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude)))))) AS distance,
+			(a.account_balance - COALESCE((SELECT SUM(x.gross_amount_company) FROM order_transactions x WHERE x.order_status = 'WAIT_SCHEDULE'), 0)) AS money_left
 		FROM users a
 		WHERE a.user_gender = '%s' AND a.is_logged_in = '1' AND a.is_active = '%s' AND a.is_busy = '%s' AND a.is_auto_bid = '%s' AND a.is_suspended = '0' AND a.user_type = 'mitra'
-		HAVING total_hutang <= a.account_balance AND money_left >= %f AND distance <= %f AND a.account_balance >= %f AND count_order = 0 AND count_order_repeat = 0;`,
-		timeZone, timeZone, minutesSubServices, timeZone, timeZone, minutesSubServices, latitude, longitude, latitude, userGender, isActive, isBusy, isAutoBid, grossAmountCompany, distance, grossAmountCompany)
+	) sub
+	WHERE sub.total_hutang <= sub.account_balance AND sub.money_left >= %f AND sub.distance <= %f AND sub.account_balance >= %f AND sub.count_order = 0 AND sub.count_order_repeat = 0;`,
+		minutesSubServices, minutesSubServices, latitude, longitude, latitude, userGender, isActive, isBusy, isAutoBid, grossAmountCompany, distance, grossAmountCompany)
 	return searchStringWithoutRating
 }
 
 func searchQueryNow(latitude float64, longitude float64, isActive string, isBusy string, distance float64, isAutoBid string, minutesSubServices int, userGender string) string {
-	timeZone := "Asia/Jakarta"
-	searchString := fmt.Sprintf(`SELECT
-		COALESCE((SELECT SUM(CASE WHEN TIMESTAMPDIFF(MINUTE, CONVERT_TZ(CONVERT_TZ(NOW(), '%s', b.timezone_code), b.timezone_code, 'UTC'), b.order_time) > 0 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(CONVERT_TZ(NOW(), '%s', b.timezone_code), b.timezone_code, 'UTC'), b.order_time) < %d THEN 1 ELSE 0 END) FROM order_transactions b WHERE b.mitra_id = a.id AND b.order_status = "WAIT_SCHEDULE"),0) AS count_order,
-		COALESCE((SELECT SUM(CASE WHEN TIMESTAMPDIFF(MINUTE, CONVERT_TZ(CONVERT_TZ(NOW(), '%s', b.timezone_code), b.timezone_code, 'UTC'), c.order_time) > 0 AND TIMESTAMPDIFF(MINUTE, CONVERT_TZ(CONVERT_TZ(NOW(), '%s', b.timezone_code), b.timezone_code, 'UTC'), c.order_time) < %d THEN 1 ELSE 0 END) FROM order_transactions b LEFT JOIN order_transaction_repeats c ON c.order_id = b.id WHERE c.order_id = b.id AND c.mitra_id = a.id),0) AS count_order_repeat,
-		a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
-		(SELECT COALESCE(SUM(c.debt_per_week),0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
-		(6371 * acos(cos(radians(%f)) * cos(radians(latitude)) * cos(radians(longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(latitude)))) AS distance
+	searchString := fmt.Sprintf(`SELECT * FROM (
+		SELECT
+			COALESCE((SELECT SUM(CASE WHEN EXTRACT(EPOCH FROM (b.order_time - NOW())) / 60 > 0 AND EXTRACT(EPOCH FROM (b.order_time - NOW())) / 60 < %d THEN 1 ELSE 0 END) FROM order_transactions b WHERE b.mitra_id = a.id AND b.order_status = 'WAIT_SCHEDULE'), 0) AS count_order,
+			COALESCE((SELECT SUM(CASE WHEN EXTRACT(EPOCH FROM (c.order_time - NOW())) / 60 > 0 AND EXTRACT(EPOCH FROM (c.order_time - NOW())) / 60 < %d THEN 1 ELSE 0 END) FROM order_transactions b LEFT JOIN order_transaction_repeats c ON c.order_id = b.id WHERE c.order_id = b.id AND c.mitra_id = a.id), 0) AS count_order_repeat,
+			a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
+			(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
+			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude)) * cos(radians(a.longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude)))))) AS distance
 		FROM users a
 		WHERE a.user_gender = '%s' AND a.is_logged_in = '1' AND a.is_active = '%s' AND a.is_busy = '%s' AND a.is_auto_bid = '%s' AND a.is_suspended = '0' AND a.user_type = 'mitra'
-		HAVING total_hutang <= a.account_balance AND distance <= %f AND count_order = 0 AND count_order_repeat = 0
-		LIMIT 1;`,
-		timeZone, timeZone, minutesSubServices, timeZone, timeZone, minutesSubServices, latitude, longitude, latitude, userGender, isActive, isBusy, isAutoBid, distance)
+	) sub
+	WHERE sub.total_hutang <= sub.account_balance AND sub.distance <= %f AND sub.count_order = 0 AND sub.count_order_repeat = 0
+	LIMIT 1;`,
+		minutesSubServices, minutesSubServices, latitude, longitude, latitude, userGender, isActive, isBusy, isAutoBid, distance)
 	return searchString
 }
 
 func searchQueryNowCashWithoutTime(latitude float64, longitude float64, isActive string, isBusy string, distance float64, isAutoBid string, userGender string, grossAmountCompany float64) string {
-	searchStringWithoutRating := fmt.Sprintf(`SELECT
-		a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
-		(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
-		(6371 * acos(cos(radians(%f)) * cos(radians(latitude)) * cos(radians(longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(latitude)))) AS distance,
-		(a.account_balance - (CASE WHEN(SELECT SUM(x.gross_amount_company) FROM order_transactions x WHERE x.order_status = 'WAIT_SCHEDULE') IS NULL THEN 0 ELSE (SELECT SUM(x.gross_amount_company) FROM order_transactions x WHERE x.order_status = 'WAIT_SCHEDULE') END)) as money_left
+	searchStringWithoutRating := fmt.Sprintf(`SELECT * FROM (
+		SELECT
+			a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
+			(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
+			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude)) * cos(radians(a.longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude)))))) AS distance,
+			(a.account_balance - COALESCE((SELECT SUM(x.gross_amount_company) FROM order_transactions x WHERE x.order_status = 'WAIT_SCHEDULE'), 0)) AS money_left
 		FROM users a
 		WHERE a.user_gender = '%s' AND a.is_logged_in = '1' AND a.is_active = '%s' AND a.is_busy = '%s' AND a.is_auto_bid = '%s' AND a.is_suspended = '0' AND a.user_type = 'mitra'
-		HAVING total_hutang <= a.account_balance AND distance <= %f AND money_left >= %f AND a.account_balance >= %f
-		LIMIT 1;`,
+	) sub
+	WHERE sub.total_hutang <= sub.account_balance AND sub.distance <= %f AND sub.money_left >= %f AND sub.account_balance >= %f
+	LIMIT 1;`,
 		latitude, longitude, latitude, userGender, isActive, isBusy, isAutoBid, distance, grossAmountCompany, grossAmountCompany)
 	return searchStringWithoutRating
 }
 
 func searchQueryNowWithoutTime(latitude float64, longitude float64, isActive string, isBusy string, distance float64, isAutoBid string, userGender string) string {
-	searchString := fmt.Sprintf(`SELECT
-		a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
-		(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
-		(6371 * acos(cos(radians(%f)) * cos(radians(latitude)) * cos(radians(longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(latitude)))) AS distance
+	searchString := fmt.Sprintf(`SELECT * FROM (
+		SELECT
+			a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
+			(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
+			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude)) * cos(radians(a.longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude)))))) AS distance
 		FROM users a
 		WHERE a.user_gender = '%s' AND a.is_logged_in = '1' AND a.is_active = '%s' AND a.is_busy = '%s' AND a.is_auto_bid = '%s' AND a.is_suspended = '0' AND a.user_type = 'mitra'
-		HAVING total_hutang <= a.account_balance AND distance <= %f
-		LIMIT 1;`,
+	) sub
+	WHERE sub.total_hutang <= sub.account_balance AND sub.distance <= %f
+	LIMIT 1;`,
 		latitude, longitude, latitude, userGender, isActive, isBusy, isAutoBid, distance)
 	return searchString
 }

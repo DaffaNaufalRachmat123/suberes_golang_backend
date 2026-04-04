@@ -401,6 +401,49 @@ func GetTimezoneNowDate(timezone string) string {
 		second,
 	)
 }
+
+// NormalizeDateTimeString ensures the date portion of a "YYYY-M-D HH:MM" or
+// "YYYY-M-D HH:MM:SS" string is zero-padded to "YYYY-MM-DD HH:MM[:SS]" so
+// that Go's strict time.ParseInLocation does not fail on single-digit months
+// or days sent by mobile/web clients.
+// If the time component only has hours and minutes (HH:MM), ":00" is appended
+// so the string is also compatible with layouts that include seconds.
+func NormalizeDateTimeString(s string) string {
+	parts := strings.SplitN(s, " ", 2)
+	if len(parts) != 2 {
+		return s
+	}
+	dateParts := strings.Split(parts[0], "-")
+	if len(dateParts) != 3 {
+		return s
+	}
+	month, _ := strconv.Atoi(dateParts[1])
+	day, _ := strconv.Atoi(dateParts[2])
+	timePart := parts[1]
+	// Add seconds if only HH:MM was provided
+	if strings.Count(timePart, ":") == 1 {
+		timePart += ":00"
+	}
+	return fmt.Sprintf("%s-%02d-%02d %s", dateParts[0], month, day, timePart)
+}
+
+// DerefStr safely dereferences a *string, returning "" if nil.
+func DerefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// NormalizeIsAdditional converts "0"/"1" (sent by mobile clients) or
+// "true"/"false" (any case) to the canonical "false"/"true" stored in DB.
+func NormalizeIsAdditional(v string) string {
+	if v == "1" || strings.EqualFold(v, "true") {
+		return "true"
+	}
+	return "false"
+}
+
 func RandomString(length int) string {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, length)

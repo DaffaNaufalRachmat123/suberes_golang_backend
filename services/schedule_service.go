@@ -54,7 +54,7 @@ func (s *ScheduleService) Create(req *dtos.CreateScheduleRequest) (*models.Sched
 	}
 	if !valid {
 		tx.Rollback()
-		return nil, errors.New("schedule's date cannot be less than today or the same as today")
+		return nil, errors.New("schedule date and time cannot be in the past")
 	}
 
 	admin, err := s.UserRepo.FindAdminById(req.CreatorID)
@@ -80,6 +80,7 @@ func (s *ScheduleService) Create(req *dtos.CreateScheduleRequest) (*models.Sched
 		ScheduleMessage:  req.ScheduleMessage,
 		ScheduleIsActive: req.ScheduleIsActive,
 		TimezoneCode:     req.TimezoneCode,
+		ScheduleTimezone: req.ScheduleTimezone,
 		ScheduleTemplate: scheduleTemplate,
 	}
 
@@ -111,7 +112,7 @@ func (s *ScheduleService) Update(id string, req *dtos.UpdateScheduleRequest) (*m
 	}
 	if !valid {
 		tx.Rollback()
-		return nil, errors.New("schedule's date cannot be less than today or the same as today")
+		return nil, errors.New("schedule date and time cannot be in the past")
 	}
 
 	admin, err := s.UserRepo.FindAdminById(req.CreatorID)
@@ -136,6 +137,7 @@ func (s *ScheduleService) Update(id string, req *dtos.UpdateScheduleRequest) (*m
 	schedule.ScheduleMessage = req.ScheduleMessage
 	schedule.ScheduleIsActive = req.ScheduleIsActive
 	schedule.TimezoneCode = req.TimezoneCode
+	schedule.ScheduleTimezone = req.ScheduleTimezone
 	schedule.ScheduleTemplate = scheduleTemplate
 
 	if err := s.ScheduleRepo.Update(tx, schedule); err != nil {

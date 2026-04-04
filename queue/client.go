@@ -56,6 +56,10 @@ func StartWorker() {
 	mux.HandleFunc(TypeOrderQueueCash, HandleOrderQueueCashTask)
 	mux.HandleFunc(TypeOrderOfferExpired, HandleOrderOfferExpiredTask)
 	mux.HandleFunc(TypeOrderSelectedExpired, HandleOrderSelectedExpiredTask)
+	mux.HandleFunc(TypeOrderOnProgressToFinish, HandleOrderOnProgressToFinishTask)
+	mux.HandleFunc(TypeOrderEwalletNotifyExpired, HandleOrderEwalletNotifyExpiredTask)
+	mux.HandleFunc(TypeOrderComingSoonRun, HandleOrderComingSoonRunTask)
+	mux.HandleFunc(TypeOrderComingSoonWarning, HandleOrderComingSoonWarningTask)
 
 	log.Println("Asynq worker started")
 

@@ -10,7 +10,7 @@ import (
 )
 
 func OrderRoutes(r *gin.RouterGroup, controller *controllers.OrderController, db *gorm.DB) {
-	order := r.Group("/orders")
+	order := r.Group("/cash_order")
 	order.Use(middleware.AuthMiddleware(db))
 
 	routes := []helpers.ProtectedRoute{

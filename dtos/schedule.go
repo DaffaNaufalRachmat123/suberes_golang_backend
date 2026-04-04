@@ -11,6 +11,7 @@ type CreateScheduleRequest struct {
 	ScheduleMessage  string `json:"schedule_message" binding:"required"`
 	ScheduleIsActive string `json:"schedule_is_active" binding:"required,oneof=0 1"`
 	TimezoneCode     string `json:"timezone_code" binding:"required"`
+	ScheduleTimezone string `json:"schedule_timezone" binding:"required,oneof=Asia/Jakarta Asia/Makassar Asia/Jayapura"`
 }
 
 type UpdateScheduleRequest struct {
@@ -24,4 +25,5 @@ type UpdateScheduleRequest struct {
 	ScheduleMessage  string `json:"schedule_message" binding:"required"`
 	ScheduleIsActive string `json:"schedule_is_active" binding:"required,oneof=0 1"`
 	TimezoneCode     string `json:"timezone_code" binding:"required"`
+	ScheduleTimezone string `json:"schedule_timezone" binding:"required,oneof=Asia/Jakarta Asia/Makassar Asia/Jayapura"`
 }

@@ -3,7 +3,7 @@ package models
 import "time"
 
 type BaseModel struct {
-	ID        int `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        int       `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
 }

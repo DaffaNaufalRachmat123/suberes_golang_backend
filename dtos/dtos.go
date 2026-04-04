@@ -36,3 +36,19 @@ type ServiceUpdateRequest struct {
 type ServiceDeleteRequest struct {
 	Password string `json:"password" binding:"required"`
 }
+
+// PaymentCreateRequest is used for POST /create and PUT /update/image/:id (multipart).
+// Valid types: tunai, virtual account, ewallet, balance.
+type PaymentCreateRequest struct {
+	Title string `json:"title"`
+	Type  string `json:"type"`
+	Desc  string `json:"desc"`
+}
+
+// PaymentUpdateRequest is used for PUT /update/:id (JSON body).
+// Valid types: tunai, virtual account, transfer, balance.
+type PaymentUpdateRequest struct {
+	Title string `json:"title" binding:"required"`
+	Type  string `json:"type" binding:"required"`
+	Desc  string `json:"desc" binding:"required"`
+}

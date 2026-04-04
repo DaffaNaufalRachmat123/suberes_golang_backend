@@ -13,6 +13,7 @@ type Schedule struct {
 	ScheduleTemplate string `gorm:"type:text" json:"schedule_template"`
 	ScheduleIsActive string `gorm:"type:varchar(1);check:schedule_is_active IN ('0','1')" json:"schedule_is_active"`
 	TimezoneCode     string `gorm:"type:varchar(255)" json:"timezone_code"`
+	ScheduleTimezone string `gorm:"type:varchar(100);check:schedule_timezone IN ('Asia/Jakarta','Asia/Makassar','Asia/Jayapura')" json:"schedule_timezone"`
 
 	// Associations
 	Creator              *User                 `gorm:"foreignKey:CreatorID;references:ID" json:"creator,omitempty"`

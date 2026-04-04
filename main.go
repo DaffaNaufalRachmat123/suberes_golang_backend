@@ -171,6 +171,39 @@ func main() {
 		PanduanService: panduanService,
 	}
 
+	paymentService := &services.PaymentService{
+		PaymentRepo: paymentRepo,
+		DB:          config.DB,
+	}
+
+	paymentController := &controllers.PaymentController{
+		PaymentService: paymentService,
+	}
+
+	orderTransactionService := &services.OrderTransactionService{
+		DB:                          config.DB,
+		OrderTransactionRepo:        orderTransactionRepo,
+		OrderTransactionRepeatsRepo: orderTransactionRepeatsRepo,
+		OrderRepo:                   orderRepo,
+		UserRepo:                    userRepo,
+		SubServiceRepo:              subServiceRepo,
+		TransactionRepo:             transactionRepo,
+	}
+
+	orderTransactionController := &controllers.OrderTransactionController{
+		OrderTransactionService: orderTransactionService,
+	}
+
+	orderHistoryService := &services.OrderHistoryService{
+		DB:                          config.DB,
+		OrderTransactionRepo:        orderTransactionRepo,
+		OrderTransactionRepeatsRepo: orderTransactionRepeatsRepo,
+	}
+
+	orderHistoryController := &controllers.OrderHistoryController{
+		OrderHistoryService: orderHistoryService,
+	}
+
 	transactionService := services.NewTransactionService(transactionRepo)
 
 	scheduleService := services.NewScheduleService(scheduleRepo, userRepo, config.DB)
@@ -201,6 +234,14 @@ func main() {
 
 	OrderController := controllers.NewOrderController(orderCashService, orderService)
 
+	orderOfferService := services.NewOrderOfferService(config.DB)
+	orderEwalletService := services.NewOrderEwalletService(config.DB)
+	orderVAService := services.NewOrderVAService(config.DB)
+
+	OrderOfferController := controllers.NewOrderOfferController(orderOfferService)
+	OrderEwalletController := controllers.NewOrderEwalletController(orderEwalletService)
+	OrderVAController := controllers.NewOrderVAController(orderVAService)
+
 	BantuanController := &controllers.BantuanController{
 		BantuanService: bantuanService,
 	}
@@ -224,6 +265,12 @@ func main() {
 	routes.NewsRoutes(api, newsController, config.DB)
 	routes.TermsConditionRoutes(api, termsConditionController, config.DB)
 	routes.PanduanRoutes(api, panduanController, config.DB)
+	routes.PaymentRoutes(api, paymentController, config.DB)
+	routes.OrderTransactionRoutes(api, orderTransactionController, config.DB)
+	routes.OrderOfferRoutes(api, OrderOfferController, config.DB)
+	routes.OrderEwalletRoutes(api, OrderEwalletController, config.DB)
+	routes.OrderVARoutes(api, OrderVAController, config.DB)
+	routes.OrderHistoryRoutes(api, orderHistoryController, config.DB)
 
 	queue.InitAsynq()
 

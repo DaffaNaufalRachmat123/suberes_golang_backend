@@ -35,8 +35,6 @@ type CreateOrderDTO struct {
 	OrderNote             string               `json:"order_note" form:"order_note"`
 	CustomerLatitude      float64              `json:"customer_latitude" form:"customer_latitude" binding:"required"`
 	CustomerLongitude     float64              `json:"customer_longitude" form:"customer_longitude" binding:"required"`
-	MitraLatitude         float64              `json:"mitra_latitude" form:"mitra_latitude" binding:"required"`
-	MitraLongitude        float64              `json:"mitra_longitude" form:"mitra_longitude" binding:"required"`
 }
 
 type OrderAdditionalDTO struct {

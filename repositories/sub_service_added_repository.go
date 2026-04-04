@@ -11,5 +11,8 @@ type SubServiceAddedRepository struct {
 }
 
 func (r *SubServiceAddedRepository) CreateBulk(tx *gorm.DB, data []map[string]interface{}) error {
+	if len(data) == 0 {
+		return nil
+	}
 	return tx.Model(&models.SubServiceAdded{}).Create(&data).Error
 }

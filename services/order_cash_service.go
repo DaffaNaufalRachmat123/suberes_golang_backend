@@ -99,8 +99,8 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 	}
 
 	nowDateTime = nowDateTime.AddDate(0, 0, 1)
-	layout := "2006-01-02 15:04"
-	orderDateTime, err := time.ParseInLocation(layout, dto.OrderTime, loc)
+	layout := "2006-01-02 15:04:05"
+	orderDateTime, err := time.ParseInLocation(layout, helpers.NormalizeDateTimeString(dto.OrderTime), loc)
 	if err != nil {
 		return "", 0, "", "", 400, err
 	}
@@ -235,7 +235,7 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 	var orderTimeCreate time.Time
 
 	if dto.OrderType == "coming soon" {
-		t, _ := time.ParseInLocation("2006-01-02 15:04:05", dto.OrderTime, loc)
+		t, _ := time.ParseInLocation("2006-01-02 15:04:05", helpers.NormalizeDateTimeString(dto.OrderTime), loc)
 		orderTimeCreate = t.UTC()
 	} else {
 		t, _ := time.ParseInLocation("2006-01-02 15:04:05", createdAtString, loc)
@@ -314,6 +314,7 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 		SubServiceID:          dto.SubServiceID,
 		CustomerName:          customerData.CompleteName,
 		OrderType:             dto.OrderType,
+		MitraGender:           strings.ToLower(dto.MitraGender),
 		OrderTime:             orderTimeCreate,
 		OrderTimestamp:        orderTimestamp,
 		Address:               dto.Address,
@@ -323,7 +324,7 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 		PaymentType:           paymentData.Type,
 		OrderStatus:           "FINDING_MITRA",
 		IDTransaction:         idTransaction,
-		IsAdditional:          dto.IsAdditional,
+		IsAdditional:          helpers.NormalizeIsAdditional(dto.IsAdditional),
 		OrderCountAdditional:  dto.OrderCountAdditional,
 		GrossAmount:           grossAmount,
 		GrossAmountMitra:      grossAmountMitra,
@@ -335,6 +336,14 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 		NotificationID:        randomNotificationID,
 		OfferExpiredJobID:     uuid.New().String(),
 		OfferSelectedJobID:    uuid.New().String(),
+		IsRated:               "0",
+		IsRatedCustomer:       "0",
+		IsMitraOnline:         "0",
+		IsCustomerOnline:      "0",
+		IsPaidCustomer:        "0",
+		IsLive:                "false",
+		IsClosed:              "0",
+		IsSingleUse:           "0",
 		CreatedAt:             time.Now().UTC(),
 		UpdatedAt:             time.Now().UTC(),
 	}
@@ -398,8 +407,6 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 					"gross_amount_mitra":   grossAmountMitraRepeat,
 					"customer_latitude":    dto.CustomerLatitude,
 					"customer_longitude":   dto.CustomerLongitude,
-					"mitra_latitude":       dto.MitraLatitude,
-					"mitra_longitude":      dto.MitraLongitude,
 				}
 
 				payloadRepeat = append(payloadRepeat, payload)
@@ -424,7 +431,7 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 	if err != nil {
 		return "", 0, "", "", 500, err
 	}
-	return order.ID, -1, order.CustomerID, order.MitraID, 200, nil
+	return order.ID, -1, order.CustomerID, helpers.DerefStr(order.MitraID), 200, nil
 }
 
 func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[string]interface{}, error) {
@@ -829,7 +836,7 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 			if customerData == nil {
 				return errors.New("Customer data not found")
 			}
-			mitraData, err := s.UserRepo.FindMitraById(orderWarningData.MitraID)
+			mitraData, err := s.UserRepo.FindMitraById(helpers.DerefStr(orderWarningData.MitraID))
 			if err != nil {
 				return err
 			}
