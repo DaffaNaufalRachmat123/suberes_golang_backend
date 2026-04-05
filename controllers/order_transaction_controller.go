@@ -83,6 +83,23 @@ func (c *OrderTransactionController) GetSelectedMitra(ctx *gin.Context) {
 	helpers.APIResponse(ctx, "OK", http.StatusOK, pagination)
 }
 
+// GET /orders/index/admin/:status
+func (c *OrderTransactionController) FindAllByStatus(ctx *gin.Context) {
+	status := ctx.Param("status")
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
+	search := ctx.DefaultQuery("search", "")
+
+	orders, total, err := c.OrderTransactionService.FindAllByStatusWithPagination(status, page, limit, search)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, "Failed to get orders", http.StatusInternalServerError)
+		return
+	}
+
+	response := helpers.GetPaginationData(ctx, orders, len(orders), page, limit, total)
+	ctx.JSON(http.StatusOK, response)
+}
+
 // GET /orders/order_detail_admin/:order_id
 func (c *OrderTransactionController) GetAdminOrderDetail(ctx *gin.Context) {
 	orderID := ctx.Param("order_id")

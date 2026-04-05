@@ -9,46 +9,54 @@ import (
 	"gorm.io/gorm"
 )
 
-func ScheduleRoutes(router *gin.RouterGroup, controller *controllers.ScheduleController, db *gorm.DB) {
-	schedules := router.Group("/schedules")
-	schedules.Use(middleware.AuthMiddleware(db))
+func ComplainRoutes(r *gin.RouterGroup, controller *controllers.ComplainController, db *gorm.DB) {
+	complain := r.Group("/complains")
+	protected := complain.Group("/")
+	protected.Use(middleware.AuthMiddleware(db))
+
 	routes := []helpers.ProtectedRoute{
 		{
 			Method:  "GET",
 			Path:    "/index",
-			Handler: controller.Index,
+			Handler: controller.IndexAdmin,
 			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/index/customer",
+			Handler: controller.IndexCustomer,
+			Roles:   []string{helpers.CustomerRole},
 		},
 		{
 			Method:  "GET",
 			Path:    "/index/mitra",
 			Handler: controller.IndexMitra,
-			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+			Roles:   []string{helpers.MitraRole},
 		},
 		{
 			Method:  "GET",
 			Path:    "/detail/:id",
 			Handler: controller.Detail,
-			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
+			Roles:   helpers.AllRole,
 		},
 		{
 			Method:  "POST",
 			Path:    "/create",
 			Handler: controller.Create,
-			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
+			Roles:   []string{helpers.CustomerRole, helpers.MitraRole},
 		},
 		{
 			Method:  "PUT",
-			Path:    "/update/:id",
-			Handler: controller.Update,
+			Path:    "/update/:id/:status",
+			Handler: controller.UpdateStatus,
 			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
 		},
 		{
 			Method:  "DELETE",
-			Path:    "/remove/:id/:password",
-			Handler: controller.Delete,
+			Path:    "/remove/:id",
+			Handler: controller.Remove,
 			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
 		},
 	}
-	helpers.RegisterProtectedRoutes(schedules, routes)
+	helpers.RegisterProtectedRoutes(protected, routes)
 }

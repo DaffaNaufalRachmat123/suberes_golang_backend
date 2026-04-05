@@ -32,7 +32,7 @@ const (
 func (s *ServiceService) GetServices(parent_id, page, limit int) ([]models.Service, int64, error) {
 	return s.ServiceRepo.FindAllPagination(parent_id, page, limit)
 }
-func (s *ServiceService) SearchServices(layananID int, serviceName string) ([]models.Service, error) {
+func (s *ServiceService) SearchServices(layananID int, serviceName string) ([]models.CategoryService, error) {
 	return s.ServiceRepo.Search(layananID, serviceName)
 }
 func (s *ServiceService) GetServiceByID(id int) (*models.Service, error) {

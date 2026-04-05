@@ -20,7 +20,6 @@ type JWTClaims struct {
 
 func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		fmt.Println("kesini deh daf")
 		for k, v := range c.Request.Header {
 			fmt.Println(k, v)
 		}

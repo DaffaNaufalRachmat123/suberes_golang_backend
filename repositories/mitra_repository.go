@@ -134,6 +134,50 @@ func (r *MitraRepository) GetNearestMitra(query MitraSearchQuery) ([]MitraSearch
 	return results, nil
 }
 
+func (r *MitraRepository) FindMitraForInvite(id string) (*models.User, error) {
+	var mitra models.User
+	err := r.DB.Where("id = ? AND user_type = ? AND is_mitra_activated = ?", id, "mitra", "0").First(&mitra).Error
+	if err != nil {
+		return nil, err
+	}
+	return &mitra, nil
+}
+
+func (r *MitraRepository) UpdateMitraInvited(tx *gorm.DB, id string) error {
+	return tx.Table("users").Where("id = ? AND user_type = ? AND is_mitra_invited = ?", id, "mitra", "0").Update("is_mitra_invited", "1").Error
+}
+
+// UpdateMitraTrainingStatus updates is_mitra_accepted or is_mitra_invited based on status (successful|failed).
+// Target: users where id=id AND user_type='mitra' AND is_mitra_invited='1' AND is_mitra_activated='0'.
+func (r *MitraRepository) UpdateMitraTrainingStatus(tx *gorm.DB, id, status string) error {
+	base := tx.Table("users").Where("id = ? AND user_type = ? AND is_mitra_invited = ? AND is_mitra_activated = ?", id, "mitra", "1", "0")
+	switch status {
+	case "successful":
+		return base.Update("is_mitra_accepted", "1").Error
+	case "failed":
+		return base.Update("is_mitra_invited", "0").Error
+	}
+	return nil
+}
+
+func (r *MitraRepository) FindMitraForActivation(id string) (*models.User, error) {
+	var mitra models.User
+	err := r.DB.Where("id = ? AND user_type = ? AND is_mitra_activated = ?", id, "mitra", "0").First(&mitra).Error
+	if err != nil {
+		return nil, err
+	}
+	return &mitra, nil
+}
+
+func (r *MitraRepository) UpdateMitraActivationPayload(tx *gorm.DB, id string, payload map[string]interface{}) error {
+	return tx.Table("users").Where("id = ? AND user_type = ? AND is_mitra_activated = ?", id, "mitra", "0").Updates(payload).Error
+}
+
+// UpdateMitraByID updates mitra fields by id only, with no re-fetch.
+func (r *MitraRepository) UpdateMitraByID(tx *gorm.DB, id string, payload map[string]interface{}) error {
+	return tx.Table("users").Where("id = ? AND user_type = ?", id, "mitra").Updates(payload).Error
+}
+
 func NewMitraRepository(db *gorm.DB) *MitraRepository {
 	return &MitraRepository{DB: db}
 }

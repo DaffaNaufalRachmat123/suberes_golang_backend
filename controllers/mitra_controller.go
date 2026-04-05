@@ -129,9 +129,10 @@ func (c *MitraController) Register(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "register successful",
-		"status":         "ok",
-		"data":           createdMitra,
+		"server_message":        "register successful",
+		"status":                "ok",
+		"register_success_text": "Pendaftaran mitra baru berhasil selanjutnya kita akan ngasih tau kamu lewat email untuk proses verifikasi data diri dan kelengkapan",
+		"data":                  createdMitra,
 	})
 }
 
@@ -184,19 +185,25 @@ func (c *MitraController) UpdateMitraStatus(ctx *gin.Context) {
 			"server_message": "Customer not found",
 			"status":         "failure",
 		})
-	}
-	user := userCtx.(models.User)
-	var req dtos.SuspendRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": err.Error(),
-			"status":         "failed",
-		})
 		return
 	}
-	code, err := c.MitraService.UpdateMitraStatus(ctx, mitraID, status, user.UserType, req.SuspendedReason)
+	user := userCtx.(models.User)
+	suspendedReason := ""
+	if status == "suspend" {
+		var req dtos.SuspendRequest
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"server_message": err.Error(),
+				"status":         "failed",
+			})
+			return
+		}
+		suspendedReason = req.SuspendedReason
+	}
+	code, err := c.MitraService.UpdateMitraStatus(ctx, mitraID, status, user.UserType, suspendedReason)
 	if err != nil {
 		helpers.JSONError(ctx, code, err)
+		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "Mitra status updated",
@@ -516,4 +523,47 @@ func (c *MitraController) UpdateFirebaseToken(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{"server_message": "refresh token updated", "status": "success"})
+}
+
+func (c *MitraController) InviteMitra(ctx *gin.Context) {
+	mitraID := ctx.Param("id")
+	var req dtos.InviteMitraRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": err.Error(), "status": "failure"})
+		return
+	}
+	code, err := c.MitraService.InviteMitra(mitraID, req.ScheduleID)
+	if err != nil {
+		helpers.JSONError(ctx, code, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"server_message": "mitra invited", "status": "success"})
+}
+
+func (c *MitraController) TrainingStatus(ctx *gin.Context) {
+	mitraID := ctx.Param("id")
+	status := ctx.Param("status")
+	code, err := c.MitraService.TrainingStatus(mitraID, status)
+	if err != nil {
+		helpers.JSONError(ctx, code, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"server_message": "Berhasil memperbarui status mitra", "status": "success"})
+}
+
+func (c *MitraController) ActivateMitraStatus(ctx *gin.Context) {
+	mitraID := ctx.Param("id")
+	status := ctx.Param("status")
+	code, err := c.MitraService.ActivateMitraStatus(mitraID, status)
+	if err != nil {
+		helpers.JSONError(ctx, code, err)
+		return
+	}
+	var msg string
+	if status == "successful" {
+		msg = "Akun mitra diaktifkan"
+	} else {
+		msg = "Akun mitra telah ditolak"
+	}
+	ctx.JSON(http.StatusOK, gin.H{"server_message": msg, "update_status": status, "status": "success"})
 }

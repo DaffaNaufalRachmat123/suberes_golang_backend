@@ -31,22 +31,26 @@ func (r *ServiceRepository) FindByID(id int) (*models.Service, error) {
 	}
 	return &service, nil
 }
-func (r *ServiceRepository) Search(layananID int, serviceName string) ([]models.Service, error) {
-	var services []models.Service
+func (r *ServiceRepository) Search(layananID int, serviceName string) ([]models.CategoryService, error) {
+	var categories []models.CategoryService
+	likePattern := fmt.Sprintf("%%%s%%", serviceName)
 
 	err := r.DB.
-		Model(&models.Service{}).
-		Joins("JOIN category_services ON category_services.id = services.category_service_id").
-		Where("category_services.layanan_id = ?", layananID).
-		Where("services.service_name LIKE ?", fmt.Sprintf("%%%s%%", serviceName)).
-		Preload("CategoryService").
-		Find(&services).Error
+		Model(&models.CategoryService{}).
+		Where("layanan_id = ?", layananID).
+		Where("EXISTS (SELECT 1 FROM services WHERE services.parent_id = category_services.id AND services.service_name LIKE ?)", likePattern).
+		Preload("Services", func(db *gorm.DB) *gorm.DB {
+			return db.Where("service_name LIKE ?", likePattern)
+		}).
+		Preload("Services.SubServices").
+		Preload("Services.ServiceGuarantee").
+		Find(&categories).Error
 
 	if err != nil {
 		return nil, err
 	}
 
-	return services, nil
+	return categories, nil
 }
 func (r *ServiceRepository) FindLayananServices(id int) ([]models.LayananService, error) {
 	var layanan []models.LayananService

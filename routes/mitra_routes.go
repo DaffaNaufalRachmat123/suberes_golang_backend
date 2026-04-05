@@ -116,6 +116,24 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 			Handler: controller.UpdateDocumentStatus,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
+		{
+			Method:  "PUT",
+			Path:    "/invite_mitra/:id",
+			Handler: controller.InviteMitra,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/training_status/:id/:status",
+			Handler: controller.TrainingStatus,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/activate_mitra_status/:id/:status",
+			Handler: controller.ActivateMitraStatus,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
 	}
 	helpers.RegisterProtectedRoutes(protected, routes)
 }

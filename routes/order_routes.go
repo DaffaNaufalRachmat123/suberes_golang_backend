@@ -26,12 +26,6 @@ func OrderRoutes(r *gin.RouterGroup, controller *controllers.OrderController, db
 			Handler: controller.AcceptOrderCash,
 			Roles:   []string{helpers.MitraRole},
 		},
-		{
-			Method:  "GET",
-			Path:    "/index/admin/:status",
-			Handler: controller.FindAllByStatus,
-			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
-		},
 	}
 	helpers.RegisterProtectedRoutes(order, routes)
 }

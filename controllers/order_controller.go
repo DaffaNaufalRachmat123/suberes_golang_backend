@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"net/http"
-	"strconv"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
 	"suberes_golang/services"
@@ -12,13 +11,11 @@ import (
 
 type OrderController struct {
 	OrderCashService *services.OrderCashService
-	OrderService     *services.OrderService
 }
 
-func NewOrderController(orderCashService *services.OrderCashService, orderService *services.OrderService) *OrderController {
+func NewOrderController(orderCashService *services.OrderCashService) *OrderController {
 	return &OrderController{
 		OrderCashService: orderCashService,
-		OrderService:     orderService,
 	}
 }
 
@@ -62,20 +59,4 @@ func (c *OrderController) AcceptOrderCash(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusCreated, response)
-}
-
-func (c *OrderController) FindAllByStatus(ctx *gin.Context) {
-	status := ctx.Param("status")
-	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
-	search := ctx.DefaultQuery("search", "")
-
-	orders, total, err := c.OrderService.FindAllByStatusWithPagination(status, page, limit, search)
-	if err != nil {
-		helpers.APIErrorResponse(ctx, "Failed to get orders", http.StatusInternalServerError)
-		return
-	}
-
-	response := helpers.GetPaginationData(ctx, orders, len(orders), page, limit, total)
-	ctx.JSON(http.StatusOK, response)
 }

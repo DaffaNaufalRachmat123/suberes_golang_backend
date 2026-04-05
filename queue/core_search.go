@@ -15,7 +15,7 @@ func searchQueryNowCash(latitude float64, longitude float64, isActive string, is
 			COALESCE((SELECT SUM(CASE WHEN EXTRACT(EPOCH FROM (c.order_time - NOW())) / 60 > 0 AND EXTRACT(EPOCH FROM (c.order_time - NOW())) / 60 < %d THEN 1 ELSE 0 END) FROM order_transactions b LEFT JOIN order_transaction_repeats c ON c.order_id = b.id WHERE c.order_id = b.id AND c.mitra_id = a.id), 0) AS count_order_repeat,
 			a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
 			(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
-			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude)) * cos(radians(a.longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude)))))) AS distance,
+			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude::float)) * cos(radians(a.longitude::float) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude::float)))))) AS distance,
 			(a.account_balance - COALESCE((SELECT SUM(x.gross_amount_company) FROM order_transactions x WHERE x.order_status = 'WAIT_SCHEDULE'), 0)) AS money_left
 		FROM users a
 		WHERE a.user_gender = '%s' AND a.is_logged_in = '1' AND a.is_active = '%s' AND a.is_busy = '%s' AND a.is_auto_bid = '%s' AND a.is_suspended = '0' AND a.user_type = 'mitra'
@@ -32,7 +32,7 @@ func searchQueryNow(latitude float64, longitude float64, isActive string, isBusy
 			COALESCE((SELECT SUM(CASE WHEN EXTRACT(EPOCH FROM (c.order_time - NOW())) / 60 > 0 AND EXTRACT(EPOCH FROM (c.order_time - NOW())) / 60 < %d THEN 1 ELSE 0 END) FROM order_transactions b LEFT JOIN order_transaction_repeats c ON c.order_id = b.id WHERE c.order_id = b.id AND c.mitra_id = a.id), 0) AS count_order_repeat,
 			a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
 			(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
-			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude)) * cos(radians(a.longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude)))))) AS distance
+			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude::float)) * cos(radians(a.longitude::float) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude::float)))))) AS distance
 		FROM users a
 		WHERE a.user_gender = '%s' AND a.is_logged_in = '1' AND a.is_active = '%s' AND a.is_busy = '%s' AND a.is_auto_bid = '%s' AND a.is_suspended = '0' AND a.user_type = 'mitra'
 	) sub
@@ -47,7 +47,7 @@ func searchQueryNowCashWithoutTime(latitude float64, longitude float64, isActive
 		SELECT
 			a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
 			(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
-			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude)) * cos(radians(a.longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude)))))) AS distance,
+			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude::float)) * cos(radians(a.longitude::float) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude::float)))))) AS distance,
 			(a.account_balance - COALESCE((SELECT SUM(x.gross_amount_company) FROM order_transactions x WHERE x.order_status = 'WAIT_SCHEDULE'), 0)) AS money_left
 		FROM users a
 		WHERE a.user_gender = '%s' AND a.is_logged_in = '1' AND a.is_active = '%s' AND a.is_busy = '%s' AND a.is_auto_bid = '%s' AND a.is_suspended = '0' AND a.user_type = 'mitra'
@@ -63,7 +63,7 @@ func searchQueryNowWithoutTime(latitude float64, longitude float64, isActive str
 		SELECT
 			a.id, a.firebase_token, a.is_auto_bid, a.account_balance,
 			(SELECT COALESCE(SUM(c.debt_per_week), 0) FROM tools_credits b LEFT JOIN tools c ON b.tool_id = c.id WHERE b.mitra_id = a.id) AS total_hutang,
-			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude)) * cos(radians(a.longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude)))))) AS distance
+			(6371 * acos(LEAST(1, GREATEST(-1, cos(radians(%f)) * cos(radians(a.latitude::float)) * cos(radians(a.longitude::float) - radians(%f)) + sin(radians(%f)) * sin(radians(a.latitude::float)))))) AS distance
 		FROM users a
 		WHERE a.user_gender = '%s' AND a.is_logged_in = '1' AND a.is_active = '%s' AND a.is_busy = '%s' AND a.is_auto_bid = '%s' AND a.is_suspended = '0' AND a.user_type = 'mitra'
 	) sub

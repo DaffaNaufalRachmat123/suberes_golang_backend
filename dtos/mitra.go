@@ -103,3 +103,7 @@ type ChangePasswordRequest struct {
 type ChangeEmailRequest struct {
 	Email string `json:"email" binding:"required,email"`
 }
+
+type InviteMitraRequest struct {
+	ScheduleID int64 `json:"schedule_id" binding:"required"`
+}

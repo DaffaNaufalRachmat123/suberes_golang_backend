@@ -30,7 +30,12 @@ type OrderTransactionService struct {
 	TransactionRepo             *repositories.TransactionRepository
 }
 
-// ---------- 1. GetPaymentStatus ----------
+// ---------- 1. FindAllByStatusWithPagination ----------
+func (s *OrderTransactionService) FindAllByStatusWithPagination(status string, page, limit int, search string) ([]models.OrderTransaction, int64, error) {
+	return s.OrderTransactionRepo.FindAllByStatusWithPagination(status, page, limit, search)
+}
+
+// ---------- 2. GetPaymentStatus ----------
 func (s *OrderTransactionService) GetPaymentStatus(idTransaction string) (*models.OrderTransaction, error) {
 	return s.OrderTransactionRepo.FindByIDTransaction(idTransaction)
 }

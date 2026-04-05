@@ -1,5 +1,7 @@
 package models
 
+import "gorm.io/gorm"
+
 type SubService struct {
 	BaseModel
 	ServiceID             uint    `gorm:"type:integer" json:"service_id"`
@@ -19,4 +21,11 @@ type SubService struct {
 	UserRatings             []UserRating             `gorm:"foreignKey:SubServiceID" json:"user_ratings,omitempty"`
 	OrderChats              []OrderChat              `gorm:"foreignKey:SubServiceID" json:"order_chats,omitempty"`
 	Notifications           []Notification           `gorm:"foreignKey:SubServiceID" json:"notifications,omitempty"`
+}
+
+func (s *SubService) AfterFind(tx *gorm.DB) error {
+	if s.SubServiceAdditionals == nil {
+		s.SubServiceAdditionals = []SubServiceAdditional{}
+	}
+	return nil
 }

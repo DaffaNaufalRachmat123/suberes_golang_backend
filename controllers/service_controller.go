@@ -103,7 +103,18 @@ func (c *ServiceController) SearchService(ctx *gin.Context) {
 		return
 	}
 	data, err := c.ServiceService.ServiceRepo.Search(layananId, serviceName)
-	ctx.JSON(http.StatusOK, data)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"server_message": err.Error(),
+			"status":         "failure",
+		})
+		return
+	}
+	result := make([]dtos.CategoryServiceSearchResponse, len(data))
+	for i, cs := range data {
+		result[i] = dtos.ToCategoryServiceSearchResponse(cs)
+	}
+	ctx.JSON(http.StatusOK, result)
 }
 func (c *ServiceController) ServiceType(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))

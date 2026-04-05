@@ -88,3 +88,12 @@ func (r *ScheduleRepository) Update(tx *gorm.DB, schedule *models.Schedule) erro
 func (r *ScheduleRepository) Delete(tx *gorm.DB, id string) error {
 	return tx.Where("id = ?", id).Delete(&models.Schedule{}).Error
 }
+
+func (r *ScheduleRepository) FindMitraLevelByID(id int64) (*models.Schedule, error) {
+	var schedule models.Schedule
+	err := r.DB.Where("id = ? AND schedule_level = ?", id, "mitra_level").First(&schedule).Error
+	if err != nil {
+		return nil, err
+	}
+	return &schedule, nil
+}

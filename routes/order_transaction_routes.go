@@ -18,14 +18,25 @@ func OrderTransactionRoutes(r *gin.RouterGroup, controller *controllers.OrderTra
 	order.GET("/index/mitra/coming_soon/:mitra_id/:limit/:offset", controller.GetComingSoonOrdersForMitra)
 	order.GET("/running_order/:order_id/:sub_id/:customer_id/:mitra_id/:type", controller.GetRunningOrderDetail)
 	order.GET("/index/virtual_account/all/:customer_id/:limit/:offset", controller.GetVirtualAccountOrders)
-	order.PUT("/update/run_order/:order_id/:customer_id/:mitra_id", controller.StartRunOrder)
 
 	// ── Protected routes ─────────────────────────────────────────────────────────
 	protected := order.Group("")
 	protected.Use(middleware.AuthMiddleware(db))
 
 	protectedRoutes := []helpers.ProtectedRoute{
+		{
+			Method:  "PUT",
+			Path:    "/update/run_order/:order_id/:customer_id/:mitra_id",
+			Handler: controller.StartRunOrder,
+			Roles:   []string{helpers.MitraRole},
+		},
 		// Admin-only routes
+		{
+			Method:  "GET",
+			Path:    "/index/admin/:status",
+			Handler: controller.FindAllByStatus,
+			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
+		},
 		{
 			Method:  "GET",
 			Path:    "/index/admin/dashboard",

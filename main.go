@@ -70,6 +70,9 @@ func main() {
 	newsRepo := &repositories.NewsRepository{DB: config.DB}
 	termsConditionRepo := &repositories.TermsConditionRepository{DB: config.DB}
 	panduanRepo := &repositories.PanduanRepository{DB: config.DB}
+	pinRepo := &repositories.PinRepository{DB: config.DB}
+	ratingRepo := &repositories.RatingRepository{DB: config.DB}
+	complainRepo := &repositories.ComplainRepository{DB: config.DB}
 
 	customerService := &services.CustomerService{
 		UserRepo:    userRepo,
@@ -107,6 +110,7 @@ func main() {
 		UserOtpRepository:                 userOtpRepo,
 		OrderTransactionRepository:        orderTransactionRepo,
 		OrderTransactionRepeatsRepository: orderTransactionRepeatsRepo,
+		ScheduleRepository:                scheduleRepo,
 		DB:                                config.DB,
 	}
 
@@ -136,8 +140,6 @@ func main() {
 	subServiceController := &controllers.SubServiceController{
 		SubServiceService: subServiceService,
 	}
-
-	orderService := services.NewOrderService(orderTransactionRepo)
 
 	bantuanService := &services.BantuanService{
 		BantuanRepo: bantuanRepo,
@@ -169,6 +171,30 @@ func main() {
 
 	panduanController := &controllers.PanduanController{
 		PanduanService: panduanService,
+	}
+
+	pinService := &services.PinService{
+		PinRepo:     pinRepo,
+		UserOTPRepo: userOtpRepo,
+		DB:          config.DB,
+	}
+	pinController := &controllers.PinController{
+		PinService: pinService,
+	}
+
+	ratingService := &services.RatingService{
+		RatingRepo: ratingRepo,
+	}
+	ratingController := &controllers.RatingController{
+		RatingService: ratingService,
+	}
+
+	complainService := &services.ComplainService{
+		ComplainRepo: complainRepo,
+		DB:           config.DB,
+	}
+	complainController := &controllers.ComplainController{
+		ComplainService: complainService,
 	}
 
 	paymentService := &services.PaymentService{
@@ -232,7 +258,7 @@ func main() {
 		MitraService: mitraService,
 	}
 
-	OrderController := controllers.NewOrderController(orderCashService, orderService)
+	OrderController := controllers.NewOrderController(orderCashService)
 
 	orderOfferService := services.NewOrderOfferService(config.DB)
 	orderEwalletService := services.NewOrderEwalletService(config.DB)
@@ -271,6 +297,9 @@ func main() {
 	routes.OrderEwalletRoutes(api, OrderEwalletController, config.DB)
 	routes.OrderVARoutes(api, OrderVAController, config.DB)
 	routes.OrderHistoryRoutes(api, orderHistoryController, config.DB)
+	routes.PinRoutes(api, pinController, config.DB)
+	routes.RatingRoutes(api, ratingController, config.DB)
+	routes.ComplainRoutes(api, complainController, config.DB)
 
 	queue.InitAsynq()
 

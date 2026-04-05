@@ -29,7 +29,7 @@ func NewsRoutes(router *gin.RouterGroup, controller *controllers.NewsController,
 			Method:  "GET",
 			Path:    "/detail/:id",
 			Handler: controller.GetByID,
-			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole, helpers.CustomerRole},
 		},
 		{
 			Method:  "POST",

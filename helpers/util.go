@@ -8,8 +8,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"image"
@@ -201,6 +203,38 @@ func DecryptRSA(privateKeyPEM string, encrypted string) ([]byte, error) {
 	}
 
 	return rsa.DecryptPKCS1v15(rand.Reader, privateKey, cipherData)
+}
+
+// EncryptPinCbc replicates Node.js AES-256-CBC pin encryption:
+//
+//	key = sha512(SECRET_KEY).hex[:32], iv = sha512(SECRET_IV_KEY).hex[:16]
+//	output = base64( hex( aes_cbc_encrypt(plaintext) ) )
+func EncryptPinCbc(plaintext string) (string, error) {
+	key := pinDeriveBytes(os.Getenv("SECRET_KEY"), 32)
+	iv := pinDeriveBytes(os.Getenv("SECRET_IV_KEY"), 16)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	// PKCS7 padding
+	blockSize := aes.BlockSize
+	padding := blockSize - len(plaintext)%blockSize
+	padded := append([]byte(plaintext), bytes.Repeat([]byte{byte(padding)}, padding)...)
+
+	ciphertext := make([]byte, len(padded))
+	cipher.NewCBCEncrypter(block, iv).CryptBlocks(ciphertext, padded)
+
+	// hex-encode the cipher bytes, then base64-encode the hex string (mirrors JS behaviour)
+	hexStr := hex.EncodeToString(ciphertext)
+	return base64.StdEncoding.EncodeToString([]byte(hexStr)), nil
+}
+
+func pinDeriveBytes(secret string, length int) []byte {
+	sum := sha512.Sum512([]byte(secret))
+	hexStr := hex.EncodeToString(sum[:])
+	return []byte(hexStr[:length])
 }
 
 func FindPercentageFromDifferentValue(number1, number2 float64) float64 {
@@ -743,3 +777,16 @@ const (
 )
 
 var AllRole = []string{CustomerRole, MitraRole, AdminRole, SuperAdminRole}
+
+// GenerateMitraPassword generates a 10-char random password from the mitra wishlist charset.
+// Uses crypto/rand for cryptographic randomness (matches Node.js crypto.randomFillSync).
+func GenerateMitraPassword() string {
+	const wishlist = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~!@-_+=#$"
+	const length = 10
+	b := make([]byte, length)
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(wishlist))))
+		b[i] = wishlist[n.Int64()]
+	}
+	return string(b)
+}

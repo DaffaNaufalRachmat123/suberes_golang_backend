@@ -38,6 +38,7 @@ type MitraService struct {
 	SubPaymentRepository              *repositories.SubPaymentRepository
 	TransactionRepository             *repositories.TransactionRepository
 	UserOtpRepository                 *repositories.UserOtpRepository
+	ScheduleRepository                *repositories.ScheduleRepository
 }
 
 func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.MitraLoginResponseDTO, error) {
@@ -480,7 +481,7 @@ func (s *MitraService) UpdateFirebaseToken(mitraID string, token string) error {
 	return tx.Commit().Error
 }
 func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, userType string, suspendedReason string) (int, error) {
-	if status == "suspended" {
+	if status == "suspend" {
 		mitra, err := s.UserRepository.FindMitraById(mitraID)
 		if err != nil {
 			return 500, err
@@ -645,12 +646,7 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 			"service_id_running":     nil,
 			"sub_service_id_running": nil,
 		}
-		_, err = s.UserRepository.UpdateUserData(tx, map[string]interface{}{
-			"id":                 mitraID,
-			"is_mitra_activated": "1",
-			"is_suspended":       "0",
-		}, userUpdate)
-		if err != nil {
+		if err = s.MitraRepository.UpdateMitraByID(tx, mitraID, userUpdate); err != nil {
 			tx.Rollback()
 			return 500, err
 		}
@@ -701,15 +697,10 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 			return 500, tx.Error
 		}
 
-		_, err = s.UserRepository.UpdateUserData(tx, map[string]interface{}{
-			"id":                 mitraID,
-			"is_mitra_activated": "0",
-			"is_suspended":       "1",
-		}, map[string]interface{}{
+		if err = s.MitraRepository.UpdateMitraByID(tx, mitraID, map[string]interface{}{
 			"is_mitra_activated": "1",
 			"is_suspended":       "0",
-		})
-		if err != nil {
+		}); err != nil {
 			tx.Rollback()
 			return 500, err
 		}
@@ -1075,5 +1066,133 @@ func (s *MitraService) UpdateDocumentStatus(data dtos.DocumentStatusRequest) (in
 		return 500, err
 	}
 	helpers.SendInvitedMailMitra(os.Getenv("SUPPORT_EMAIL"), mitra.Email, "Data Tidak Lengkap", "Data anda kurang lengkap, silahkan submit ulang", "", "")
+	return 200, nil
+}
+
+func (s *MitraService) InviteMitra(mitraID string, scheduleID int64) (int, error) {
+	mitra, err := s.MitraRepository.FindMitraForInvite(mitraID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 404, errors.New("mitra not found")
+		}
+		return 500, err
+	}
+
+	schedule, err := s.ScheduleRepository.FindMitraLevelByID(scheduleID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 404, errors.New("schedule not found")
+		}
+		return 500, err
+	}
+
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return 500, tx.Error
+	}
+
+	if err := s.MitraRepository.UpdateMitraInvited(tx, mitraID); err != nil {
+		tx.Rollback()
+		return 500, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+
+	go helpers.SendInvitedMailMitra(
+		os.Getenv("SUPPORT_EMAIL"),
+		mitra.Email,
+		"Undangan Verifikasi Mitra",
+		schedule.ScheduleName,
+		schedule.ScheduleDateTime,
+		schedule.SchedulePlace,
+	)
+
+	return 200, nil
+}
+
+func (s *MitraService) TrainingStatus(mitraID, status string) (int, error) {
+	if status != "successful" && status != "failed" {
+		return 400, errors.New("status must be 'successful' or 'failed'")
+	}
+
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return 500, tx.Error
+	}
+
+	if err := s.MitraRepository.UpdateMitraTrainingStatus(tx, mitraID, status); err != nil {
+		tx.Rollback()
+		return 500, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+
+	return 200, nil
+}
+
+func (s *MitraService) ActivateMitraStatus(mitraID, status string) (int, error) {
+	if status != "successful" && status != "failed" {
+		return 400, errors.New("status must be 'successful' or 'failed'")
+	}
+
+	mitra, err := s.MitraRepository.FindMitraForActivation(mitraID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 404, errors.New("mitra not found")
+		}
+		return 500, err
+	}
+
+	payload := map[string]interface{}{
+		"is_mitra_rejected":  "0",
+		"is_mitra_activated": "0",
+	}
+
+	var passwordPlain string
+
+	if status == "successful" {
+		payload["is_mitra_activated"] = "1"
+		payload["is_mitra_rejected"] = "0"
+		passwordPlain = helpers.GenerateMitraPassword()
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(passwordPlain), 12)
+		if err != nil {
+			return 500, err
+		}
+		payload["password"] = string(hashedPassword)
+	} else {
+		payload["is_document_completed"] = "0"
+		payload["is_mitra_invited"] = "0"
+		payload["is_mitra_accepted"] = "0"
+		payload["is_mitra_rejected"] = "1"
+	}
+
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return 500, tx.Error
+	}
+
+	if err := s.MitraRepository.UpdateMitraActivationPayload(tx, mitraID, payload); err != nil {
+		tx.Rollback()
+		return 500, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+
+	if status == "successful" {
+		go helpers.SendAcceptedMailMitra(
+			os.Getenv("SUPPORT_EMAIL"),
+			mitra.Email,
+			"Penerimaan Mitra Suberes",
+			mitra.Email,
+			passwordPlain,
+		)
+	}
+
 	return 200, nil
 }
