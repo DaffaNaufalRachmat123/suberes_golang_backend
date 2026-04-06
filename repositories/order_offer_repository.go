@@ -108,3 +108,8 @@ func (r *OrderOfferRepository) FindDetailByOrderAndMitra(orderID, mitraID, count
 
 	return &offer, nil
 }
+func (r *OrderOfferRepository) CountByMitraID(mitraID string) (int64, error) {
+	var count int64
+	err := r.DB.Model(&models.OrderOffer{}).Where("mitra_id = ?", mitraID).Count(&count).Error
+	return count, err
+}

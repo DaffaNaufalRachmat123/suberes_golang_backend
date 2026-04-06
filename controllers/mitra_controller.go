@@ -217,6 +217,7 @@ func (c *MitraController) UpdateMitraActive(ctx *gin.Context) {
 	code, err := c.MitraService.UpdateMitraActive(mitraID, isActive)
 	if err != nil {
 		helpers.JSONError(ctx, code, err)
+		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "Mitra active status updated",
@@ -230,6 +231,7 @@ func (c *MitraController) UpdateMitraAutoBid(ctx *gin.Context) {
 	code, err := c.MitraService.UpdateMitraAutoBid(mitraID, isAutoBid)
 	if err != nil {
 		helpers.JSONError(ctx, code, err)
+		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "Mitra auto bid status updated",
@@ -566,4 +568,14 @@ func (c *MitraController) ActivateMitraStatus(ctx *gin.Context) {
 		msg = "Akun mitra telah ditolak"
 	}
 	ctx.JSON(http.StatusOK, gin.H{"server_message": msg, "update_status": status, "status": "success"})
+}
+
+func (c *MitraController) DashboardCount(ctx *gin.Context) {
+	mitraID := ctx.Param("id")
+	result, err := c.MitraService.DashboardCount(mitraID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failed"})
+		return
+	}
+	ctx.JSON(http.StatusOK, result)
 }

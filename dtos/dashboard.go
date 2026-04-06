@@ -1,14 +1,16 @@
 package dtos
 
+import "suberes_golang/models"
+
 type DashboardPayload struct {
-	TodayOrderData       TodayOrderData       `json:"today_order_data"`
-	TodayMitraData       TodayMitraData       `json:"today_mitra_data"`
-	TodayTransactionData TodayTransactionData `json:"today_transaction_data"`
-	TotalOrdersByMonth   []TotalOrdersByMonth `json:"total_orders_by_month"`
-	OverviewMonth        []OverviewMonthRevenue `json:"overview_month"`
-	OverviewWeek         []OverviewWeekRevenue  `json:"overview_week"`
+	TodayOrderData       TodayOrderData          `json:"today_order_data"`
+	TodayMitraData       TodayMitraData          `json:"today_mitra_data"`
+	TodayTransactionData TodayTransactionData    `json:"today_transaction_data"`
+	TotalOrdersByMonth   []TotalOrdersByMonth    `json:"total_orders_by_month"`
+	OverviewMonth        []OverviewMonthRevenue  `json:"overview_month"`
+	OverviewWeek         []OverviewWeekRevenue   `json:"overview_week"`
 	FusService           []FrequentlyUsedService `json:"fus_service"`
-	MitraOrderToday      []MitraOrderToday      `json:"mitra_order_today"`
+	MitraOrderToday      []MitraOrderToday       `json:"mitra_order_today"`
 }
 
 type TodayOrderData struct {
@@ -53,4 +55,15 @@ type MitraOrderToday struct {
 	OrderCount   int64  `json:"order_count"`
 	ID           string `json:"id"`
 	CompleteName string `json:"complete_name"`
+}
+
+type MitraDashboardCountResponse struct {
+	OrderSoonCount     int64                    `json:"order_soon_count"`
+	OrderDoneCount     int64                    `json:"order_done_count"`
+	OrderRepeatCount   int64                    `json:"order_repeat_count"`
+	OrderCanceledCount int64                    `json:"order_canceled_count"`
+	OrderOfferCount    int64                    `json:"order_offer_count"`
+	IsSuspended        string                   `json:"is_suspended"`
+	Status             string                   `json:"status"`
+	OrderRunningData   *models.OrderTransaction `json:"order_running_data"`
 }

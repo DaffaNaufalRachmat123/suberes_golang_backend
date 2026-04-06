@@ -16,6 +16,7 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 	mitraRoutes.PUT("/change_forgot_password", controller.ChangeForgotPassword)
 	mitraRoutes.PUT("/request_forgot_password/:email", controller.RequestForgotPassword)
 	mitraRoutes.PUT("/otp_validator_forgot_password", controller.OTPValidatorForgotPassword)
+	mitraRoutes.GET("/dashboard/count/:id", controller.DashboardCount)
 
 	protected := mitraRoutes.Group("/")
 	protected.Use(middleware.AuthMiddleware(db))

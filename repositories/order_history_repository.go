@@ -32,6 +32,9 @@ func (r *OrderTransactionRepository) FindCanceledDatesByMitra(mitraID string) ([
 		Group("TO_CHAR(order_time, 'YYYY-MM-DD')").
 		Order("order_time_customer DESC").
 		Scan(&results).Error
+	if results == nil {
+		results = []OrderHistoryDateResult{}
+	}
 	return results, err
 }
 
@@ -60,6 +63,9 @@ func (r *OrderTransactionRepository) FindCanceledByMitraAndDate(mitraID, startDa
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").Preload("OrderTransactionRepeats").
 		Order("order_time DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -80,6 +86,9 @@ func (r *OrderTransactionRepository) FindCanceledForCustomerPagedFull(customerID
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").Preload("OrderTransactionRepeats").
 		Order("order_time DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -93,6 +102,9 @@ func (r *OrderTransactionRepository) FindDoneDatesByMitra(mitraID string) ([]Ord
 		Group("TO_CHAR(order_time, 'YYYY-MM-DD')").
 		Order("order_time_customer DESC").
 		Scan(&results).Error
+	if results == nil {
+		results = []OrderHistoryDateResult{}
+	}
 	return results, err
 }
 
@@ -121,6 +133,9 @@ func (r *OrderTransactionRepository) FindDoneByMitraAndDate(mitraID, startDate, 
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").Preload("OrderTransactionRepeats").
 		Order("order_time DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -140,6 +155,9 @@ func (r *OrderTransactionRepository) FindDoneForCustomerPagedFull(customerID, st
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").Preload("OrderTransactionRepeats").
 		Order("order_time DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -153,6 +171,9 @@ func (r *OrderTransactionRepository) FindComingSoonDatesByMitra(mitraID string) 
 		Group("TO_CHAR(order_time, 'YYYY-MM-DD')").
 		Order("order_time_customer DESC").
 		Scan(&results).Error
+	if results == nil {
+		results = []OrderHistoryDateResult{}
+	}
 	return results, err
 }
 
@@ -181,6 +202,9 @@ func (r *OrderTransactionRepository) FindComingSoonByMitraAndDate(mitraID, start
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").
 		Order("id DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -201,6 +225,9 @@ func (r *OrderTransactionRepository) FindComingSoonForCustomerPagedFull(customer
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").
 		Order("id DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -214,6 +241,9 @@ func (r *OrderTransactionRepository) FindRepeatDatesByMitra(mitraID string) ([]O
 		Group("TO_CHAR(order_time, 'YYYY-MM-DD')").
 		Order("order_time_customer DESC").
 		Scan(&results).Error
+	if results == nil {
+		results = []OrderHistoryDateResult{}
+	}
 	return results, err
 }
 
@@ -242,6 +272,9 @@ func (r *OrderTransactionRepository) FindRepeatByMitraAndDate(mitraID, startDate
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").Preload("OrderTransactionRepeats").
 		Order("id DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -280,6 +313,9 @@ func (r *OrderTransactionRepository) FindRepeatForCustomerPagedFull(customerID s
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").Preload("OrderTransactionRepeats").
 		Order("id DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -327,6 +363,9 @@ func (r *OrderTransactionRepository) FindPendingByMitraPaged(mitraID string, pag
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").
 		Order("id DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -343,6 +382,9 @@ func (r *OrderTransactionRepository) FindPendingByCustomerPaged(customerID strin
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").
 		Order("id DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }
 
@@ -362,5 +404,8 @@ func (r *OrderTransactionRepository) FindRunningForCustomerPagedFull(customerID 
 	err := q.Preload("Customer").Preload("Mitra").Preload("Service").Preload("SubService").
 		Preload("Payment").Preload("SubPayment").Preload("OrderTransactionRepeats").
 		Order("id DESC").Limit(limit).Offset(offset).Find(&orders).Error
+	if orders == nil {
+		orders = []models.OrderTransaction{}
+	}
 	return orders, total, err
 }

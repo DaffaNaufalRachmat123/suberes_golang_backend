@@ -111,6 +111,7 @@ func main() {
 		OrderTransactionRepository:        orderTransactionRepo,
 		OrderTransactionRepeatsRepository: orderTransactionRepeatsRepo,
 		ScheduleRepository:                scheduleRepo,
+		OrderOfferRepository:              orderOfferRepo,
 		DB:                                config.DB,
 	}
 

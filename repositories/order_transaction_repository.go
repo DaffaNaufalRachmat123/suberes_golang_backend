@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"errors"
 	"strings"
 	"suberes_golang/dtos"
 	"suberes_golang/models"
@@ -16,6 +17,9 @@ type OrderTransactionRepository struct {
 func (r *OrderTransactionRepository) FindRunningOrderByMitraID(mitraID string) (*models.OrderTransaction, error) {
 	var orderTransaction models.OrderTransaction
 	err := r.DB.Where("mitra_id = ? AND order_status IN (?)", mitraID, []string{"OTW", "ON_PROGRESS"}).First(&orderTransaction).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
 	return &orderTransaction, err
 }
 func (r *OrderTransactionRepository) CountRunningOrders() (int64, error) {
@@ -590,4 +594,55 @@ func (r *OrderTransactionRepository) FindFullForFinish(orderID string) (*models.
 		return nil, err
 	}
 	return &order, nil
+}
+
+type MitraDashboardOrderCounts struct {
+	OrderSoonCount     int64
+	OrderDoneCount     int64
+	OrderRepeatCount   int64
+	OrderCanceledCount int64
+}
+
+func (r *OrderTransactionRepository) GetMitraDashboardOrderCounts(mitraID string) (*MitraDashboardOrderCounts, error) {
+	var result MitraDashboardOrderCounts
+
+	if err := r.DB.Model(&models.OrderTransaction{}).
+		Where("mitra_id = ? AND order_type = ? AND order_status = ?", mitraID, "coming soon", "WAIT_SCHEDULE").
+		Count(&result.OrderSoonCount).Error; err != nil {
+		return nil, err
+	}
+
+	if err := r.DB.Model(&models.OrderTransaction{}).
+		Where("mitra_id = ? AND order_status = ?", mitraID, "FINISH").
+		Count(&result.OrderDoneCount).Error; err != nil {
+		return nil, err
+	}
+
+	if err := r.DB.Model(&models.OrderTransaction{}).
+		Where("mitra_id = ? AND order_type = ?", mitraID, "repeat").
+		Count(&result.OrderRepeatCount).Error; err != nil {
+		return nil, err
+	}
+
+	if err := r.DB.Model(&models.OrderTransaction{}).
+		Where("mitra_id = ? AND order_status IN ?", mitraID,
+			[]string{"CANCELED", "CANCELED_LATE_PAYMENT", "CANCELED_BY_SYSTEM", "CANCELED_VOID", "CANCELED_VOID_BY_SYSTEM"}).
+		Count(&result.OrderCanceledCount).Error; err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (r *OrderTransactionRepository) FindRunningOrderDetailByMitraID(mitraID string) (*models.OrderTransaction, error) {
+	var order models.OrderTransaction
+	err := r.DB.
+		Where("mitra_id = ? AND order_status IN ?", mitraID, []string{"OTW", "ON_PROGRESS"}).
+		Preload("Service").
+		Preload("SubService").
+		First(&order).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &order, err
 }

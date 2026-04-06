@@ -39,6 +39,7 @@ type MitraService struct {
 	TransactionRepository             *repositories.TransactionRepository
 	UserOtpRepository                 *repositories.UserOtpRepository
 	ScheduleRepository                *repositories.ScheduleRepository
+	OrderOfferRepository              *repositories.OrderOfferRepository
 }
 
 func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.MitraLoginResponseDTO, error) {
@@ -726,10 +727,10 @@ func (s *MitraService) UpdateMitraActive(mitraID, isActive string) (int, error) 
 	}
 	tx := s.DB.Begin()
 	_, err = s.UserRepository.UpdateUserData(tx, map[string]interface{}{
-		"is_active": isActive,
-	}, map[string]interface{}{
 		"id":        mitraID,
 		"user_type": "mitra",
+	}, map[string]interface{}{
+		"is_active": isActive,
 	})
 	if err != nil {
 		tx.Rollback()
@@ -738,7 +739,7 @@ func (s *MitraService) UpdateMitraActive(mitraID, isActive string) (int, error) 
 	if err := tx.Commit().Error; err != nil {
 		return 500, err
 	}
-	tokens, err := s.UserRepository.GetOnlineAdminTokens(tx)
+	tokens, err := s.UserRepository.GetOnlineAdminTokens(s.DB)
 	if err != nil {
 		return 500, err
 	}
@@ -772,10 +773,10 @@ func (s *MitraService) UpdateMitraAutoBid(mitraID, isAutoBid string) (int, error
 	}
 	tx := s.DB.Begin()
 	_, err = s.UserRepository.UpdateUserData(tx, map[string]interface{}{
-		"is_auto_bid": isAutoBid,
-	}, map[string]interface{}{
 		"id":        mitraID,
 		"user_type": "mitra",
+	}, map[string]interface{}{
+		"is_auto_bid": isAutoBid,
 	})
 	if err != nil {
 		tx.Rollback()
@@ -1195,4 +1196,44 @@ func (s *MitraService) ActivateMitraStatus(mitraID, status string) (int, error) 
 	}
 
 	return 200, nil
+}
+func (s *MitraService) DashboardCount(mitraID string) (*dtos.MitraDashboardCountResponse, error) {
+	counts, err := s.OrderTransactionRepository.GetMitraDashboardOrderCounts(mitraID)
+	if err != nil {
+		return nil, err
+	}
+
+	offerCount, err := s.OrderOfferRepository.CountByMitraID(mitraID)
+	if err != nil {
+		return nil, err
+	}
+
+	mitra, err := s.MitraRepository.FindMitraByID(mitraID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("mitra not found")
+		}
+		return nil, err
+	}
+
+	runningOrder, err := s.OrderTransactionRepository.FindRunningOrderDetailByMitraID(mitraID)
+	if err != nil {
+		return nil, err
+	}
+
+	status := "NOT_IN_ORDER"
+	if runningOrder != nil {
+		status = "IN_ORDER"
+	}
+
+	return &dtos.MitraDashboardCountResponse{
+		OrderSoonCount:     counts.OrderSoonCount,
+		OrderDoneCount:     counts.OrderDoneCount,
+		OrderRepeatCount:   counts.OrderRepeatCount,
+		OrderCanceledCount: counts.OrderCanceledCount,
+		OrderOfferCount:    offerCount,
+		IsSuspended:        mitra.IsSuspended,
+		Status:             status,
+		OrderRunningData:   runningOrder,
+	}, nil
 }
