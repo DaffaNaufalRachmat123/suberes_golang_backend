@@ -803,11 +803,11 @@ func (s *MitraService) UpdateMitraCoordinate(mitraID string, latitude, longitude
 	}
 	tx := s.DB.Begin()
 	_, err = s.UserRepository.UpdateUserData(tx, map[string]interface{}{
-		"latitude":  latitude,
-		"longitude": longitude,
-	}, map[string]interface{}{
 		"id":        mitraID,
 		"user_type": "mitra",
+	}, map[string]interface{}{
+		"latitude":  fmt.Sprintf("%g", latitude),
+		"longitude": fmt.Sprintf("%g", longitude),
 	})
 	if err != nil {
 		tx.Rollback()
@@ -842,9 +842,6 @@ func (s *MitraService) UpdateMitraCoordinate(mitraID string, latitude, longitude
 				},
 			)
 		}
-	}
-	if err := tx.Commit().Error; err != nil {
-		return 500, err
 	}
 	return 200, nil
 }

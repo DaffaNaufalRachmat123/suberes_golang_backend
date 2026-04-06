@@ -241,24 +241,20 @@ func (c *MitraController) UpdateMitraAutoBid(ctx *gin.Context) {
 
 func (c *MitraController) UpdateMitraCoordinate(ctx *gin.Context) {
 	mitraID := ctx.Param("id")
-	latitude := ctx.Param("latitude")
-	longitude := ctx.Param("longitude")
-	latitudeConvert, err := strconv.ParseFloat(latitude, 64)
 
-	if err != nil {
-		fmt.Println("Error during conversion:", err)
-		helpers.APIErrorResponse(ctx, "Error during conversion : "+err.Error(), http.StatusInternalServerError)
+	var body struct {
+		Latitude  float64 `json:"latitude" binding:"required"`
+		Longitude float64 `json:"longitude" binding:"required"`
+	}
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		helpers.APIErrorResponse(ctx, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	longitudeConvert, err := strconv.ParseFloat(longitude, 64)
 
-	if err != nil {
-		helpers.APIErrorResponse(ctx, "Error during conversion : "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	code, err := c.MitraService.UpdateMitraCoordinate(mitraID, latitudeConvert, longitudeConvert)
+	code, err := c.MitraService.UpdateMitraCoordinate(mitraID, body.Latitude, body.Longitude)
 	if err != nil {
 		helpers.JSONError(ctx, code, err)
+		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "Mitra coordinate updated",

@@ -27,6 +27,7 @@ import (
 func main() {
 	godotenv.Load()
 	config.ConnectDB()
+	config.InitFirebase()
 	database.AutoMigrate()
 
 	realtime.InitSocket()

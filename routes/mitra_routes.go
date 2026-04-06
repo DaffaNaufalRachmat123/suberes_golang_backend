@@ -77,7 +77,7 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 		},
 		{
 			Method:  "PUT",
-			Path:    "/update_mitra_coordinate/:id/:latitude/:longitude",
+			Path:    "/update_mitra_coordinate/:id",
 			Handler: controller.UpdateMitraCoordinate,
 			Roles:   []string{helpers.MitraRole},
 		},
