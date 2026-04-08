@@ -185,7 +185,11 @@ func main() {
 	}
 
 	ratingService := &services.RatingService{
-		RatingRepo: ratingRepo,
+		RatingRepo:           ratingRepo,
+		OrderTransactionRepo: orderTransactionRepo,
+		UserRepo:             userRepo,
+		ServiceRepo:          serviceRepo,
+		DB:                   config.DB,
 	}
 	ratingController := &controllers.RatingController{
 		RatingService: ratingService,
@@ -302,6 +306,14 @@ func main() {
 	routes.PinRoutes(api, pinController, config.DB)
 	routes.RatingRoutes(api, ratingController, config.DB)
 	routes.ComplainRoutes(api, complainController, config.DB)
+
+	disbursementService := services.NewDisbursementService(config.DB)
+	disbursementController := controllers.NewDisbursementController(disbursementService)
+	routes.DisbursementRoutes(api, disbursementController, config.DB)
+
+	bankListService := services.NewBankListService(config.DB)
+	bankListController := controllers.NewBankListController(bankListService)
+	routes.BankListRoutes(api, bankListController, config.DB)
 
 	queue.InitAsynq()
 

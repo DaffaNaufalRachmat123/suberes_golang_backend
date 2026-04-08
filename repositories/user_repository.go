@@ -404,3 +404,7 @@ func (r *UserRepository) FindUserForTransaction(tx *gorm.DB, transaction *models
 func (r *UserRepository) UpdateUserBalance(tx *gorm.DB, userID string, amount int64) error {
 	return tx.Model(&models.User{}).Where("id = ?", userID).Update("account_balance", gorm.Expr("account_balance + ?", amount)).Error
 }
+
+func (r *UserRepository) DeductUserBalance(tx *gorm.DB, userID string, amount int64) error {
+	return tx.Model(&models.User{}).Where("id = ?", userID).Update("account_balance", gorm.Expr("account_balance - ?", amount)).Error
+}

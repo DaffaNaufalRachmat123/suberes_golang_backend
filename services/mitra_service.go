@@ -257,6 +257,39 @@ func (s *MitraService) GetEmailPassword(mitraID string) (*dtos.MitraEmailPasswor
 	}, nil
 }
 
+func (s *MitraService) ShowPhone(mitraID string) (*models.User, error) {
+	return s.MitraRepository.GetMitraShowPhone(mitraID)
+}
+
+type MitraSaldoResponse struct {
+	MitraData    *models.User                 `json:"mitra_data"`
+	OrderData    []repositories.OrderDataItem `json:"order_data"`
+	SubToolsData *repositories.MitraSaldoData `json:"sub_tools_data"`
+}
+
+func (s *MitraService) GetSaldo(mitraID string) (*MitraSaldoResponse, error) {
+	mitraProfile, err := s.MitraRepository.GetMitraSaldoProfile(mitraID)
+	if err != nil {
+		return nil, err
+	}
+
+	orderData, err := s.MitraRepository.GetMitraOrderDataSaldo(mitraID)
+	if err != nil {
+		return nil, err
+	}
+
+	saldo, err := s.MitraRepository.GetMitraSaldo(mitraID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MitraSaldoResponse{
+		MitraData:    mitraProfile,
+		OrderData:    orderData,
+		SubToolsData: saldo,
+	}, nil
+}
+
 func (s *MitraService) ChangePassword(mitraID string, changePasswordDTO dtos.ChangePasswordDTO) error {
 	mitra, err := s.UserRepository.FindMitraById(mitraID)
 	if err != nil {

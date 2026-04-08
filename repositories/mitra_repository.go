@@ -84,7 +84,7 @@ func (r *MitraRepository) IsRunningOrder(mitraID string) (*models.User, error) {
 
 func (r *MitraRepository) GetMitraProfile(id string) (*models.User, error) {
 	var mitra models.User
-	err := r.DB.Select("id, user_profile_image, complete_name, email, is_mitra_activated, user_level, color_code_level, country_code, phone_number, user_rating, user_gender, place_of_birth, TIMESTAMPDIFF(YEAR , date_of_birth , CURDATE()) as age").Where("id = ? AND user_type = ?", id, "mitra").First(&mitra).Error
+	err := r.DB.Select("id, user_profile_image, complete_name, email, is_mitra_activated, user_level, color_code_level, country_code, phone_number, user_rating, user_gender, place_of_birth, EXTRACT(YEAR FROM AGE(date_of_birth::date))::text as age").Where("id = ? AND user_type = ?", id, "mitra").First(&mitra).Error
 	return &mitra, err
 }
 
@@ -102,8 +102,73 @@ func (r *MitraRepository) GetTodayOrderRepeatCount(mitraID string, startTime tim
 
 func (r *MitraRepository) GetTotalCicilan(mitraID string) (int, error) {
 	var totalHutang int
-	err := r.DB.Model(&models.ToolCredit{}).Select("SUM(0) - SUM(amount_paid)").Where("mitra_id = ?", mitraID).Row().Scan(&totalHutang)
+	err := r.DB.Model(&models.SubToolCredit{}).Select("COALESCE(SUM(amount_paid), 0)").Where("mitra_id = ? AND paid_status = '0'", mitraID).Row().Scan(&totalHutang)
 	return totalHutang, err
+}
+
+// GetMitraShowPhone returns only id, country_code, and phone_number for a mitra.
+func (r *MitraRepository) GetMitraShowPhone(mitraID string) (*models.User, error) {
+	var mitra models.User
+	err := r.DB.Select("id, country_code, phone_number").
+		Where("id = ? AND user_type = ?", mitraID, "mitra").
+		First(&mitra).Error
+	return &mitra, err
+}
+
+type MitraSaldoData struct {
+	AccountBalance int64 `json:"account_balance"`
+	Result         int64 `json:"result"`
+}
+
+type OrderDataItem struct {
+	GrossAmountMitra string `json:"gross_amount_mitra"`
+	DayOfWeek        string `json:"day_of_week"`
+}
+
+// GetMitraSaldo returns account_balance for a mitra.
+func (r *MitraRepository) GetMitraSaldo(mitraID string) (*MitraSaldoData, error) {
+	var data MitraSaldoData
+	err := r.DB.Table("users").
+		Select("account_balance, account_balance as result").
+		Where("id = ? AND user_type = ?", mitraID, "mitra").
+		Take(&data).Error
+	return &data, err
+}
+
+// GetMitraOrderDataSaldo returns gross_amount_mitra summed per day-of-week for a mitra.
+func (r *MitraRepository) GetMitraOrderDataSaldo(mitraID string) ([]OrderDataItem, error) {
+	var items []OrderDataItem
+	err := r.DB.Table("order_transactions").
+		Select(`
+			CAST(COALESCE(SUM(gross_amount_mitra), 0) AS TEXT) AS gross_amount_mitra,
+			CASE EXTRACT(DOW FROM created_at)
+				WHEN 0 THEN 'Minggu'
+				WHEN 1 THEN 'Senin'
+				WHEN 2 THEN 'Selasa'
+				WHEN 3 THEN 'Rabu'
+				WHEN 4 THEN 'Kamis'
+				WHEN 5 THEN 'Jumat'
+				WHEN 6 THEN 'Sabtu'
+				ELSE '-'
+			END AS day_of_week
+		`).
+		Where("mitra_id = ? AND order_status = ?", mitraID, "FINISH").
+		Group("EXTRACT(DOW FROM created_at)").
+		Order("EXTRACT(DOW FROM created_at)").
+		Scan(&items).Error
+	if items == nil {
+		items = []OrderDataItem{}
+	}
+	return items, err
+}
+
+// GetMitraSaldoProfile returns basic mitra profile fields for the saldo page.
+func (r *MitraRepository) GetMitraSaldoProfile(mitraID string) (*models.User, error) {
+	var mitra models.User
+	err := r.DB.Select("id, complete_name, user_profile_image, country_code, phone_number, email").
+		Where("id = ? AND user_type = ?", mitraID, "mitra").
+		First(&mitra).Error
+	return &mitra, err
 }
 
 func (r *MitraRepository) buildSearchQueryNowCash(query MitraSearchQuery) *gorm.DB {

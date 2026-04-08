@@ -123,3 +123,112 @@ func (r *TransactionRepository) FindDisbursementsByMitraID(mitraID string, page,
 
 	return transactions, total, nil
 }
+
+func (r *TransactionRepository) FindTopupTransactionByExternalIDForCallback(externalID string) (*models.Transaction, error) {
+	var transaction models.Transaction
+	err := r.DB.Where("external_id = ?", externalID).First(&transaction).Error
+	if err != nil {
+		return nil, err
+	}
+	return &transaction, nil
+}
+
+func (r *TransactionRepository) FindPendingDisbursementByExternalID(externalID string) (*models.Transaction, error) {
+	var transaction models.Transaction
+	err := r.DB.Where("external_id = ? AND transaction_status = ? AND transaction_for = ?", externalID, "pending", "disbursement").First(&transaction).Error
+	if err != nil {
+		return nil, err
+	}
+	return &transaction, nil
+}
+
+func (r *TransactionRepository) FindMitraDisburseTransactionsPaginated(mitraID string, page, limit int) ([]models.Transaction, int64, error) {
+	var transactions []models.Transaction
+	var total int64
+
+	query := r.DB.Model(&models.Transaction{}).
+		Where("mitra_id = ? AND (transaction_for = ? OR transaction_for = ?)", mitraID, "disbursement", "topup")
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := query.Preload("MitraTransactionData").
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&transactions).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return transactions, total, nil
+}
+
+func (r *TransactionRepository) FindCustomerDisburseTransactionsPaginated(customerID string, page, limit int) ([]models.Transaction, int64, error) {
+	var transactions []models.Transaction
+	var total int64
+
+	query := r.DB.Model(&models.Transaction{}).
+		Where("customer_id = ? AND (transaction_for = ? OR transaction_for = ?)", customerID, "disbursement", "topup")
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := query.Preload("CustomerTransactionData").
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&transactions).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return transactions, total, nil
+}
+
+func (r *TransactionRepository) FindMitraTransactionDetail(id, mitraID, idempotencyKey string) (*models.Transaction, error) {
+	var transaction models.Transaction
+	err := r.DB.Where("id = ? AND mitra_id = ? AND idempotency_key = ?", id, mitraID, idempotencyKey).
+		Preload("MitraTransactionData").
+		First(&transaction).Error
+	if err != nil {
+		return nil, err
+	}
+	return &transaction, nil
+}
+
+func (r *TransactionRepository) FindCustomerTransactionDetail(id, customerID string) (*models.Transaction, error) {
+	var transaction models.Transaction
+	err := r.DB.Where("id = ? AND customer_id = ?", id, customerID).
+		Preload("CustomerTransactionData").
+		First(&transaction).Error
+	if err != nil {
+		return nil, err
+	}
+	return &transaction, nil
+}
+
+func (r *TransactionRepository) UpdateTopupSuccess(tx *gorm.DB, externalID string, lastAmount int64) error {
+	return tx.Model(&models.Transaction{}).
+		Where("external_id = ? AND transaction_status = ?", externalID, "pending").
+		Updates(map[string]interface{}{
+			"last_amount":        lastAmount,
+			"transaction_status": "success",
+		}).Error
+}
+
+func (r *TransactionRepository) UpdateDisbursementFailure(tx *gorm.DB, transactionID, failureCode string, refundLastAmount int64) error {
+	return tx.Model(&models.Transaction{}).
+		Where("id = ?", transactionID).
+		Updates(map[string]interface{}{
+			"transaction_status": "failed",
+			"failure_code":       failureCode,
+			"last_amount":        gorm.Expr("last_amount + ?", refundLastAmount),
+		}).Error
+}
+
+func (r *TransactionRepository) UpdateDisbursementStatus(tx *gorm.DB, transactionID, status string) error {
+	return tx.Model(&models.Transaction{}).
+		Where("id = ?", transactionID).
+		Update("transaction_status", status).Error
+}

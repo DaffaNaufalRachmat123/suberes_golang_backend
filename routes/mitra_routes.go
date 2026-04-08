@@ -23,7 +23,7 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 	routes := []helpers.ProtectedRoute{
 		{
 			Method:  "GET",
-			Path:    "/update_firebase_token",
+			Path:    "/profile/:id",
 			Handler: controller.Profile,
 			Roles:   []string{helpers.MitraRole},
 		},
@@ -134,6 +134,18 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 			Path:    "/activate_mitra_status/:id/:status",
 			Handler: controller.ActivateMitraStatus,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/show_phone/:id",
+			Handler: controller.ShowPhone,
+			Roles:   helpers.AllRole,
+		},
+		{
+			Method:  "GET",
+			Path:    "/saldo/:mitra_id",
+			Handler: controller.Saldo,
+			Roles:   []string{helpers.MitraRole},
 		},
 	}
 	helpers.RegisterProtectedRoutes(protected, routes)

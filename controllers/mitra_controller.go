@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"gorm.io/gorm"
 )
 
 type MitraController struct {
@@ -36,7 +38,18 @@ func (c *MitraController) Login(ctx *gin.Context) {
 
 	response, err := c.MitraService.Login(loginDTO)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch err.Error() {
+		case "mitra not found":
+			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error(), "failure_type": "MITRA_NOT_FOUND"})
+		case "password not match":
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error(), "failure_type": "PASSWORD_DOESNT_MATCH"})
+		case "mitra already logged in another device, please log out first":
+			ctx.JSON(http.StatusConflict, gin.H{"error": err.Error(), "failure_type": "MITRA_ALREADY_LOGGED_IN"})
+		case "mitra not activated":
+			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error(), "failure_type": "MITRA_NOT_ACTIVATED"})
+		default:
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -142,10 +155,42 @@ func (c *MitraController) Profile(ctx *gin.Context) {
 
 	response, err := c.MitraService.GetProfile(mitraID, timezoneCode)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "mitra not found"})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (c *MitraController) ShowPhone(ctx *gin.Context) {
+	mitraID := ctx.Param("id")
+	mitra, err := c.MitraService.ShowPhone(mitraID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "mitra not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, mitra)
+}
+
+func (c *MitraController) Saldo(ctx *gin.Context) {
+	mitraID := ctx.Param("mitra_id")
+	response, err := c.MitraService.GetSaldo(mitraID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "mitra not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	ctx.JSON(http.StatusOK, response)
 }
 

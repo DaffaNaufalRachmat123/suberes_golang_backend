@@ -12,7 +12,7 @@ import (
 func OrderHistoryRoutes(r *gin.RouterGroup, c *controllers.OrderHistoryController, db *gorm.DB) {
 
 	// ── Order Canceleds ───────────────────────────────────────────────────────
-	canceled := r.Group("/order_canceleds")
+	canceled := r.Group("/order_canceled")
 
 	// Public (no auth in original JS)
 	canceled.GET("/index/date/:mitra_id", c.GetCanceledDatesByMitra)
