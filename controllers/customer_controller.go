@@ -106,6 +106,21 @@ func (c *CustomerController) ChangePhoneMail(ctx *gin.Context) {
 	ctx.JSON(status, resp)
 }
 
+func (c *CustomerController) RefreshToken(ctx *gin.Context) {
+	userCtx, _ := ctx.Get("currentUser")
+	user := userCtx.(models.User)
+	newToken, err := c.CustomerService.RefreshToken(user.ID)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "Token updated",
+		"status":         "success",
+		"token":          "Bearer " + newToken,
+	})
+}
+
 func (c *CustomerController) UserLogout(ctx *gin.Context) {
 	userCtx, exists := ctx.Get("currentUser")
 	if !exists {

@@ -227,6 +227,35 @@ func (s *AdminService) RemoveAdmin(adminID string, superAdminID string, req *dto
 	return nil
 }
 
+func (s *AdminService) RefreshToken(userId string) (string, error) {
+	user, err := s.AdminRepo.FindAdminByID(userId)
+	if err != nil {
+		return "", err
+	}
+	if user == nil {
+		return "", errors.New("user not found")
+	}
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"id":               user.ID,
+		"complete_name":    user.CompleteName,
+		"email":            user.Email,
+		"phone_number":     user.PhoneNumber,
+		"country_code":     user.CountryCode,
+		"user_type":        user.UserType,
+		"user_gender":      user.UserGender,
+		"address":          user.Address,
+		"domisili_address": user.DomisiliAddress,
+		"issued_at":        now.Format("2006-01-02T15:04:05.000Z07:00"),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
+}
+
 func (s *AdminService) Login(req *dtos.LoginAdminRequest) (string, *models.User, error) {
 	tx := s.DB.Begin()
 	defer func() {
@@ -250,6 +279,7 @@ func (s *AdminService) Login(req *dtos.LoginAdminRequest) (string, *models.User,
 		return "", nil, err
 	}
 
+	now := time.Now()
 	claims := jwt.MapClaims{
 		"id":               user.ID,
 		"complete_name":    user.CompleteName,
@@ -260,6 +290,7 @@ func (s *AdminService) Login(req *dtos.LoginAdminRequest) (string, *models.User,
 		"user_gender":      user.UserGender,
 		"address":          user.Address,
 		"domisili_address": user.DomisiliAddress,
+		"issued_at":        now.Format("2006-01-02T15:04:05.000Z07:00"),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))

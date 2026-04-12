@@ -64,7 +64,7 @@ func (r *OrderOfferRepository) FindPaginatedByMitraID(mitraID string, page, limi
 
 	err := query.
 		Preload("OrderTransaction", func(db *gorm.DB) *gorm.DB {
-			return db.Omit("private_key_rsa", "public_key_rsa").
+			return db.
 				Preload("Service").
 				Preload("SubService").
 				Preload("Customer")
@@ -87,9 +87,6 @@ func (r *OrderOfferRepository) FindDetailByOrderAndMitra(orderID, mitraID, count
 		Preload("OrderTransaction", func(db *gorm.DB) *gorm.DB {
 			return db.
 				Select("order_transactions.*, "+countdownSQL+" AS count_down_can_take_order").
-				Omit("private_key_rsa", "public_key_rsa",
-					"payment_id_pay", "checkout_url_ewallet", "mobile_ewallet",
-					"account_number_va", "va_id", "external_id").
 				Preload("Service").
 				Preload("SubService").
 				Preload("Payment").

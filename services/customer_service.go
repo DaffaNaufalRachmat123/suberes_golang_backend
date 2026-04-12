@@ -502,3 +502,27 @@ func (s *CustomerService) Logout(ID string) (map[string]interface{}, int, error)
 		"status":         "OK",
 	}, 200, nil
 }
+
+func (s *CustomerService) RefreshToken(userID string) (string, error) {
+	user, err := s.UserRepo.FindCustomerById(userID)
+	if err != nil || user == nil {
+		return "", errors.New("customer not found")
+	}
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"id":            user.ID,
+		"complete_name": user.CompleteName,
+		"country_code":  user.CountryCode,
+		"email":         user.Email,
+		"phone_number":  user.PhoneNumber,
+		"user_type":     user.UserType,
+		"user_rating":   user.UserRating,
+		"issued_at":     now.Format("2006-01-02T15:04:05.000Z07:00"),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
+}

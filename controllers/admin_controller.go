@@ -154,6 +154,20 @@ func (c *AdminController) RemoveAdmin(ctx *gin.Context) {
 	})
 }
 
+func (c *AdminController) RefreshToken(ctx *gin.Context) {
+	userCtx, _ := ctx.Get("currentUser")
+	user := userCtx.(models.User)
+	refreshToken, err := c.AdminService.RefreshToken(user.ID)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), 500)
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "Token updated",
+		"status":         "success",
+		"token":          "Bearer " + refreshToken,
+	})
+}
+
 func (c *AdminController) Login(ctx *gin.Context) {
 	var req dtos.LoginAdminRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {

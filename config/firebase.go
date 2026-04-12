@@ -17,10 +17,9 @@ var (
 func InitFirebase() {
 	ctx := context.Background()
 
-	// Karena credential ada satu tingkat direktori
-	customerOpt := option.WithCredentialsFile("../credential_files/suberes-8b773-firebase-adminsdk-ci9gh-647d90c6f7.json")
-	mitraOpt := option.WithCredentialsFile("../credential_files/suberes-mitra-firebase-adminsdk-vml8u-b66d157f36.json")
-	adminOpt := option.WithCredentialsFile("../credential_files/suberes-dashboard-firebase-adminsdk-ns1j6-5218ef4faa.json")
+	customerOpt := option.WithCredentialsFile("credential_files/suberes-8b773-firebase-adminsdk-ci9gh-86aa7134d7.json")
+	mitraOpt := option.WithCredentialsFile("credential_files/suberes-mitra-firebase-adminsdk-vml8u-6a0a90bc12.json")
+	adminOpt := option.WithCredentialsFile("credential_files/suberes-dashboard-firebase-adminsdk-ns1j6-5218ef4faa.json")
 
 	var err error
 

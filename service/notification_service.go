@@ -59,9 +59,29 @@ func SendToDevice(db *gorm.DB, userType string, token string, payload map[string
 		return "", tx.Error
 	}
 
+	var strData map[string]string
+	var dataForCopy map[string]interface{}
+	switch d := payload["data"].(type) {
+	case map[string]string:
+		strData = d
+		dataForCopy = make(map[string]interface{}, len(d))
+		for k, v := range d {
+			dataForCopy[k] = v
+		}
+	case map[string]interface{}:
+		dataForCopy = d
+		strData = make(map[string]string, len(d))
+		for k, v := range d {
+			strData[k] = fmt.Sprintf("%v", v)
+		}
+	default:
+		tx.Rollback()
+		return "", fmt.Errorf("invalid data type in payload")
+	}
+
 	msg := &messaging.Message{
 		Token: token,
-		Data:  payload["data"].(map[string]string),
+		Data:  strData,
 	}
 
 	response, err := client.Send(ctx, msg)
@@ -71,9 +91,8 @@ func SendToDevice(db *gorm.DB, userType string, token string, payload map[string
 	}
 
 	// Copy optional fields
-	data := payload["data"].(map[string]interface{})
 	helpers.GetOtpDuration()
-	helpers.CopyFields(data, payloadNotification)
+	helpers.CopyFields(dataForCopy, payloadNotification)
 
 	if err := tx.Table("notifications").Create(payloadNotification).Error; err != nil {
 		tx.Rollback()
@@ -115,9 +134,29 @@ func SendMulticast(db *gorm.DB, userType string, payload map[string]interface{})
 		return nil, tx.Error
 	}
 
+	var strData map[string]string
+	var rawData map[string]interface{}
+	switch d := payload["data"].(type) {
+	case map[string]string:
+		strData = d
+		rawData = make(map[string]interface{}, len(d))
+		for k, v := range d {
+			rawData[k] = v
+		}
+	case map[string]interface{}:
+		rawData = d
+		strData = make(map[string]string, len(d))
+		for k, v := range d {
+			strData[k] = fmt.Sprintf("%v", v)
+		}
+	default:
+		tx.Rollback()
+		return nil, fmt.Errorf("invalid data type in payload")
+	}
+
 	msg := &messaging.MulticastMessage{
 		Tokens: payload["tokens"].([]string),
-		Data:   payload["data"].(map[string]string),
+		Data:   strData,
 	}
 
 	response, err := client.SendMulticast(ctx, msg)
@@ -126,8 +165,7 @@ func SendMulticast(db *gorm.DB, userType string, payload map[string]interface{})
 		return nil, err
 	}
 
-	data := payload["data"].(map[string]interface{})
-	helpers.CopyFields(data, payloadNotification)
+	helpers.CopyFields(rawData, payloadNotification)
 
 	if err := tx.Table("notifications").Create(payloadNotification).Error; err != nil {
 		tx.Rollback()

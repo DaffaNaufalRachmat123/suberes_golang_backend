@@ -583,7 +583,7 @@ func (s *OrderTransactionService) CancelBlast(orderID string) error {
 		return fmt.Errorf("order not found: %v", err)
 	}
 
-	allowedStatuses := []string{"FINDING_MITRA", "WAITING_FOR_SELECTED_MITRA", "WAITING_PAYMENT", "PROCESSING_PAYMENT"}
+	allowedStatuses := []string{"CANCELED_CANT_FIND_MITRA", "FINDING_MITRA", "WAITING_FOR_SELECTED_MITRA", "WAITING_PAYMENT", "PROCESSING_PAYMENT"}
 	isAllowed := false
 	for _, st := range allowedStatuses {
 		if order.OrderStatus == st {

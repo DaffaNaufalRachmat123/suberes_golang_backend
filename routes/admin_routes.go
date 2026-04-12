@@ -26,6 +26,12 @@ func AdminRoutes(r *gin.RouterGroup, controller *controllers.AdminController, db
 		},
 		{
 			Method:  "GET",
+			Path:    "/refresh_token",
+			Handler: controller.RefreshToken,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
+			Method:  "GET",
 			Path:    "/index_admin",
 			Handler: controller.IndexAdmin,
 			Roles:   []string{helpers.SuperAdminRole},

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -226,7 +227,7 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 		}
 
 		if nowHours >= 20 && nowMinutes >= 0 {
-			return "", 0, "", "", 400, errors.New("Batas maksimal jam order sampai jam 8 malam")
+			return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam order sampai jam 8 malam")
 		}
 	}
 	createdAtString := helpers.GetTimezoneNowDate(dto.TimezoneCode)

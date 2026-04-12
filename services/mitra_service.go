@@ -470,6 +470,30 @@ func (s *MitraService) OTPValidatorForgotPassword(dto dtos.OTPValidatorForgotPas
 	return nil
 }
 
+func (s *MitraService) RefreshToken(mitraID string) (string, error) {
+	mitra, err := s.UserRepository.FindMitraById(mitraID)
+	if err != nil {
+		return "", errors.New("mitra not found")
+	}
+	now := time.Now()
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":                 mitra.ID,
+		"complete_name":      mitra.CompleteName,
+		"email":              mitra.Email,
+		"phone_number":       mitra.PhoneNumber,
+		"user_type":          mitra.UserType,
+		"user_rating":        mitra.UserRating,
+		"user_profile_image": mitra.UserProfileImage,
+		"user_status":        mitra.UserStatus,
+		"issued_at":          now.Format("2006-01-02T15:04:05.000Z07:00"),
+	})
+	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
+}
+
 func (s *MitraService) Logout(mitraID string) error {
 	mitra, err := s.UserRepository.FindMitraById(mitraID)
 	if err != nil {
@@ -505,7 +529,7 @@ func (s *MitraService) UpdateFirebaseToken(mitraID string, token string) error {
 		return tx.Error
 	}
 
-	*mitra.FirebaseToken = token
+	mitra.FirebaseToken = &token
 
 	if err := s.MitraRepository.UpdateMitra(tx, mitra); err != nil {
 		tx.Rollback()
@@ -1265,5 +1289,51 @@ func (s *MitraService) DashboardCount(mitraID string) (*dtos.MitraDashboardCount
 		IsSuspended:        mitra.IsSuspended,
 		Status:             status,
 		OrderRunningData:   runningOrder,
+	}, nil
+}
+
+// PendapatanResponse mirrors the Node.js payload_response for GET /mitra/pendapatan.
+type PendapatanResponse struct {
+	OrderDateList       []repositories.PendapatanDateResult  `json:"order_date_list"`
+	CalculatePendapatan *repositories.PendapatanCalculate    `json:"calculate_pendapatan"`
+	GroupPendapatan     []repositories.PendapatanGroupResult `json:"group_pendapatan"`
+	OrderListData       []repositories.PendapatanOrderItem   `json:"order_list_data"`
+}
+
+// GetPendapatan fetches all pendapatan data for a mitra on a given calendar date
+// (format "YYYY-MM-DD"). It mirrors the logic of GET /api/mitra/pendapatan/:mitra_id/:pendapatan_date.
+func (s *MitraService) GetPendapatan(mitraID, pendapatanDate string) (*PendapatanResponse, error) {
+	startDate, endDate := helpers.GetStartEndDateFromString(pendapatanDate)
+
+	orderDateList, err := s.MitraRepository.FindPendapatanDates(mitraID)
+	if err != nil {
+		return nil, err
+	}
+
+	calculate, err := s.MitraRepository.CalculatePendapatan(mitraID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	groupPendapatan, err := s.MitraRepository.GroupPendapatanByPayment(mitraID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	var orderListData []repositories.PendapatanOrderItem
+	if len(groupPendapatan) > 0 {
+		orderListData, err = s.MitraRepository.FindOrderListByPayment(mitraID, startDate, endDate, groupPendapatan[0].PaymentID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		orderListData = []repositories.PendapatanOrderItem{}
+	}
+
+	return &PendapatanResponse{
+		OrderDateList:       orderDateList,
+		CalculatePendapatan: calculate,
+		GroupPendapatan:     groupPendapatan,
+		OrderListData:       orderListData,
 	}, nil
 }

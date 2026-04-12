@@ -307,7 +307,7 @@ func (r *OrderTransactionRepository) FindAllByStatusWithPagination(status string
 		"user_gender", "user_profile_image", "is_logged_in", "user_status",
 		"is_busy", "is_document_completed", "is_mitra_invited",
 		"is_mitra_accepted", "is_mitra_rejected", "is_mitra_activated",
-		"is_suspended", "suspension_reason", "is_active", "is_auto_bid",
+		"is_suspended", "suspended_reason", "is_active", "is_auto_bid",
 		"kind_of_mitra", "today_order", "today_income", "total_order",
 		"account_balance", "total_bills", "age", "date_of_birth",
 		"created_at", "updated_at",

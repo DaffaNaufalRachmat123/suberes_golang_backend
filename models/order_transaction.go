@@ -111,6 +111,9 @@ type OrderTransaction struct {
 	CreatedAt                        time.Time `gorm:"type:timestamp;default:now()" json:"created_at"`
 	UpdatedAt                        time.Time `gorm:"type:timestamp;default:now()" json:"updated_at"`
 
+	// Virtual computed field — populated by select expressions, never inserted/updated/migrated
+	CountDownCanTakeOrder *int64 `gorm:"column:count_down_can_take_order;-:migration;-:create;-:update" json:"count_down_can_take_order,omitempty"`
+
 	// Associations
 	Customer                *User                    `gorm:"foreignKey:CustomerID;references:ID" json:"customer"`
 	Mitra                   *User                    `gorm:"foreignKey:MitraID;references:ID" json:"mitra"`

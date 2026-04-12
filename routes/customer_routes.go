@@ -18,6 +18,12 @@ func CustomerRoutes(r *gin.RouterGroup, controller *controllers.CustomerControll
 	protected.Use(middleware.AuthMiddleware(db))
 	routes := []helpers.ProtectedRoute{
 		{
+			Method:  "GET",
+			Path:    "/refresh_token",
+			Handler: controller.RefreshToken,
+			Roles:   []string{helpers.CustomerRole},
+		},
+		{
 			Method:  "PUT",
 			Path:    "/update_firebase_token",
 			Handler: controller.UpdateFirebaseToken,

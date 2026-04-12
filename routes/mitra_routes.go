@@ -23,6 +23,18 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 	routes := []helpers.ProtectedRoute{
 		{
 			Method:  "GET",
+			Path:    "/refresh_token",
+			Handler: controller.RefreshToken,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/pendapatan/:mitra_id/:pendapatan_date",
+			Handler: controller.GetPendapatan,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
 			Path:    "/profile/:id",
 			Handler: controller.Profile,
 			Roles:   []string{helpers.MitraRole},

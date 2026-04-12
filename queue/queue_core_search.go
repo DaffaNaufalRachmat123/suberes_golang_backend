@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"suberes_golang/config"
 	"suberes_golang/models"
+	"suberes_golang/service"
 	"time"
 
 	"github.com/google/uuid"
@@ -103,7 +104,9 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 			tx.Rollback()
 			return fmt.Errorf("failed to create order offers: %v", err)
 		}
-		tx.Commit()
+		if err := tx.Commit().Error; err != nil {
+			return fmt.Errorf("failed to commit order offers transaction: %v", err)
+		}
 
 		log.Printf("Sending push notifications to tokens: %v", registrationTokenList)
 
@@ -117,11 +120,11 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 		}
 
 		offerExpiredTaskPayload, err := NewOrderOfferExpiredTask(orderData.ID, tempID, orderData.CustomerID, orderData.NotificationID, timeoutFindingOrder.String())
-		if err == nil {
-			_, err = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferExpired, offerExpiredTaskPayload), asynq.ProcessIn(timeoutCanTakeOrder))
-			if err != nil {
-				log.Printf("could not enqueue task: %v", err)
-			}
+		if err != nil {
+			return fmt.Errorf("failed to create offer expired task payload: %v", err)
+		}
+		if _, err = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferExpired, offerExpiredTaskPayload), asynq.ProcessIn(timeoutCanTakeOrder)); err != nil {
+			return fmt.Errorf("could not enqueue offer expired task: %v", err)
 		}
 	} else {
 		if err := config.DB.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Update("order_status", "WAITING_FOR_SELECTED_MITRA").Error; err != nil {
@@ -204,6 +207,30 @@ func HandleOrderSelectedExpiredTask(ctx context.Context, t *asynq.Task) error {
 
 	log.Printf("Notifying customer about order cancellation for order %s", p.OrderID)
 	log.Printf("Notifying admin about order timeout for order %s", p.OrderID)
+
+	// Send FCM notification to customer
+	var customerData models.User
+	if err := config.DB.Select("id, firebase_token").Where("id = ? AND user_type = ?", orderData.CustomerID, "customer").First(&customerData).Error; err == nil {
+		if customerData.FirebaseToken != nil && *customerData.FirebaseToken != "" {
+			fcmPayload := map[string]interface{}{
+				"data": map[string]string{
+					"notification_type": "MITRA_NOT_FOUND_NOTIFICATION",
+					"title":             "Tidak bisa dapat mitra",
+					"message":           "Sayang sekali, orderanmu dibatalin karena tidak ada mitra disekitar mu :(",
+					"order_temp_id":     orderData.TempID,
+					"order_id":          orderData.ID,
+					"customer_id":       orderData.CustomerID,
+					"notification_id":   strconv.Itoa(orderData.NotificationID),
+					"notif_type":        "order",
+				},
+			}
+			if _, err := service.SendToDevice(config.DB, "customer", *customerData.FirebaseToken, fcmPayload); err != nil {
+				log.Printf("failed to send FCM to customer %s: %v", orderData.CustomerID, err)
+			}
+		}
+	} else {
+		log.Printf("failed to fetch customer firebase token for order selected expired: %v", err)
+	}
 
 	return nil
 }

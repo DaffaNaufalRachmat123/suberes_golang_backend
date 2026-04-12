@@ -46,8 +46,5 @@ func (c *OrderOfferController) GetIncomingOrder(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data":   offer,
-	})
+	helpers.APIResponse(ctx, "OK", http.StatusOK, offer)
 }

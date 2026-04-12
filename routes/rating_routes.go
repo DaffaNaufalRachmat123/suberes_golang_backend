@@ -10,7 +10,7 @@ import (
 )
 
 func RatingRoutes(r *gin.RouterGroup, controller *controllers.RatingController, db *gorm.DB) {
-	rating := r.Group("/ratings")
+	rating := r.Group("/users_rating")
 	protected := rating.Group("/")
 	protected.Use(middleware.AuthMiddleware(db))
 

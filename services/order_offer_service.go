@@ -59,16 +59,16 @@ func (s *OrderOfferService) GetIncomingOrder(orderID, mitraID string) (*models.O
 		timeoutMinutes = 5
 	}
 
-	// Build the raw countdown expression (mirrors the JS TIMESTAMPDIFF logic)
+	// Build the raw countdown expression (PostgreSQL syntax)
 	var countdownSQL string
 	if orderData.OrderStatus == "WAITING_FOR_SELECTED_MITRA" {
 		countdownSQL = fmt.Sprintf(
-			"TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), DATE_ADD(order_transactions.order_blast_time, INTERVAL %d MINUTE))",
+			"EXTRACT(EPOCH FROM (order_transactions.order_blast_time + INTERVAL '%d minutes' - NOW()))::bigint",
 			timeoutMinutes,
 		)
 	} else {
 		countdownSQL = fmt.Sprintf(
-			"TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), DATE_ADD(order_transactions.order_time, INTERVAL %d MINUTE))",
+			"EXTRACT(EPOCH FROM (order_transactions.order_time + INTERVAL '%d minutes' - NOW()))::bigint",
 			timeoutMinutes,
 		)
 	}

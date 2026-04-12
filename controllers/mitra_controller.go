@@ -56,6 +56,21 @@ func (c *MitraController) Login(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+func (c *MitraController) RefreshToken(ctx *gin.Context) {
+	userCtx, _ := ctx.Get("currentUser")
+	user := userCtx.(models.User)
+	newToken, err := c.MitraService.RefreshToken(user.ID)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "Token updated",
+		"status":         "success",
+		"token":          "Bearer " + newToken,
+	})
+}
+
 func (c *MitraController) Register(ctx *gin.Context) {
 
 	var registerDTO dtos.MitraRegisterDTO
@@ -619,4 +634,18 @@ func (c *MitraController) DashboardCount(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, result)
+}
+
+// GetPendapatan handles GET /api/mitra/pendapatan/:mitra_id/:pendapatan_date
+// pendapatan_date must be in "YYYY-MM-DD" format.
+func (c *MitraController) GetPendapatan(ctx *gin.Context) {
+	mitraID := ctx.Param("mitra_id")
+	pendapatanDate := ctx.Param("pendapatan_date")
+
+	result, err := c.MitraService.GetPendapatan(mitraID, pendapatanDate)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	helpers.APIResponse(ctx, "success", http.StatusOK, result)
 }
