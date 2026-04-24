@@ -159,7 +159,7 @@ func SendMulticast(db *gorm.DB, userType string, payload map[string]interface{})
 		Data:   strData,
 	}
 
-	response, err := client.SendMulticast(ctx, msg)
+	responses, err := client.SendEachForMulticast(ctx, msg)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -173,5 +173,7 @@ func SendMulticast(db *gorm.DB, userType string, payload map[string]interface{})
 	}
 
 	tx.Commit()
-	return response, nil
+
+	// Adapt to BatchResponse-like return for compatibility
+	return responses, nil
 }

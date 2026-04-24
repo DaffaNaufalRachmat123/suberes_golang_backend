@@ -13,6 +13,7 @@ func AdminRoutes(r *gin.RouterGroup, controller *controllers.AdminController, db
 	admin := r.Group("/admin")
 	admin.POST("/login", controller.Login)
 	admin.POST("/create", controller.CreateAdmin)
+	admin.POST("/refresh_token", middleware.RefreshTokenMiddleware(db), controller.RefreshToken)
 
 	protected := admin.Group("/")
 	protected.Use(middleware.AuthMiddleware(db))
@@ -23,12 +24,6 @@ func AdminRoutes(r *gin.RouterGroup, controller *controllers.AdminController, db
 			Path:    "/dashboard",
 			Handler: controller.GetDashboard,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole, helpers.SuperAdminRole},
-		},
-		{
-			Method:  "GET",
-			Path:    "/refresh_token",
-			Handler: controller.RefreshToken,
-			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 		{
 			Method:  "GET",

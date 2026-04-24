@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"suberes_golang/constants"
 	"suberes_golang/dtos"
@@ -23,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -100,136 +99,56 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 	}
 
 	nowDateTime = nowDateTime.AddDate(0, 0, 1)
-	layout := "2006-01-02 15:04:05"
-	orderDateTime, err := time.ParseInLocation(layout, helpers.NormalizeDateTimeString(dto.OrderTime), loc)
 	if err != nil {
 		return "", 0, "", "", 400, err
 	}
+	// if dto.OrderType == "now" {
+	// 	nowTime := helpers.GetTimezoneNowDate(dto.TimezoneCode)
+	// 	splitNowTime := strings.Split(nowTime, " ")
+	// 	splitNowDateTime := strings.Split(splitNowTime[0], "-")
+	// 	splitNowTimeTime := strings.Split(splitNowTime[1], ":")
 
-	if dto.OrderType == "coming soon" {
+	// 	nowYear, _ := strconv.Atoi(splitNowDateTime[0])
+	// 	nowMonth, _ := strconv.Atoi(splitNowDateTime[1])
+	// 	nowDay, _ := strconv.Atoi(splitNowDateTime[2])
+	// 	nowHours, _ := strconv.Atoi(splitNowTimeTime[0])
+	// 	nowMinutes, _ := strconv.Atoi(splitNowTimeTime[1])
 
-		// STRICT: orderDateTime.getDate() >= nowDateTime.getDate()
-		if orderDateTime.Day() >= nowDateTime.Day() &&
-			orderDateTime.Hour() >= 7 {
+	// 	dateAdd := time.Date(
+	// 		nowYear,
+	// 		time.Month(nowMonth),
+	// 		nowDay,
+	// 		nowHours,
+	// 		nowMinutes,
+	// 		0,
+	// 		0,
+	// 		nowDateTime.Location(),
+	// 	)
 
-			// orderDateTime.setMinutes(orderDateTime.getMinutes() + minutesSubServices)
-			orderDateTime = orderDateTime.Add(
-				time.Duration(subService.MinutesSubServices) * time.Minute,
-			)
+	// 	fmt.Printf("Now Time : %s\n", nowTime)
 
-			// if (hour >= 23 && minute > 0)
-			if orderDateTime.Hour() >= 23 &&
-				orderDateTime.Minute() > 0 {
-				return "", 0, "", "", 400, errors.New("Batas maksimal order di jam 11 malam")
-			}
-		}
-	} else if dto.OrderType == "repeat" {
-		nowDate, err := helpers.GetTimezoneNowDateReturnDate(dto.TimezoneCode)
-		if err != nil {
-			return "", 0, "", "", 500, err
-		}
-		for i := 0; i < len(dto.OrderRepeatList); i++ {
-			nowDateSecond := time.Date(
-				nowDate.Year(),
-				nowDate.Month(),
-				nowDate.Day(),
-				nowDate.Hour(),
-				nowDate.Minute(),
-				0,
-				nowDate.Nanosecond(),
-				nowDate.Location(),
-			)
-			orderDateTime := time.Now()
-			orderTimeSplit := strings.Split(dto.OrderRepeatList[i].OrderTime, " ")
-			orderTimeDate := strings.Split(orderTimeSplit[0], "-")
-			orderTimeTime := strings.Split(orderTimeSplit[1], ":")
-			year, _ := strconv.Atoi(orderTimeDate[0])
+	// 	if service.ServiceType == "Durasi" {
 
-			monthStr := orderTimeDate[1]
-			if len(monthStr) == 2 && monthStr[0] == '0' {
-				monthStr = string(monthStr[1])
-			}
-			monthInt, _ := strconv.Atoi(monthStr)
+	// 		dateAdd = dateAdd.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
 
-			day, _ := strconv.Atoi(orderTimeDate[2])
+	// 		addedDate := helpers.GetFormattedYearMonthDate(dateAdd)
+	// 		splitAddDate := strings.Split(addedDate, " ")
+	// 		splitTime := strings.Split(splitAddDate[1], ":")
 
-			hour, _ := strconv.Atoi(orderTimeTime[0])
-			minute, _ := strconv.Atoi(orderTimeTime[1])
+	// 		addedHours, _ := strconv.Atoi(splitTime[0])
+	// 		addedMinutes, _ := strconv.Atoi(splitTime[1])
 
-			orderDateTime = time.Date(
-				year,
-				time.Month(monthInt),
-				day,
-				hour,
-				minute,
-				0,
-				0,
-				nowDate.Location(),
-			)
+	// 		if nowHours >= 23 && nowMinutes >= 0 {
+	// 			return "", 0, "", "", 400, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
+	// 		} else if addedHours >= 23 && addedMinutes >= 0 {
+	// 			return "", 0, "", "", 400, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
+	// 		}
+	// 	}
 
-			if orderDateTime.Day() >= nowDateSecond.Day() && orderDateTime.Hour() >= 7 {
-
-				orderDateTime = orderDateTime.Add(
-					time.Duration(subService.MinutesSubServices) * time.Minute,
-				)
-
-				fmt.Printf("After Add : %02d:%02d\n",
-					orderDateTime.Hour(),
-					orderDateTime.Minute(),
-				)
-
-				if orderDateTime.Hour() >= 23 && orderDateTime.Minute() > 0 {
-					return "", 0, "", "", 400, errors.New("Batas maksimal jam order di jam 11 malam")
-				}
-			}
-		}
-	} else if dto.OrderType == "now" {
-		nowTime := helpers.GetTimezoneNowDate(dto.TimezoneCode)
-		splitNowTime := strings.Split(nowTime, " ")
-		splitNowDateTime := strings.Split(splitNowTime[0], "-")
-		splitNowTimeTime := strings.Split(splitNowTime[1], ":")
-
-		nowYear, _ := strconv.Atoi(splitNowDateTime[0])
-		nowMonth, _ := strconv.Atoi(splitNowDateTime[1])
-		nowDay, _ := strconv.Atoi(splitNowDateTime[2])
-		nowHours, _ := strconv.Atoi(splitNowTimeTime[0])
-		nowMinutes, _ := strconv.Atoi(splitNowTimeTime[1])
-
-		dateAdd := time.Date(
-			nowYear,
-			time.Month(nowMonth),
-			nowDay,
-			nowHours,
-			nowMinutes,
-			0,
-			0,
-			nowDateTime.Location(),
-		)
-
-		fmt.Printf("Now Time : %s\n", nowTime)
-
-		if service.ServiceType == "Durasi" {
-
-			dateAdd = dateAdd.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
-
-			addedDate := helpers.GetFormattedYearMonthDate(dateAdd)
-			splitAddDate := strings.Split(addedDate, " ")
-			splitTime := strings.Split(splitAddDate[1], ":")
-
-			addedHours, _ := strconv.Atoi(splitTime[0])
-			addedMinutes, _ := strconv.Atoi(splitTime[1])
-
-			if nowHours >= 23 && nowMinutes >= 0 {
-				return "", 0, "", "", 400, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
-			} else if addedHours >= 23 && addedMinutes >= 0 {
-				return "", 0, "", "", 400, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
-			}
-		}
-
-		if nowHours >= 20 && nowMinutes >= 0 {
-			return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam order sampai jam 8 malam")
-		}
-	}
+	// 	if nowHours >= 23 && nowMinutes >= 0 {
+	// 		return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam order sampai jam 8 malam")
+	// 	}
+	// }
 	createdAtString := helpers.GetTimezoneNowDate(dto.TimezoneCode)
 	orderSoonTime := dto.OrderTime
 
@@ -445,38 +364,73 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		},
 	)
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR FindDynamicOrderTransactionMap: %v\n", err)
 		return 500, nil, err
 	}
 	if orderData == nil {
+		fmt.Printf("[AcceptOrder] ERROR orderData nil, err: %v\n", err)
 		return 404, nil, err
 	}
-	payment, err := s.PaymentRepo.FindById(orderData["payment_id"].(int))
+	var paymentID int
+	switch v := orderData["payment_id"].(type) {
+	case int:
+		paymentID = v
+	case int64:
+		paymentID = int(v)
+	case float64:
+		paymentID = int(v)
+	default:
+	}
+	payment, err := s.PaymentRepo.FindById(paymentID)
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR FindById Payment: %v\n", err)
 		return 500, nil, err
 	}
 	if payment == nil {
+		fmt.Printf("[AcceptOrder] ERROR payment nil\n")
 		return 404, nil, err
 	}
-	customer, err := s.UserRepo.FindCustomerById(orderData["customer_id"].(string))
+
+	var customerID string
+
+	switch v := orderData["customer_id"].(type) {
+	case string:
+		customerID = v
+	case []byte:
+		customerID = string(v)
+	default:
+		return 500, nil, fmt.Errorf("customer_id tipe tidak dikenali")
+	}
+
+	customer, err := s.UserRepo.FindCustomerById(customerID)
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR FindCustomerById: %v\n", err)
 		return 500, nil, err
 	}
 	if customer == nil {
+		fmt.Printf("[AcceptOrder] ERROR customer nil\n")
 		return 404, nil, err
 	}
-	mitra, err := s.UserRepo.FindMitraById(orderData["mitra_id"].(string))
+	mitra, err := s.UserRepo.FindMitraById(data.MitraID)
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR FindMitraById: %v\n", err)
 		return 500, nil, err
 	}
 	if mitra == nil {
+		fmt.Printf("[AcceptOrder] ERROR mitra nil\n")
 		return 404, nil, err
 	}
 	playerMitraIDs, err := helpers.GetValue(data.TempID)
-	if err != nil {
+	if err != nil && err != redis.Nil {
+		fmt.Printf("[AcceptOrder] ERROR GetValue TempID: %v\n", err)
 		return 500, nil, err
 	}
 
-	bookedOrderSign, _ := helpers.GetValue(fmt.Sprintf("BOOKED_ORDER_%s", orderData["id"]))
+	bookedOrderSign, err := helpers.GetValue(fmt.Sprintf("BOOKED_ORDER_%s", orderData["id"]))
+	if err != nil && err != redis.Nil {
+		fmt.Printf("[AcceptOrder] ERROR GetValue BOOKED_ORDER: %v\n", err)
+		return 500, nil, err
+	}
 
 	log.Printf("PLAYER MITRA IDS : %s", playerMitraIDs)
 
@@ -489,6 +443,7 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		fmt.Sprintf("BOOKED_FOR_MITRA_%s", mitra.CompleteName),
 	)
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR SetValue BOOKED_ORDER: %v\n", err)
 		return 500, nil, err
 	}
 
@@ -583,31 +538,23 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		"offer_selected_job_id": nil,
 		"order_status":          orderStatus,
 	}
+	fmt.Println(payloadOrderUpdate)
 	if orderData["order_type"] == "now" {
 		payloadOrderUpdate["shared_prime"] = customer.SharedPrime
 	}
+	fmt.Printf("mitra id : %s\npublic key mitra : %s\npublic key customer : %s\nmitra secret : %s\ncustomer secret : %s\norder status : %s", data.MitraID, publicKeyMitra, publicKeyCustomer, mitraSecret, customerSecret, orderStatus)
 	where := map[string]interface{}{
-		"OR": map[string]interface{}{
+		"AND": map[string]interface{}{
+			"id": data.OrderID,
 			"order_status": []string{
 				"FINDING_MITRA",
-				"WAITING_FOR_SELECTED_MITRA",
 			},
 		},
 	}
 	if err := s.OrderTransactionRepo.UpdateWithConditions(tx, where, payloadOrderUpdate); err != nil {
+		fmt.Printf("[AcceptOrder] ERROR UpdateWithConditions: %v | WHERE: %+v | UPDATE: %+v\n", err, where, payloadOrderUpdate)
 		tx.Rollback()
 		return 500, nil, err
-	}
-	if orderData["order_type"] == "repeat" {
-		if err := s.OrderTransactionRepo.UpdateWithConditions(tx, map[string]interface{}{
-			"order_id":     data.OrderID,
-			"order_status": "FINDING_MITRA",
-		}, map[string]interface{}{
-			"order_status": "WAIT_SCHEDULE",
-		}); err != nil {
-			tx.Rollback()
-			return 500, nil, err
-		}
 	}
 	if orderData["order_type"] == "now" {
 		if _, err := s.UserRepo.UpdateUserData(tx, map[string]interface{}{
@@ -621,315 +568,16 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 			"service_id_running":     orderData["service_id"],
 			"sub_service_id_running": orderData["sub_service_id_running"],
 		}); err != nil {
+			fmt.Printf("[AcceptOrder] ERROR UpdateUserData Mitra: %v\n", err)
 			tx.Rollback()
 			return 500, nil, err
 		}
-	} else if orderData["order_type"] == "coming soon" {
-		dateTimeSplit := strings.Split(orderData["order_time"].(string), " ")
-		dateSplit := strings.Split(dateTimeSplit[0], "-")
-		timeSplit := strings.Split(dateTimeSplit[1], ":")
-
-		year := dateSplit[0]
-		monthInt, _ := strconv.Atoi(dateSplit[1])
-		month := monthInt - 1
-		day := dateSplit[2]
-		hour := timeSplit[0]
-		minute := timeSplit[1]
-
-		yearInt, _ := strconv.Atoi(year)
-		dayInt, _ := strconv.Atoi(day)
-		hourInt, _ := strconv.Atoi(hour)
-		minuteInt, _ := strconv.Atoi(minute)
-
-		scheduleDate := time.Date(yearInt, time.Month(month+1), dayInt, hourInt, minuteInt, 0, 0, time.Local)
-		scheduleWarningDate := scheduleDate.Add(3 * time.Minute)
-
-		nodeScheduleDate := helpers.GetFormattedYearMonthDateTimeZone(scheduleDate, "UTC")
-		nodeScheduleWarningDate := helpers.GetFormattedYearMonthDateTimeZone(scheduleWarningDate, "UTC")
-
-		splitScheduledDate := strings.Split(nodeScheduleDate, " ")
-		scheduleSplitDate := strings.Split(splitScheduledDate[0], "-")
-		scheduleSplitTime := strings.Split(splitScheduledDate[1], ":")
-
-		yearScheduled := scheduleSplitDate[0]
-		monthScheduled := scheduleSplitDate[1]
-		datesScheduled := scheduleSplitDate[2]
-		hoursScheduled := scheduleSplitTime[0]
-		minutesScheduled := scheduleSplitTime[1]
-
-		if len(monthScheduled) == 2 {
-			if strings.Split(monthScheduled, "")[0] == "0" {
-				monthScheduled = strings.Split(monthScheduled, "")[1]
-			}
-		}
-		if len(datesScheduled) == 2 {
-			if strings.Split(datesScheduled, "")[0] == "0" {
-				datesScheduled = strings.Split(datesScheduled, "")[1]
-			}
-		}
-		if len(hoursScheduled) == 2 {
-			if strings.Split(hoursScheduled, "")[0] == "0" {
-				hoursScheduled = strings.Split(hoursScheduled, "")[1]
-			}
-		}
-		if len(minutesScheduled) == 2 {
-			if strings.Split(minutesScheduled, "")[0] == "0" {
-				minutesScheduled = strings.Split(minutesScheduled, "")[1]
-			}
-		}
-
-		splitWarningDate := strings.Split(nodeScheduleWarningDate, " ")
-		warningSplitDate := strings.Split(splitWarningDate[0], "-")
-		warningSplitTime := strings.Split(splitWarningDate[1], ":")
-
-		yearWarning := warningSplitDate[0]
-		monthWarning := warningSplitDate[1]
-		dateWarning := warningSplitDate[2]
-		hourWarning := warningSplitTime[0]
-		minuteWarning := warningSplitTime[1]
-
-		if len(monthWarning) == 2 {
-			if strings.Split(monthWarning, "")[0] == "0" {
-				monthWarning = strings.Split(monthWarning, "")[1]
-			}
-		}
-		if len(dateWarning) == 2 {
-			if strings.Split(dateWarning, "")[0] == "0" {
-				dateWarning = strings.Split(dateWarning, "")[1]
-			}
-		}
-		if len(hourWarning) == 2 {
-			if strings.Split(hourWarning, "")[0] == "0" {
-				hourWarning = strings.Split(hourWarning, "")[1]
-			}
-		}
-		if len(minuteWarning) == 2 {
-			if strings.Split(minuteWarning, "")[0] == "0" {
-				minuteWarning = strings.Split(minuteWarning, "")[1]
-			}
-		}
-		loc, err := time.LoadLocation(orderData["timezone_code"].(string))
-		if err != nil {
-			return 500, nil, err
-		}
-		minutes, _ := strconv.Atoi(minutesScheduled)
-		hours, _ := strconv.Atoi(hoursScheduled)
-		days, _ := strconv.Atoi(datesScheduled)
-		months, _ := strconv.Atoi(monthScheduled)
-		years, _ := strconv.Atoi(yearScheduled)
-
-		scheduledTime := time.Date(
-			years,
-			time.Month(months), // No need subtract -1
-			days,
-			hours,
-			minutes,
-			0, // second
-			0, // nanosecond
-			loc,
-		)
-		queue.ScheduleOnceWithCallbackAt(scheduledTime, func() error {
-			orderData, err := s.OrderTransactionRepo.FindDynamicOrderTransactionMap(
-				nil,
-				nil,
-				"order_status IN ?",
-				[]interface{}{
-					[]string{"WAIT_SCHEDULE"},
-				},
-			)
-			if err != nil {
-				return err
-			}
-			if orderData == nil {
-				return errors.New("Order data wait schedule not found")
-			}
-			customerLoad, err := s.UserRepo.FindCustomerById(orderData["customre_id"].(string))
-			if err != nil {
-				return err
-			}
-			if customerLoad == nil {
-				return errors.New("Customer not found")
-			}
-			mitraLoad, err := s.UserRepo.FindMitraById(orderData["mitra_id"].(string))
-			if err != nil {
-				return err
-			}
-			if mitraLoad == nil {
-				return errors.New("Mitra not found")
-			}
-			mitraPayload := map[string]interface{}{
-				"data": map[string]interface{}{
-					"notification_type": "COMING_SOON_ORDER_RUN_NOTIFICATION",
-					"title":             "Order Terjadwal",
-					"message":           fmt.Sprintf("Halo %s harap jalankan orderan mu sekarang", mitraLoad.CompleteName),
-					"order_id":          orderData["id"].(string),
-					"mitra_id":          orderData["mitra_id"].(string),
-					"sub_order_id":      "-1",
-					"customer_id":       orderData["customer_id"].(string),
-					"notif_type":        "order",
-				},
-				"tokens": []string{*mitraLoad.FirebaseToken},
-			}
-			_, err = service.SendMulticast(s.DB, "mitra", mitraPayload)
-			if err != nil {
-				log.Println("error:", err)
-			}
-
-			customerPayload := map[string]interface{}{
-				"data": map[string]interface{}{
-					"notification_type": "COMING_SOON_ORDER_NOTIFICATION",
-					"title":             "Order Terjadwal",
-					"message": fmt.Sprintf(
-						"Mitra %s seharusnya menjalankan orderan mu sekarang", mitraLoad.CompleteName,
-					),
-					"order_id":     orderData["id"].(string),
-					"mitra_id":     orderData["mitra_id"].(string),
-					"sub_order_id": "-1",
-					"customer_id":  orderData["customer_id"].(string),
-					"notif_type":   "order",
-				},
-				"tokens": []string{
-					*customerLoad.FirebaseToken,
-				},
-			}
-			_, err = service.SendMulticast(s.DB, "customer", customerPayload)
-			if err != nil {
-				log.Println("error:", err)
-			}
-			return nil
-		})
-
-		minutesWarning, _ := strconv.Atoi(minuteWarning)
-		hoursWarning, _ := strconv.Atoi(hourWarning)
-		daysWarning, _ := strconv.Atoi(dateWarning)
-		monthsWarning, _ := strconv.Atoi(monthWarning)
-		yearsWarning, _ := strconv.Atoi(yearWarning)
-
-		scheduledWarningTime := time.Date(
-			yearsWarning,
-			time.Month(monthsWarning), // No need subtract -1
-			daysWarning,
-			hoursWarning,
-			minutesWarning,
-			0, // second
-			0, // nanosecond
-			loc,
-		)
-		queue.ScheduleOnceWithCallbackAt(scheduledWarningTime, func() error {
-			orderWarningData, err := s.OrderTransactionRepo.FindById(orderData["id"].(string))
-			if err != nil {
-				return err
-			}
-			if orderWarningData == nil {
-				return errors.New("Order data wait schedule not found")
-			}
-			paymentData, err := s.PaymentRepo.FindById(orderWarningData.PaymentID)
-			if err != nil {
-				return err
-			}
-			if paymentData == nil {
-				return errors.New("Payment data not found")
-			}
-			customerData, err := s.UserRepo.FindCustomerById(orderWarningData.CustomerID)
-			if err != nil {
-				return err
-			}
-			if customerData == nil {
-				return errors.New("Customer data not found")
-			}
-			mitraData, err := s.UserRepo.FindMitraById(helpers.DerefStr(orderWarningData.MitraID))
-			if err != nil {
-				return err
-			}
-			if mitraData == nil {
-				return errors.New("Mitra data not found")
-			}
-			tx := s.DB.Begin()
-			if mitraData.IsBusy == "no" && orderWarningData.OrderStatus == "WAIT_SCHEDULE" {
-				err := s.OrderTransactionRepo.UpdateWithConditions(tx,
-					map[string]interface{}{
-						"id":          orderWarningData.ID,
-						"mitra_id":    orderWarningData.MitraID,
-						"customer_id": orderWarningData.CustomerID,
-					}, map[string]interface{}{
-						"order_status": "CANCELED",
-					})
-				if err != nil {
-					log.Println("err : " + err.Error())
-					return err
-				}
-				mitraPayload := map[string]interface{}{
-					"data": map[string]interface{}{
-						"notification_type": "CANCELED_ORDER_COMING_SOON_NOTIFICATION",
-						"title":             "Perhatian !",
-						"message":           fmt.Sprintf("Halo %s performa kamu diturunkan karena tidak menjalankan order", mitraData.CompleteName),
-						"order_id":          orderWarningData.ID,
-						"sub_order_id":      "-1",
-						"mitra_id":          orderWarningData.MitraID,
-						"customer_id":       orderWarningData.CustomerID,
-						"notif_type":        "order",
-					},
-					"tokens": []string{*mitraData.FirebaseToken},
-				}
-				_, err = service.SendMulticast(s.DB, "mitra", mitraPayload)
-				if err != nil {
-					log.Println("err : " + err.Error())
-					return err
-				}
-				msgCustomer := fmt.Sprintf("Order dibatalkan otomatis karena mitra %s tidak menjalankan order", mitraData.CompleteName)
-				if paymentData.Type == "virtual account" || paymentData.Type == "ewallet" {
-					msgCustomer += " dan uang kamu akan dikembalikan segera"
-				}
-				customerPayload := map[string]interface{}{
-					"data": map[string]interface{}{
-						"notification_type": "CANCELED_ORDER_LATE_NOTIFICATION",
-						"title":             "Order terlambat & dibatalkan",
-						"message":           msgCustomer,
-						"order_id":          orderWarningData.ID,
-						"sub_order_id":      "-1",
-						"mitra_id":          orderWarningData.MitraID,
-						"customer_id":       orderWarningData.CustomerID,
-						"notif_type":        "order",
-					},
-					"tokens": []string{*customerData.FirebaseToken},
-				}
-				_, err = service.SendMulticast(s.DB, "customer", customerPayload)
-				if err != nil {
-					log.Println("err : " + err.Error())
-					return err
-				}
-			}
-			return nil
-		})
-	} else if orderData["order_type"] == "repeat" {
-		orderRepeatData, err := s.OrderTransactionRepeatRepo.FindByWhereDynamic(tx, map[string]interface{}{
-			"order_id":     orderData["id"],
-			"order_status": "FINDING_MITRA",
-		})
-		if err != nil {
-			return 500, nil, err
-		}
-		if orderRepeatData == nil {
-			return 404, nil, errors.New("Order not found")
-		}
-		// if len(orderRepeatData) {
-		// 	for _, elem := range orderRepeatData {
-		// 		dateTimeSplitRepeat := strings.Split(elem.OrderTime , " ")
-		// 		dateSplit := strings.Split(dateTimeSplitRepeat[0], "-")
-		// 		timeSplit := strings.Split(dateTimeSplitRepeat[1], ":")
-		// 		year := dateSplit[0]
-		// 		monthInt, _ := strconv.Atoi(dateSplit[1])
-		// 		day := dateSplit[2]
-		// 		hour := timeSplit[0]
-		// 		minute := timeSplit[1]
-
-		// 	}
-		// }
 	}
 	err = s.OrderOfferRepo.DeleteByWhere(tx, map[string]interface{}{
 		"order_id": data.OrderID,
 	})
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR DeleteByWhere OrderOffer: %v\n", err)
 		return 500, nil, err
 	}
 	payloadCreateChat := models.OrderChat{
@@ -942,20 +590,24 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	}
 	err = s.OrderChatRepo.Create(tx, payloadCreateChat)
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR Create OrderChat: %v\n", err)
 		return 500, nil, err
 	}
 	if err := tx.Commit().Error; err != nil {
+		fmt.Printf("[AcceptOrder] ERROR Commit: %v\n", err)
 		return 500, nil, err
 	}
 	if expiredJobId != "" {
 		err = queue.Inspector.DeleteTask(queue.TypeOrderOfferExpired, expiredJobId)
 		if err != nil {
+			fmt.Printf("[AcceptOrder] ERROR DeleteTask OfferExpired: %v\n", err)
 			return 500, nil, err
 		}
 	}
 	if offerSelectedJobId != "" {
 		err = queue.Inspector.DeleteTask(queue.TypeOrderSelectedExpired, offerSelectedJobId)
 		if err != nil {
+			fmt.Printf("[AcceptOrder] ERROR DeleteTask OfferSelectedExpired: %v\n", err)
 			return 500, nil, err
 		}
 	}
@@ -974,30 +626,33 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		}
 		_, err = service.SendMulticast(s.DB, "customer", payloadCustomer)
 		if err != nil {
-			log.Println("error:", err)
+			fmt.Printf("[AcceptOrder] ERROR SendMulticast Customer: %v\n", err)
 		}
 	}
 	err = helpers.DeleteValue(data.TempID)
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR DeleteValue TempID: %v\n", err)
 		return 500, nil, err
 	}
 	err = helpers.DeleteValue(fmt.Sprintf("SELECT_MITRA_%s", orderData["id"]))
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR DeleteValue SELECT_MITRA: %v\n", err)
 		return 500, nil, err
 	}
 	onlineAdminList, err := s.UserRepo.FindOnlineAdmins()
 	if err != nil {
+		fmt.Printf("[AcceptOrder] ERROR FindOnlineAdmins: %v\n", err)
 		return 500, nil, err
 	}
 	runningCount, err := s.OrderTransactionRepo.CountRunningOrders()
 	if err != nil {
-		log.Println(err)
+		fmt.Printf("[AcceptOrder] ERROR CountRunningOrders: %v\n", err)
 		return 500, nil, err
 	}
 
 	waitingCount, err := s.OrderTransactionRepo.CountWaitingOrders()
 	if err != nil {
-		log.Println(err)
+		fmt.Printf("[AcceptOrder] ERROR CountWaitingOrders: %v\n", err)
 		return 500, nil, err
 	}
 	if len(onlineAdminList) > 0 {

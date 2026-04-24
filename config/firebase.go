@@ -18,7 +18,7 @@ func InitFirebase() {
 	ctx := context.Background()
 
 	customerOpt := option.WithCredentialsFile("credential_files/suberes-8b773-firebase-adminsdk-ci9gh-86aa7134d7.json")
-	mitraOpt := option.WithCredentialsFile("credential_files/suberes-mitra-firebase-adminsdk-vml8u-6a0a90bc12.json")
+	mitraOpt := option.WithCredentialsFile("credential_files/suberes-mitra-firebase-adminsdk-vml8u-0977b1d80d.json")
 	adminOpt := option.WithCredentialsFile("credential_files/suberes-dashboard-firebase-adminsdk-ns1j6-5218ef4faa.json")
 
 	var err error

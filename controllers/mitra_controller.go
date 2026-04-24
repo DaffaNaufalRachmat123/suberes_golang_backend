@@ -57,18 +57,23 @@ func (c *MitraController) Login(ctx *gin.Context) {
 }
 
 func (c *MitraController) RefreshToken(ctx *gin.Context) {
-	userCtx, _ := ctx.Get("currentUser")
-	user := userCtx.(models.User)
-	newToken, err := c.MitraService.RefreshToken(user.ID)
-	if err != nil {
-		helpers.APIErrorResponse(ctx, err.Error(), http.StatusInternalServerError)
+	userID := ctx.GetString("refreshUserID")
+
+	tokenRecordRaw, exists := ctx.Get("refreshTokenRecord")
+	if !exists {
+		helpers.APIErrorResponse(ctx, "invalid token context", http.StatusUnauthorized)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Token updated",
-		"status":         "success",
-		"token":          "Bearer " + newToken,
-	})
+
+	tokenRecord := tokenRecordRaw.(models.RefreshToken)
+
+	result, err := c.MitraService.RefreshToken(userID, tokenRecord)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
 }
 
 func (c *MitraController) Register(ctx *gin.Context) {

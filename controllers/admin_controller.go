@@ -155,17 +155,23 @@ func (c *AdminController) RemoveAdmin(ctx *gin.Context) {
 }
 
 func (c *AdminController) RefreshToken(ctx *gin.Context) {
-	userCtx, _ := ctx.Get("currentUser")
-	user := userCtx.(models.User)
-	refreshToken, err := c.AdminService.RefreshToken(user.ID)
-	if err != nil {
-		helpers.APIErrorResponse(ctx, err.Error(), 500)
+	userID := ctx.GetString("refreshUserID")
+
+	tokenRecordRaw, exists := ctx.Get("refreshTokenRecord")
+	if !exists {
+		helpers.APIErrorResponse(ctx, "invalid token context", http.StatusUnauthorized)
+		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Token updated",
-		"status":         "success",
-		"token":          "Bearer " + refreshToken,
-	})
+
+	tokenRecord := tokenRecordRaw.(models.RefreshToken)
+
+	result, err := c.AdminService.RefreshToken(userID, tokenRecord)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
 }
 
 func (c *AdminController) Login(ctx *gin.Context) {
@@ -175,7 +181,7 @@ func (c *AdminController) Login(ctx *gin.Context) {
 		return
 	}
 
-	token, user, err := c.AdminService.Login(&req)
+	token, refreshToken, user, err := c.AdminService.Login(&req)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
 			"server_message": err.Error(),
@@ -188,6 +194,7 @@ func (c *AdminController) Login(ctx *gin.Context) {
 		"server_message": "Berhasil masuk. Selamat datang kembali",
 		"status":         "success",
 		"token":          "Bearer " + token,
+		"refresh_token":  "Bearer " + refreshToken,
 		"data":           user,
 	})
 }

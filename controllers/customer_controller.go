@@ -107,18 +107,23 @@ func (c *CustomerController) ChangePhoneMail(ctx *gin.Context) {
 }
 
 func (c *CustomerController) RefreshToken(ctx *gin.Context) {
-	userCtx, _ := ctx.Get("currentUser")
-	user := userCtx.(models.User)
-	newToken, err := c.CustomerService.RefreshToken(user.ID)
-	if err != nil {
-		helpers.APIErrorResponse(ctx, err.Error(), http.StatusInternalServerError)
+	userID := ctx.GetString("refreshUserID")
+
+	tokenRecordRaw, exists := ctx.Get("refreshTokenRecord")
+	if !exists {
+		helpers.APIErrorResponse(ctx, "invalid token context", http.StatusUnauthorized)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Token updated",
-		"status":         "success",
-		"token":          "Bearer " + newToken,
-	})
+
+	tokenRecord := tokenRecordRaw.(models.RefreshToken)
+
+	result, err := c.CustomerService.RefreshToken(userID, tokenRecord)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
 }
 
 func (c *CustomerController) UserLogout(ctx *gin.Context) {
@@ -225,7 +230,7 @@ func (c *CustomerController) LoginByEmail(ctx *gin.Context) {
 		if err.Error() == "CUSTOMER_ALREADY_LOGGED_IN" {
 			ctx.JSON(409, gin.H{
 				"failure_type":   err.Error(),
-				"server_message": "this account already logged in on other device",
+				"server_message": "This account already logged in on other device",
 				"status":         "failure",
 			})
 			return
@@ -234,7 +239,7 @@ func (c *CustomerController) LoginByEmail(ctx *gin.Context) {
 		if err.Error() == "CUSTOMER_NOT_FOUND" {
 			ctx.JSON(404, gin.H{
 				"failure_type":   err.Error(),
-				"server_message": "email not available",
+				"server_message": "Email tidak terdaftar",
 				"status":         "failure",
 			})
 			return

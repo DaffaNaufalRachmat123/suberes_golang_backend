@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,7 +44,7 @@ type MitraService struct {
 	OrderOfferRepository              *repositories.OrderOfferRepository
 }
 
-func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.MitraLoginResponseDTO, error) {
+func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.UserLoginResponseDTO, error) {
 	mitra, err := s.MitraRepository.FindMitraByEmail(loginDTO.Email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -103,11 +105,44 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.MitraLoginRespo
 		"user_rating":        mitra.UserRating,
 		"user_profile_image": mitra.UserProfileImage,
 		"user_status":        mitra.UserStatus,
-		"exp":                time.Now().Add(time.Hour * 24).Unix(),
+		"exp":                time.Now().Add(1 * time.Minute).Unix(),
+	})
+
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":                 mitra.ID,
+		"complete_name":      mitra.CompleteName,
+		"email":              mitra.Email,
+		"phone_number":       mitra.PhoneNumber,
+		"user_type":          mitra.UserType,
+		"user_rating":        mitra.UserRating,
+		"user_profile_image": mitra.UserProfileImage,
+		"user_status":        mitra.UserStatus,
+		"exp":                time.Now().Add(7 * 24 * time.Hour).Unix(),
 	})
 
 	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
 	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	refreshString, err := refreshToken.SignedString([]byte(os.Getenv("SECRET_KEY_REFRESH")))
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	hash := sha256.Sum256([]byte(refreshString))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	refreshTokenModel := models.RefreshToken{
+		UsersID:   mitra.ID,
+		TokenHash: tokenHash,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		Revoked:   "0",
+	}
+
+	if err := tx.Create(&refreshTokenModel).Error; err != nil {
 		tx.Rollback()
 		return nil, err
 	}
@@ -121,13 +156,98 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.MitraLoginRespo
 		status = "IN_ORDER"
 	}
 
-	return &dtos.MitraLoginResponseDTO{
+	return &dtos.UserLoginResponseDTO{
 		ServerMessage: "login successfully",
 		Status:        status,
 		Token:         "Bearer " + tokenString,
+		RefreshToken:  "Bearer " + refreshString,
 		Data:          *mitra,
 		SharedPrime:   sharedPrimeCustomer,
 		SharedSecret:  sharedSecret,
+	}, nil
+}
+
+func (s *MitraService) RefreshToken(userID string, stored models.RefreshToken) (*dtos.UserLoginResponseDTO, error) {
+	secretKey := os.Getenv("SECRET_KEY_REFRESH")
+	if secretKey == "" {
+		secretKey = "SuberesIndustries"
+	}
+
+	secretKeyToken := os.Getenv("SECRET_KEY")
+	if secretKeyToken == "" {
+		secretKeyToken = "SuberesIndustries"
+	}
+
+	// ambil user
+	mitra, err := s.MitraRepository.FindMitraByID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	// ❌ revoke token lama
+	if err := tx.Model(&stored).Update("revoked", "1").Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// ✅ access token baru
+	newAccess := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":          mitra.ID,
+		"email":       mitra.Email,
+		"user_type":   mitra.UserType,
+		"user_status": mitra.UserStatus,
+		"exp":         time.Now().Add(1 * time.Minute).Unix(),
+	})
+
+	accessString, err := newAccess.SignedString([]byte(secretKeyToken))
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// ✅ refresh token baru
+	newRefresh := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  mitra.ID,
+		"exp": time.Now().Add(7 * 24 * time.Hour).Unix(),
+	})
+
+	refreshString, err := newRefresh.SignedString([]byte(secretKey))
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// ✅ hash refresh token
+	hash := sha256.Sum256([]byte(refreshString))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	newStored := models.RefreshToken{
+		UsersID:   mitra.ID,
+		TokenHash: tokenHash,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		Revoked:   "0",
+	}
+
+	if err := tx.Create(&newStored).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	return &dtos.UserLoginResponseDTO{
+		ServerMessage: "refresh token success",
+		Status:        "SUCCESS",
+		Token:         "Bearer " + accessString,
+		RefreshToken:  "Bearer " + refreshString,
+		Data:          *mitra,
 	}, nil
 }
 
@@ -470,30 +590,6 @@ func (s *MitraService) OTPValidatorForgotPassword(dto dtos.OTPValidatorForgotPas
 	return nil
 }
 
-func (s *MitraService) RefreshToken(mitraID string) (string, error) {
-	mitra, err := s.UserRepository.FindMitraById(mitraID)
-	if err != nil {
-		return "", errors.New("mitra not found")
-	}
-	now := time.Now()
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":                 mitra.ID,
-		"complete_name":      mitra.CompleteName,
-		"email":              mitra.Email,
-		"phone_number":       mitra.PhoneNumber,
-		"user_type":          mitra.UserType,
-		"user_rating":        mitra.UserRating,
-		"user_profile_image": mitra.UserProfileImage,
-		"user_status":        mitra.UserStatus,
-		"issued_at":          now.Format("2006-01-02T15:04:05.000Z07:00"),
-	})
-	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
-	if err != nil {
-		return "", err
-	}
-	return tokenString, nil
-}
-
 func (s *MitraService) Logout(mitraID string) error {
 	mitra, err := s.UserRepository.FindMitraById(mitraID)
 	if err != nil {
@@ -511,6 +607,13 @@ func (s *MitraService) Logout(mitraID string) error {
 	mitra.IsLoggedIn = "0"
 
 	if err := s.MitraRepository.UpdateMitra(tx, mitra); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Model(&models.RefreshToken{}).
+		Where("users_id = ? AND revoked = ?", mitra.ID, "0").
+		Update("revoked", "1").Error; err != nil {
 		tx.Rollback()
 		return err
 	}

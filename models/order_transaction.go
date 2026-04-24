@@ -59,8 +59,9 @@ type OrderTransaction struct {
 	TotalWaitingRepeat               int       `gorm:"type:integer" json:"total_waiting_repeat"`
 	TotalDoneRepeat                  int       `gorm:"type:integer" json:"total_done_repeat"`
 	IsPaidCustomer                   string    `gorm:"type:varchar(1);check:is_paid_customer IN ('0','1')" json:"is_paid_customer"`
-	PrivateKeyRSA                    string    `gorm:"type:varchar(255)" json:"-"`
-	PublicKeyRSA                     string    `gorm:"type:varchar(255)" json:"-"`
+	PrivateKeyRSA                    string    `gorm:"type:text" json:"-"`
+	PublicKeyRSA                     string    `gorm:"type:text" json:"-"`
+	PrivateKeyMitra                  int64     `gorm:"type:bigint" json:"-"`
 	PublicKeyMitra                   int64     `gorm:"type:bigint" json:"public_key_mitra"`
 	PublicKeyCustomer                int64     `gorm:"type:bigint" json:"public_key_customer"`
 	MitraSecret                      int64     `gorm:"type:bigint" json:"-"`

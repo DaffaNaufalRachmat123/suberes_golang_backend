@@ -61,14 +61,15 @@ func (s *OrderOfferService) GetIncomingOrder(orderID, mitraID string) (*models.O
 
 	// Build the raw countdown expression (PostgreSQL syntax)
 	var countdownSQL string
+
 	if orderData.OrderStatus == "WAITING_FOR_SELECTED_MITRA" {
 		countdownSQL = fmt.Sprintf(
-			"EXTRACT(EPOCH FROM (order_transactions.order_blast_time + INTERVAL '%d minutes' - NOW()))::bigint",
+			"GREATEST(0, EXTRACT(EPOCH FROM (order_transactions.order_blast_time + INTERVAL '%d minutes' - (NOW() AT TIME ZONE 'UTC')))::bigint)",
 			timeoutMinutes,
 		)
 	} else {
 		countdownSQL = fmt.Sprintf(
-			"EXTRACT(EPOCH FROM (order_transactions.order_time + INTERVAL '%d minutes' - NOW()))::bigint",
+			"GREATEST(0, EXTRACT(EPOCH FROM (order_transactions.order_time + INTERVAL '%d minutes' - (NOW() AT TIME ZONE 'UTC')))::bigint)",
 			timeoutMinutes,
 		)
 	}

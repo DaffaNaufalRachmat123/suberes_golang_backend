@@ -14,15 +14,10 @@ func CustomerRoutes(r *gin.RouterGroup, controller *controllers.CustomerControll
 	customer.POST("/login/email", controller.LoginByEmail)
 	customer.POST("/otp_validator/mail", controller.OtpValidatorMail)
 	customer.POST("/register", controller.Register)
+	customer.POST("/refresh_token", middleware.RefreshTokenMiddleware(db), controller.RefreshToken)
 	protected := customer.Group("/")
 	protected.Use(middleware.AuthMiddleware(db))
 	routes := []helpers.ProtectedRoute{
-		{
-			Method:  "GET",
-			Path:    "/refresh_token",
-			Handler: controller.RefreshToken,
-			Roles:   []string{helpers.CustomerRole},
-		},
 		{
 			Method:  "PUT",
 			Path:    "/update_firebase_token",

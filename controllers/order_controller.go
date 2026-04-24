@@ -58,5 +58,5 @@ func (c *OrderController) AcceptOrderCash(ctx *gin.Context) {
 		helpers.APIErrorResponse(ctx, err.Error(), code)
 		return
 	}
-	ctx.JSON(http.StatusCreated, response)
+	ctx.JSON(code, response)
 }

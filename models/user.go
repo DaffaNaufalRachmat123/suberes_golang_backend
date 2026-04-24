@@ -31,9 +31,9 @@ type User struct {
 	ViolationDangerCount        int        `gorm:"type:integer" json:"violation_danger_count"`
 	IsActive                    string     `gorm:"type:varchar(3);default:'no';check:is_active IN ('yes','no')" json:"is_active"`
 	IsAutoBid                   string     `gorm:"type:varchar(3);default:'no';check:is_auto_bid IN ('yes','no')" json:"is_auto_bid"`
-	OrderIDRunning              *string    `gorm:"type:integer" json:"order_id_running"`
+	OrderIDRunning              *string    `gorm:"type:varchar(255)" json:"order_id_running"`
 	SubOrderIDRunning           *int       `gorm:"type:integer" json:"sub_order_id_running"`
-	CustomerIDRunning           *int       `gorm:"type:integer" json:"customer_id_running"`
+	CustomerIDRunning           *string    `gorm:"type:varchar(255)" json:"customer_id_running"`
 	ServiceIDRunning            *int       `gorm:"type:integer" json:"service_id_running"`
 	SubServiceIDRunning         *int       `gorm:"type:integer" json:"sub_service_id_running"`
 	Latitude                    string     `gorm:"type:varchar(255);default:''" json:"latitude"`

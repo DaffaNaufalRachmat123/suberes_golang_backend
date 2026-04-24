@@ -17,16 +17,11 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 	mitraRoutes.PUT("/request_forgot_password/:email", controller.RequestForgotPassword)
 	mitraRoutes.PUT("/otp_validator_forgot_password", controller.OTPValidatorForgotPassword)
 	mitraRoutes.GET("/dashboard/count/:id", controller.DashboardCount)
+	mitraRoutes.POST("/refresh_token", middleware.RefreshTokenMiddleware(db), controller.RefreshToken)
 
 	protected := mitraRoutes.Group("/")
 	protected.Use(middleware.AuthMiddleware(db))
 	routes := []helpers.ProtectedRoute{
-		{
-			Method:  "GET",
-			Path:    "/refresh_token",
-			Handler: controller.RefreshToken,
-			Roles:   []string{helpers.MitraRole},
-		},
 		{
 			Method:  "GET",
 			Path:    "/pendapatan/:mitra_id/:pendapatan_date",

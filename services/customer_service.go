@@ -1,12 +1,15 @@
 package services
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand"
 	"os"
 	"strconv"
 	"strings"
+	"suberes_golang/dtos"
 	"suberes_golang/helpers"
 	"suberes_golang/models"
 	"suberes_golang/repositories"
@@ -412,21 +415,56 @@ func (s *CustomerService) OtpValidatorMail(email, otpCode string) (map[string]in
 		tx.Rollback()
 		return nil, 500, err
 	}
-	claims := jwt.MapClaims{
-		"id":            user.ID,
-		"complete_name": user.CompleteName,
-		"country_code":  user.CountryCode,
-		"email":         user.Email,
-		"phone_number":  user.PhoneNumber,
-		"user_type":     user.UserType,
-		"user_rating":   user.UserRating,
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, _ := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
-	if err := s.UserOTPRepo.DeleteByUserId(tx, user.ID); err != nil {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":                 user.ID,
+		"complete_name":      user.CompleteName,
+		"email":              user.Email,
+		"phone_number":       user.PhoneNumber,
+		"user_type":          user.UserType,
+		"user_rating":        user.UserRating,
+		"user_profile_image": user.UserProfileImage,
+		"user_status":        user.UserStatus,
+		"exp":                time.Now().Add(1 * time.Minute).Unix(),
+	})
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":                 user.ID,
+		"complete_name":      user.CompleteName,
+		"email":              user.Email,
+		"phone_number":       user.PhoneNumber,
+		"user_type":          user.UserType,
+		"user_rating":        user.UserRating,
+		"user_profile_image": user.UserProfileImage,
+		"user_status":        user.UserStatus,
+		"exp":                time.Now().Add(7 * 24 * time.Hour).Unix(),
+	})
+
+	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+	if err != nil {
 		tx.Rollback()
 		return nil, 500, err
 	}
+
+	refreshString, err := refreshToken.SignedString([]byte(os.Getenv("SECRET_KEY_REFRESH")))
+	if err != nil {
+		tx.Rollback()
+		return nil, 500, err
+	}
+
+	hash := sha256.Sum256([]byte(refreshString))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	refreshTokenModel := models.RefreshToken{
+		UsersID:   user.ID,
+		TokenHash: tokenHash,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		Revoked:   "0",
+	}
+
+	if err := tx.Create(&refreshTokenModel).Error; err != nil {
+		tx.Rollback()
+		return nil, 500, err
+	}
+
 	if err := s.UserRepo.SetLoggedIn(tx, user.ID); err != nil {
 		tx.Rollback()
 		return nil, 500, err
@@ -438,10 +476,95 @@ func (s *CustomerService) OtpValidatorMail(email, otpCode string) (map[string]in
 		"server_message": "login successfully",
 		"status":         "success",
 		"token":          "Bearer " + tokenString,
+		"refresh_token":  "Bearer " + refreshString,
 		"data":           user,
 		"shared_prime":   sharedPrime,
 		"shared_secret":  sharedSecret,
 	}, 200, nil
+}
+
+func (s *CustomerService) RefreshToken(userID string, stored models.RefreshToken) (*dtos.UserLoginResponseDTO, error) {
+	secretKey := os.Getenv("SECRET_KEY_REFRESH")
+	if secretKey == "" {
+		secretKey = "SuberesIndustries"
+	}
+
+	secretKeyToken := os.Getenv("SECRET_KEY")
+	if secretKeyToken == "" {
+		secretKeyToken = "SuberesIndustries"
+	}
+
+	// ambil user
+	mitra, err := s.UserRepo.FindCustomerById(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	// ❌ revoke token lama
+	if err := tx.Model(&stored).Update("revoked", "1").Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// ✅ access token baru
+	newAccess := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":          mitra.ID,
+		"email":       mitra.Email,
+		"user_type":   mitra.UserType,
+		"user_status": mitra.UserStatus,
+		"exp":         time.Now().Add(1 * time.Minute).Unix(),
+	})
+
+	accessString, err := newAccess.SignedString([]byte(secretKeyToken))
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// ✅ refresh token baru
+	newRefresh := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  mitra.ID,
+		"exp": time.Now().Add(7 * 24 * time.Hour).Unix(),
+	})
+
+	refreshString, err := newRefresh.SignedString([]byte(secretKey))
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// ✅ hash refresh token
+	hash := sha256.Sum256([]byte(refreshString))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	newStored := models.RefreshToken{
+		UsersID:   mitra.ID,
+		TokenHash: tokenHash,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		Revoked:   "0",
+	}
+
+	if err := tx.Create(&newStored).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	return &dtos.UserLoginResponseDTO{
+		ServerMessage: "refresh token success",
+		Status:        "SUCCESS",
+		Token:         "Bearer " + accessString,
+		RefreshToken:  "Bearer " + refreshString,
+		Data:          *mitra,
+	}, nil
 }
 
 func (s *CustomerService) UpdateUserProfile(
@@ -496,33 +619,15 @@ func (s *CustomerService) Logout(ID string) (map[string]interface{}, int, error)
 		tx.Rollback()
 		return nil, 500, err
 	}
+	if err := tx.Model(&models.RefreshToken{}).
+		Where("users_id = ? AND revoked = ?", user.ID, "0").
+		Update("revoked", "1").Error; err != nil {
+		tx.Rollback()
+		return nil, 500, err
+	}
 	tx.Commit()
 	return map[string]interface{}{
 		"server_message": "Logout succeed",
 		"status":         "OK",
 	}, 200, nil
-}
-
-func (s *CustomerService) RefreshToken(userID string) (string, error) {
-	user, err := s.UserRepo.FindCustomerById(userID)
-	if err != nil || user == nil {
-		return "", errors.New("customer not found")
-	}
-	now := time.Now()
-	claims := jwt.MapClaims{
-		"id":            user.ID,
-		"complete_name": user.CompleteName,
-		"country_code":  user.CountryCode,
-		"email":         user.Email,
-		"phone_number":  user.PhoneNumber,
-		"user_type":     user.UserType,
-		"user_rating":   user.UserRating,
-		"issued_at":     now.Format("2006-01-02T15:04:05.000Z07:00"),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
-	if err != nil {
-		return "", err
-	}
-	return tokenString, nil
 }

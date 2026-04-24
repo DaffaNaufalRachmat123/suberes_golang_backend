@@ -36,6 +36,7 @@ func AutoMigrate() {
 		&models.Payment{},
 		&models.PaymentMitra{},
 		&models.PrivacyPolicy{},
+		&models.RefreshToken{},
 		&models.Region{},
 		&models.Reward{},
 		&models.ScheduleParticipant{},

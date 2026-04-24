@@ -110,6 +110,36 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 
 		log.Printf("Sending push notifications to tokens: %v", registrationTokenList)
 
+		// --- Kirim push notification ke mitra ---
+		if len(registrationTokenList) > 0 {
+			titleOrder := fmt.Sprintf("Order %s", serviceData.ServiceName)
+			messageOrder := fmt.Sprintf("Ada order baru dari %s", customerData.CompleteName)
+			msg := map[string]interface{}{
+				"data": map[string]interface{}{
+					"temp_id":           tempID,
+					"notification_type": "ORDER_BROADCAST",
+					"title":             titleOrder,
+					"message":           messageOrder,
+					"order_id":          orderData.ID,
+					"order_type":        orderData.OrderType,
+					"payment_type":      orderData.PaymentType,
+					"customer_id":       orderData.CustomerID,
+					"notification_id":   strconv.Itoa(orderData.NotificationID),
+					"notif_type":        "order",
+				},
+				"tokens": registrationTokenList,
+			}
+			if _, err := service.SendMulticast(config.DB, "mitra", msg); err != nil {
+				log.Printf("failed to send push notification to mitra: %v", err)
+			} else {
+				log.Printf("Successfully sent push notification to mitra")
+			}
+		} else {
+			log.Printf("No tokens to send push notification to")
+		}
+
+		// ---
+
 		timeoutCanTakeOrder, _ := time.ParseDuration(os.Getenv("TIMEOUT_CAN_TAKE_ORDER") + "m")
 		if timeoutCanTakeOrder == 0 {
 			timeoutCanTakeOrder = 1 * time.Minute
@@ -162,6 +192,50 @@ func HandleOrderOfferExpiredTask(ctx context.Context, t *asynq.Task) error {
 	if err := config.DB.Model(&models.OrderTransaction{}).Where("id = ? AND order_status = ?", p.OrderID, "FINDING_MITRA").Update("order_status", "WAITING_FOR_SELECTED_MITRA").Error; err != nil {
 		log.Printf("failed to update order transaction status: %v", err)
 	}
+
+	// --- Kirim push notification ke mitra yang tawarannya expired ---
+	var orderData models.OrderTransaction
+	if err := config.DB.Where("id = ?", p.OrderID).First(&orderData).Error; err == nil {
+		var orderOffers []models.OrderOffer
+		if err := config.DB.Where("temp_id = ?", p.TempID).Find(&orderOffers).Error; err == nil {
+			var mitraIDs []string
+			for _, offer := range orderOffers {
+				mitraIDs = append(mitraIDs, offer.MitraID)
+			}
+			if len(mitraIDs) > 0 {
+				var mitras []models.User
+				if err := config.DB.Select("firebase_token").Where("id IN ?", mitraIDs).Find(&mitras).Error; err == nil {
+					var firebaseTokenArray []string
+					for _, m := range mitras {
+						if m.FirebaseToken != nil && *m.FirebaseToken != "" && *m.FirebaseToken != "null" {
+							firebaseTokenArray = append(firebaseTokenArray, *m.FirebaseToken)
+						}
+					}
+					if len(firebaseTokenArray) > 0 {
+						customerData := models.User{}
+						_ = config.DB.Where("id = ?", orderData.CustomerID).First(&customerData)
+						payloadMessage := map[string]interface{}{
+							"data": map[string]interface{}{
+								"notification_type": "ORDER_OFFER_EXPIRED",
+								"title":             "Ada tawaran order yang kadaluarsa",
+								"message":           fmt.Sprintf("Tawaran order dari customer %s telah kadaluarsa", customerData.CompleteName),
+								"order_temp_id":     orderData.TempID,
+								"order_id":          orderData.ID,
+								"customer_id":       orderData.CustomerID,
+								"notification_id":   strconv.Itoa(orderData.NotificationID),
+								"notif_type":        "order",
+							},
+							"tokens": firebaseTokenArray,
+						}
+						if _, err := service.SendMulticast(config.DB, "mitra", payloadMessage); err != nil {
+							log.Printf("failed to send expired push notification to mitra: %v", err)
+						}
+					}
+				}
+			}
+		}
+	}
+	// ---
 
 	log.Printf("Notifying mitras about expired offer for order %s", p.OrderID)
 	log.Printf("Notifying admin about order %s waiting for selection", p.OrderID)
