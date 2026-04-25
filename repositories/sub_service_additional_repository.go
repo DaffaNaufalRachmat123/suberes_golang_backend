@@ -10,6 +10,10 @@ type SubServiceAdditionalRepository struct {
 	DB *gorm.DB
 }
 
+func (r *SubServiceAdditionalRepository) Create(tx *gorm.DB, record *models.SubServiceAdditional) error {
+	return tx.Create(record).Error
+}
+
 func (r *SubServiceAdditionalRepository) CreateBulk(tx *gorm.DB, records []models.SubServiceAdditional) error {
 	return tx.Create(&records).Error
 }

@@ -3,6 +3,8 @@ package models
 import (
 	"time"
 
+	"encoding/json"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -143,4 +145,15 @@ func (o *OrderTransaction) BeforeCreate(tx *gorm.DB) error {
 		o.ID = uuid.New().String()
 	}
 	return nil
+}
+
+// Custom MarshalJSON agar SubServiceAddeds selalu [] jika nil
+func (o OrderTransaction) MarshalJSON() ([]byte, error) {
+	type Alias OrderTransaction
+	// Pastikan SubServiceAddeds tidak nil
+	if o.SubServiceAddeds == nil {
+		o.SubServiceAddeds = make([]SubServiceAdded, 0)
+	}
+
+	return json.Marshal((Alias)(o))
 }

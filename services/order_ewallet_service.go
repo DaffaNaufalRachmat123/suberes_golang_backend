@@ -272,6 +272,13 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 	}
 
 	grossAmount := dto.GrossAmount
+
+	if subPayment.TitlePayment == "BALANCE" {
+		if float64(customerData.AccountBalance) < float64(grossAmount) {
+			return "", 0, "", "", http.StatusPaymentRequired, errors.New("insufficient account balance")
+		}
+	}
+
 	grossAmountMitra := grossAmount - ((grossAmount * int64(subService.CompanyPercentage)) / 100)
 	grossAmountCompany := grossAmount - grossAmountMitra
 	grossAmountCompanyAfterDeduction := grossAmountCompany
@@ -325,7 +332,7 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 		if orderDateTime.Day() >= nowDateTime.Day() && orderDateTime.Hour() >= 7 {
 			orderDateTime = orderDateTime.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
 			if orderDateTime.Hour() >= 23 && orderDateTime.Minute() > 0 {
-				return "", 0, "", "", http.StatusBadRequest, errors.New("Batas maksimal jam order di jam 11 malam")
+				return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam order di jam 11 malam")
 			}
 		}
 	} else if dto.OrderType == "repeat" {
@@ -337,37 +344,10 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 			if orderDateTime.Day() >= nowDateTime.Day() && orderDateTime.Hour() >= 7 {
 				orderDateTime = orderDateTime.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
 				if orderDateTime.Hour() >= 23 && orderDateTime.Minute() > 0 {
-					return "", 0, "", "", http.StatusBadRequest, errors.New("Batas maksimal jam order di jam 11 malam")
+					return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam order di jam 11 malam")
 				}
 			}
 		}
-	} else if dto.OrderType == "now" {
-		nowHours := nowDateTime.Hour()
-		nowMinutes := nowDateTime.Minute()
-
-		if serviceData.ServiceType == "Durasi" {
-			dateAdd := nowDateTime.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
-			if nowHours >= 23 && nowMinutes >= 0 {
-				return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
-			}
-			if dateAdd.Hour() >= 23 && dateAdd.Minute() >= 0 {
-				return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
-			}
-		}
-		if nowHours >= 20 && nowMinutes >= 0 {
-			return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam order sampai jam 8 malam")
-		}
-	}
-
-	// Generate id_transaction
-	var idTransaction string
-	switch dto.OrderType {
-	case "now":
-		idTransaction = fmt.Sprintf("%s-%s", os.Getenv("PREFIX_ORDER_NOW"), helpers.RandomString(6))
-	case "coming soon":
-		idTransaction = fmt.Sprintf("%s-%s", os.Getenv("PREFIX_ORDER_COMING_SOON"), helpers.RandomString(6))
-	case "repeat":
-		idTransaction = fmt.Sprintf("%s-%s", os.Getenv("PREFIX_ORDER_REPEAT"), helpers.RandomString(6))
 	}
 
 	// Calculate order_time_create
@@ -381,27 +361,95 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 		orderTimeCreate = t.UTC()
 	}
 
-	// Calculate ewallet payment timeout warning date
 	timeoutMinutesStr := os.Getenv("TIMEOUT_COMING_SOON_VA_PAYMENT")
 	timeoutMinutes, _ := strconv.Atoi(timeoutMinutesStr)
 	if timeoutMinutes == 0 {
 		timeoutMinutes = 30
 	}
-	ewalletExpireAt := time.Now().UTC().Add(time.Duration(timeoutMinutes) * time.Minute)
+
+	// Format order timestamp
+	parts := strings.Split(createdAtString, " ")
+	orderTimestampNow := createdAtString
+	if len(parts) == 2 {
+		dateParts := strings.Split(parts[0], "-")
+		timeParts := strings.Split(parts[1], ":")
+		if len(dateParts) == 3 && len(timeParts) >= 2 {
+			mStr := dateParts[1]
+			if strings.HasPrefix(mStr, "0") && len(mStr) > 1 {
+				mStr = mStr[1:]
+			}
+			monthName := helpers.ConvertNumberToMonthString(mStr)
+			orderTimestampNow = fmt.Sprintf("%s %s %s %s:%s", dateParts[2], monthName, dateParts[0], timeParts[0], timeParts[1])
+		}
+	}
+
+	orderTimestamp := dto.OrderTimestamp
+	if dto.OrderType != "coming soon" {
+		orderTimestamp = orderTimestampNow
+	}
+
+	// Generate id_transaction
+	var idTransaction string
+	switch dto.OrderType {
+	case "now":
+		idTransaction = fmt.Sprintf("%s-%s", os.Getenv("PREFIX_ORDER_NOW"), helpers.RandomString(6))
+	case "coming soon":
+		idTransaction = fmt.Sprintf("%s-%s", os.Getenv("PREFIX_ORDER_COMING_SOON"), helpers.RandomString(6))
+	case "repeat":
+		idTransaction = fmt.Sprintf("%s-%s", os.Getenv("PREFIX_ORDER_REPEAT"), helpers.RandomString(6))
+	}
+
+	orderID := uuid.New().String()
 
 	// Call Xendit ewallet API
 	paymentClient := helpers.NewClient()
-	referenceID := fmt.Sprintf("ORDER_ID_%s#%s", idTransaction, customerID)
-	ewalletPayload := map[string]interface{}{
-		"reference_id":         referenceID,
-		"currency":             "IDR",
-		"amount":               grossAmount,
-		"channel_code":         "ID_DANA",
-		"success_redirect_url": os.Getenv("EWALLET_SUCCESS_REDIRECT_URL"),
-		"metadata": map[string]string{
-			"order_id":    idTransaction,
-			"customer_id": customerID,
-		},
+	ewalletPayload := make(map[string]interface{})
+
+	if subPayment.TitlePayment == "ID_DANA" {
+		referenceID := fmt.Sprintf("ORDER_ID_%s#%s", orderID, customerID)
+		successURL := os.Getenv("EWALLET_SUCCESS_REDIRECT_URL")
+		if successURL == "" {
+			successURL = fmt.Sprintf("https://development.suberes.com/api/orders/order_payment_status/%s", idTransaction)
+		} else {
+			if strings.Contains(successURL, "%s") {
+				successURL = fmt.Sprintf(successURL, idTransaction)
+			} else {
+				if !strings.HasSuffix(successURL, "/") {
+					successURL += "/"
+				}
+				successURL += idTransaction
+			}
+		}
+
+		ewalletPayload = map[string]interface{}{
+			"reference_id":    referenceID,
+			"currency":        "IDR",
+			"amount":          grossAmount,
+			"checkout_method": "ONE_TIME_PAYMENT",
+			"channel_code":    "ID_DANA",
+			"channel_properties": map[string]interface{}{
+				"success_redirect_url": successURL,
+			},
+			"metadata": map[string]interface{}{
+				"branch_area": "PLUIT",
+				"branch_city": "JAKARTA",
+			},
+		}
+	} else {
+		referenceID := fmt.Sprintf("ORDER_ID_%s#%s", orderID, customerID)
+		ewalletPayload = map[string]interface{}{
+			"reference_id": referenceID,
+			"currency":     "IDR",
+			"amount":       grossAmount,
+			"channel_code": subPayment.TitlePayment,
+			"channel_properties": map[string]interface{}{
+				"success_redirect_url": os.Getenv("EWALLET_SUCCESS_REDIRECT_URL"),
+			},
+			"metadata": map[string]interface{}{
+				"order_id":    idTransaction,
+				"customer_id": customerID,
+			},
+		}
 	}
 
 	ewalletRespBytes, err := paymentClient.CreateEwalletChargeXendit(context.Background(), ewalletPayload)
@@ -420,7 +468,9 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 			paymentIDPay = id
 		}
 		if actions, ok := ewalletResp["actions"].(map[string]interface{}); ok {
-			if mobile, ok := actions["mobile_deeplink_checkout_url"].(string); ok {
+			if mobile, ok := actions["mobile_web_checkout_url"].(string); ok {
+				mobileEwallet = mobile
+			} else if mobile, ok := actions["mobile_deeplink_checkout_url"].(string); ok {
 				mobileEwallet = mobile
 			}
 			if web, ok := actions["desktop_web_checkout_url"].(string); ok {
@@ -442,6 +492,7 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 	randomNotificationID := int(n.Int64()) + 1000
 
 	orderData := &models.OrderTransaction{
+		ID:                               orderID,
 		CustomerID:                       customerID,
 		ServiceID:                        dto.ServiceID,
 		SubServiceID:                     dto.SubServiceID,
@@ -449,7 +500,7 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 		OrderType:                        dto.OrderType,
 		MitraGender:                      strings.ToLower(dto.MitraGender),
 		OrderTime:                        orderTimeCreate,
-		OrderTimestamp:                   dto.OrderTimestamp,
+		OrderTimestamp:                   orderTimestamp,
 		Address:                          dto.Address,
 		OrderNote:                        dto.OrderNote,
 		PaymentID:                        subPayment.PaymentID,
@@ -508,41 +559,6 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 		s.SubServiceAddedRepo.CreateBulk(tx, subAddPayload)
 	}
 
-	// Create repeat records
-	if dto.OrderType == "repeat" && len(dto.OrderRepeatList) > 0 {
-		var payloadRepeat []map[string]interface{}
-		for _, elem := range dto.OrderRepeatList {
-			parts := strings.Split(elem.OrderTime, " ")
-			if len(parts) == 2 {
-				grossRepeat := subService.SubPriceService + dto.GrossAddAdditional
-				grossCompanyRepeat := (float64(grossRepeat) * subService.CompanyPercentage) / 100
-				grossMitraRepeat := float64(grossRepeat) - grossCompanyRepeat
-				payloadRepeat = append(payloadRepeat, map[string]interface{}{
-					"order_id":             order.ID,
-					"customer_id":          customerID,
-					"service_id":           dto.ServiceID,
-					"sub_service_id":       dto.SubServiceID,
-					"customer_name":        customerData.CompleteName,
-					"address":              dto.Address,
-					"order_time":           elem.OrderTime,
-					"order_timestamp":      elem.OrderTimestamp,
-					"payment_id":           subPayment.PaymentID,
-					"sub_payment_id":       dto.SubPaymentID,
-					"order_status":         "WAITING_PAYMENT",
-					"id_transaction":       fmt.Sprintf("%s-%s", os.Getenv("PREFIX_ORDER_REPEAT"), helpers.RandomString(4)),
-					"gross_amount":         grossRepeat,
-					"gross_amount_company": grossCompanyRepeat,
-					"gross_amount_mitra":   grossMitraRepeat,
-					"customer_latitude":    dto.CustomerLatitude,
-					"customer_longitude":   dto.CustomerLongitude,
-				})
-			}
-		}
-		if len(payloadRepeat) > 0 {
-			tx.Model(&models.OrderTransactionRepeat{}).Create(&payloadRepeat)
-		}
-	}
-
 	if err := tx.Commit().Error; err != nil {
 		return "", 0, "", "", http.StatusInternalServerError, err
 	}
@@ -550,7 +566,7 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 	// Enqueue ewallet notify expired task
 	notifyPayload, _ := queue.NewOrderEwalletNotifyExpiredTask(order.ID, customerID)
 	notifyTask := asynq.NewTask(queue.TypeOrderEwalletNotifyExpired, notifyPayload)
-	queue.AsynqClient.Enqueue(notifyTask, asynq.ProcessIn(ewalletExpireAt.Sub(time.Now())))
+	queue.AsynqClient.Enqueue(notifyTask, asynq.ProcessIn(time.Duration(timeoutMinutes)*time.Minute))
 
 	return order.ID, -1, order.CustomerID, helpers.DerefStr(order.MitraID), http.StatusOK, nil
 }

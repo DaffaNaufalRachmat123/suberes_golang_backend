@@ -355,9 +355,41 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 }
 
 func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[string]interface{}, error) {
+	// Local helpers for safe type conversion from map[string]interface{} DB scan results.
+	asString := func(v interface{}) string {
+		switch s := v.(type) {
+		case string:
+			return s
+		case []byte:
+			return string(s)
+		case nil:
+			return ""
+		default:
+			return fmt.Sprintf("%v", s)
+		}
+	}
+	asInt := func(v interface{}) int {
+		switch n := v.(type) {
+		case int:
+			return n
+		case int64:
+			return int(n)
+		case float64:
+			return int(n)
+		case uint64:
+			return int(n)
+		default:
+			return 0
+		}
+	}
+
+	// 1. Find the order filtered by order_id, customer_id, and allowed statuses.
 	orderData, err := s.OrderTransactionRepo.FindDynamicOrderTransactionMap(
 		nil,
-		nil,
+		map[string]interface{}{
+			"id":          data.OrderID,
+			"customer_id": data.CustomerID,
+		},
 		"order_status IN ?",
 		[]interface{}{
 			[]string{"FINDING_MITRA", "WAITING_FOR_SELECTED_MITRA"},
@@ -368,9 +400,11 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		return 500, nil, err
 	}
 	if orderData == nil {
-		fmt.Printf("[AcceptOrder] ERROR orderData nil, err: %v\n", err)
-		return 404, nil, err
+		fmt.Printf("[AcceptOrder] ERROR orderData nil\n")
+		return 409, nil, errors.New("order not found")
 	}
+
+	// 2. Extract payment_id with safe type assertion.
 	var paymentID int
 	switch v := orderData["payment_id"].(type) {
 	case int:
@@ -379,7 +413,6 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		paymentID = int(v)
 	case float64:
 		paymentID = int(v)
-	default:
 	}
 	payment, err := s.PaymentRepo.FindById(paymentID)
 	if err != nil {
@@ -388,17 +421,18 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	}
 	if payment == nil {
 		fmt.Printf("[AcceptOrder] ERROR payment nil\n")
-		return 404, nil, err
+		return 404, nil, errors.New("payment not found")
 	}
 
+	// 3. Extract customer_id and fetch customer data.
 	var customerID string
-
 	switch v := orderData["customer_id"].(type) {
 	case string:
 		customerID = v
 	case []byte:
 		customerID = string(v)
 	default:
+		fmt.Printf("[AcceptOrder] ERROR customer_id tipe tidak dikenali\n")
 		return 500, nil, fmt.Errorf("customer_id tipe tidak dikenali")
 	}
 
@@ -409,8 +443,9 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	}
 	if customer == nil {
 		fmt.Printf("[AcceptOrder] ERROR customer nil\n")
-		return 404, nil, err
+		return 404, nil, errors.New("customer not found")
 	}
+
 	mitra, err := s.UserRepo.FindMitraById(data.MitraID)
 	if err != nil {
 		fmt.Printf("[AcceptOrder] ERROR FindMitraById: %v\n", err)
@@ -418,15 +453,17 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	}
 	if mitra == nil {
 		fmt.Printf("[AcceptOrder] ERROR mitra nil\n")
-		return 404, nil, err
+		return 404, nil, errors.New("mitra not found")
 	}
+
+	// 4. Check Redis for booking state.
 	playerMitraIDs, err := helpers.GetValue(data.TempID)
 	if err != nil && err != redis.Nil {
 		fmt.Printf("[AcceptOrder] ERROR GetValue TempID: %v\n", err)
 		return 500, nil, err
 	}
 
-	bookedOrderSign, err := helpers.GetValue(fmt.Sprintf("BOOKED_ORDER_%s", orderData["id"]))
+	bookedOrderSign, err := helpers.GetValue(fmt.Sprintf("BOOKED_ORDER_%s", data.OrderID))
 	if err != nil && err != redis.Nil {
 		fmt.Printf("[AcceptOrder] ERROR GetValue BOOKED_ORDER: %v\n", err)
 		return 500, nil, err
@@ -435,33 +472,33 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	log.Printf("PLAYER MITRA IDS : %s", playerMitraIDs)
 
 	if bookedOrderSign != "" {
+		fmt.Printf("[AcceptOrder] order was taken by another mitra\n")
 		return 409, nil, errors.New("this order was taken by another mitra")
 	}
 
-	err = helpers.SetValue(
-		fmt.Sprintf("BOOKED_ORDER_%s", orderData["id"]),
+	// Lock the order for this mitra before doing any DB writes.
+	if err = helpers.SetValue(
+		fmt.Sprintf("BOOKED_ORDER_%s", data.OrderID),
 		fmt.Sprintf("BOOKED_FOR_MITRA_%s", mitra.CompleteName),
-	)
-	if err != nil {
+	); err != nil {
 		fmt.Printf("[AcceptOrder] ERROR SetValue BOOKED_ORDER: %v\n", err)
 		return 500, nil, err
 	}
 
 	tx := s.DB.Begin()
-
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
 		}
 	}()
 
+	// 5. Notify other mitras in the broadcast group that they lost the order.
 	var playerMitraIDArray []string
 	if playerMitraIDs != "" {
 		playerMitraIDArray = strings.Split(playerMitraIDs, ",")
 	}
 
 	if len(playerMitraIDArray) >= 1 {
-
 		var filteredIDs []string
 		for _, id := range playerMitraIDArray {
 			if id != mitra.ID {
@@ -470,44 +507,45 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		}
 
 		var firebaseTokenArray []string
-
 		if len(filteredIDs) > 0 {
 			var users []models.User
 			if err := tx.Select("firebase_token").Where("id IN ?", filteredIDs).
 				Find(&users).Error; err != nil {
+				tx.Rollback()
+				fmt.Printf("[AcceptOrder] ERROR Find users for LOST_BROADCAST: %v\n", err)
 				return 500, nil, err
 			}
-
 			for _, u := range users {
-				if u.FirebaseToken != nil {
+				if u.FirebaseToken != nil && *u.FirebaseToken != "" && *u.FirebaseToken != "null" {
 					firebaseTokenArray = append(firebaseTokenArray, *u.FirebaseToken)
 				}
 			}
 		}
 
 		if len(firebaseTokenArray) > 0 {
-
 			payloadMessage := map[string]interface{}{
 				"data": map[string]string{
 					"notification_type": "LOST_BROADCAST",
 					"title":             "Yah...kamu kehilangan order",
 					"message":           fmt.Sprintf("Tawaran order dari customer %s telah diambil mitra lain", customer.CompleteName),
-					"order_id":          fmt.Sprintf("%v", orderData["id"]),
+					"order_id":          data.OrderID,
 					"notification_id":   fmt.Sprintf("%v", orderData["notification_id"]),
-					"customer_id":       fmt.Sprintf("%v", data.CustomerID),
+					"customer_id":       data.CustomerID,
 					"notif_type":        "order",
 				},
 				"tokens": firebaseTokenArray,
 			}
-
-			_, err = service.SendMulticast(s.DB, "mitra", payloadMessage)
-			if err != nil {
-				log.Println("error:", err)
+			if _, err = service.SendMulticast(s.DB, "mitra", payloadMessage); err != nil {
+				log.Printf("[AcceptOrder] WARNING SendMulticast LOST_BROADCAST: %v", err)
 			}
 		}
 	}
+
+	// 6. Generate RSA and Diffie-Hellman keys.
 	publicKey, privateKey, err := helpers.GenerateRsaKey()
 	if err != nil {
+		tx.Rollback()
+		fmt.Printf("[AcceptOrder] ERROR GenerateRsaKey: %v\n", err)
 		return 500, nil, err
 	}
 	publicKeyMitra := helpers.GeneratePublicKey(customer.SharedPrime, customer.SharedBase, customer.SharedSecret)
@@ -515,16 +553,19 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	mitraSecret := helpers.GenerateSharedSecret(publicKeyCustomer, customer.SharedSecret, customer.SharedPrime)
 	customerSecret := helpers.GenerateSharedSecret(publicKeyMitra, mitra.SharedSecret, customer.SharedPrime)
 
-	expiredJobId := orderData["offer_expired_job_id"].(string)
-	offerSelectedJobId := orderData["offer_selected_job_id"].(string)
+	// 7. Safely extract async job IDs for later cleanup.
+	expiredJobId := asString(orderData["offer_expired_job_id"])
+	offerSelectedJobId := asString(orderData["offer_selected_job_id"])
+	orderType := asString(orderData["order_type"])
 
 	var orderStatus string
-	if orderData["order_type"] == "now" {
+	if orderType == "now" {
 		orderStatus = "OTW"
 	} else {
 		orderStatus = "WAIT_SCHEDULE"
 	}
 
+	// 8. Update the order transaction with mitra details, keys, and new status.
 	payloadOrderUpdate := map[string]interface{}{
 		"mitra_id":              data.MitraID,
 		"private_key_rsa":       privateKey,
@@ -538,84 +579,130 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		"offer_selected_job_id": nil,
 		"order_status":          orderStatus,
 	}
-	fmt.Println(payloadOrderUpdate)
-	if orderData["order_type"] == "now" {
+	if orderType == "now" {
 		payloadOrderUpdate["shared_prime"] = customer.SharedPrime
 	}
-	fmt.Printf("mitra id : %s\npublic key mitra : %s\npublic key customer : %s\nmitra secret : %s\ncustomer secret : %s\norder status : %s", data.MitraID, publicKeyMitra, publicKeyCustomer, mitraSecret, customerSecret, orderStatus)
 	where := map[string]interface{}{
 		"AND": map[string]interface{}{
 			"id": data.OrderID,
 			"order_status": []string{
 				"FINDING_MITRA",
+				"WAITING_FOR_SELECTED_MITRA",
 			},
 		},
 	}
 	if err := s.OrderTransactionRepo.UpdateWithConditions(tx, where, payloadOrderUpdate); err != nil {
-		fmt.Printf("[AcceptOrder] ERROR UpdateWithConditions: %v | WHERE: %+v | UPDATE: %+v\n", err, where, payloadOrderUpdate)
 		tx.Rollback()
+		fmt.Printf("[AcceptOrder] ERROR UpdateWithConditions: %v\n", err)
 		return 500, nil, err
 	}
-	if orderData["order_type"] == "now" {
-		if _, err := s.UserRepo.UpdateUserData(tx, map[string]interface{}{
-			"id":        data.MitraID,
-			"user_type": "mitra",
-		}, map[string]interface{}{
-			"is_busy":                "yes",
-			"user_status":            "on progress",
-			"order_id_running":       orderData["id"],
-			"customer_id_running":    orderData["customer_id"],
-			"service_id_running":     orderData["service_id"],
-			"sub_service_id_running": orderData["sub_service_id_running"],
-		}); err != nil {
-			fmt.Printf("[AcceptOrder] ERROR UpdateUserData Mitra: %v\n", err)
+
+	// 9. Handle order-type-specific updates.
+	if orderType == "repeat" {
+		// Move all FINDING_MITRA repeat sub-orders to WAIT_SCHEDULE.
+		if err := tx.Model(&models.OrderTransactionRepeat{}).
+			Where("order_id = ? AND order_status = ?", data.OrderID, "FINDING_MITRA").
+			Update("order_status", "WAIT_SCHEDULE").Error; err != nil {
 			tx.Rollback()
+			fmt.Printf("[AcceptOrder] ERROR update OrderTransactionRepeat: %v\n", err)
 			return 500, nil, err
 		}
 	}
-	err = s.OrderOfferRepo.DeleteByWhere(tx, map[string]interface{}{
+
+	if orderType == "now" {
+		// Mark mitra as busy and running this order.
+		if _, err := s.UserRepo.UpdateUserData(tx,
+			map[string]interface{}{
+				"id":        data.MitraID,
+				"user_type": "mitra",
+			},
+			map[string]interface{}{
+				"is_busy":                "yes",
+				"user_status":            "on progress",
+				"order_id_running":       data.OrderID,
+				"customer_id_running":    customerID,
+				"service_id_running":     orderData["service_id"],
+				"sub_service_id_running": orderData["sub_service_id"],
+			},
+		); err != nil {
+			tx.Rollback()
+			fmt.Printf("[AcceptOrder] ERROR UpdateUserData Mitra: %v\n", err)
+			return 500, nil, err
+		}
+	}
+
+	// 10. Remove all competing offers for this order.
+	if err := s.OrderOfferRepo.DeleteByWhere(tx, map[string]interface{}{
 		"order_id": data.OrderID,
-	})
-	if err != nil {
+	}); err != nil {
+		tx.Rollback()
 		fmt.Printf("[AcceptOrder] ERROR DeleteByWhere OrderOffer: %v\n", err)
 		return 500, nil, err
 	}
+
+	// 11. Create the order chat room between customer and mitra.
 	payloadCreateChat := models.OrderChat{
-		ID:           string(uuid.NewString()),
+		ID:           uuid.NewString(),
 		OrderID:      data.OrderID,
-		CustomerID:   orderData["customer_id"].(string),
+		CustomerID:   customerID,
 		MitraID:      mitra.ID,
-		ServiceID:    orderData["service_id"].(int),
-		SubServiceID: orderData["sub_service_id"].(int),
+		ServiceID:    asInt(orderData["service_id"]),
+		SubServiceID: asInt(orderData["sub_service_id"]),
 	}
-	err = s.OrderChatRepo.Create(tx, payloadCreateChat)
-	if err != nil {
+	if err := s.OrderChatRepo.Create(tx, payloadCreateChat); err != nil {
+		tx.Rollback()
 		fmt.Printf("[AcceptOrder] ERROR Create OrderChat: %v\n", err)
 		return 500, nil, err
 	}
+
 	if err := tx.Commit().Error; err != nil {
 		fmt.Printf("[AcceptOrder] ERROR Commit: %v\n", err)
 		return 500, nil, err
 	}
+
+	// 12. Schedule coming-soon run and warning tasks via asynq.
+	if orderType == "coming soon" {
+		var orderTime time.Time
+		switch v := orderData["order_time"].(type) {
+		case time.Time:
+			orderTime = v
+		case []byte:
+			orderTime, _ = time.Parse("2006-01-02 15:04:05", string(v))
+		case string:
+			orderTime, _ = time.Parse("2006-01-02 15:04:05", v)
+		}
+		if !orderTime.IsZero() {
+			runPayload, _ := queue.NewOrderComingSoonRunTask(data.OrderID)
+			runTask := asynq.NewTask(queue.TypeOrderComingSoonRun, runPayload)
+			if _, err := queue.AsynqClient.Enqueue(runTask, asynq.ProcessAt(orderTime)); err != nil {
+				log.Printf("[AcceptOrder] WARNING enqueue ComingSoonRun: %v", err)
+			}
+			warningPayload, _ := queue.NewOrderComingSoonWarningTask(data.OrderID)
+			warningTask := asynq.NewTask(queue.TypeOrderComingSoonWarning, warningPayload)
+			if _, err := queue.AsynqClient.Enqueue(warningTask, asynq.ProcessAt(orderTime.Add(3*time.Minute))); err != nil {
+				log.Printf("[AcceptOrder] WARNING enqueue ComingSoonWarning: %v", err)
+			}
+		}
+	}
+
+	// 13. Remove the offer-expired and offer-selected queue jobs.
 	if expiredJobId != "" {
-		err = queue.Inspector.DeleteTask(queue.TypeOrderOfferExpired, expiredJobId)
-		if err != nil {
-			fmt.Printf("[AcceptOrder] ERROR DeleteTask OfferExpired: %v\n", err)
-			return 500, nil, err
+		if err := queue.Inspector.DeleteTask(queue.TypeOrderOfferExpired, expiredJobId); err != nil {
+			log.Printf("[AcceptOrder] WARNING DeleteTask OfferExpired: %v", err)
 		}
 	}
 	if offerSelectedJobId != "" {
-		err = queue.Inspector.DeleteTask(queue.TypeOrderSelectedExpired, offerSelectedJobId)
-		if err != nil {
-			fmt.Printf("[AcceptOrder] ERROR DeleteTask OfferSelectedExpired: %v\n", err)
-			return 500, nil, err
+		if err := queue.Inspector.DeleteTask(queue.TypeOrderSelectedExpired, offerSelectedJobId); err != nil {
+			log.Printf("[AcceptOrder] WARNING DeleteTask OfferSelectedExpired: %v", err)
 		}
 	}
-	if customer.FirebaseToken != nil {
+
+	// 14. Notify customer that a mitra has been found.
+	if customer.FirebaseToken != nil && *customer.FirebaseToken != "" {
 		payloadCustomer := map[string]interface{}{
 			"data": map[string]interface{}{
 				"notification_type": "GOT_ORDER",
-				"title":             "Kamu dapet mitra",
+				"title":             "Kamu dapat mitra",
 				"message":           "Halo, kamu sudah dapat mitra untuk order mu",
 				"order_id":          data.OrderID,
 				"mitra_id":          data.MitraID,
@@ -624,52 +711,40 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 			},
 			"tokens": []string{*customer.FirebaseToken},
 		}
-		_, err = service.SendMulticast(s.DB, "customer", payloadCustomer)
-		if err != nil {
-			fmt.Printf("[AcceptOrder] ERROR SendMulticast Customer: %v\n", err)
+		if _, err = service.SendMulticast(s.DB, "customer", payloadCustomer); err != nil {
+			log.Printf("[AcceptOrder] WARNING SendMulticast Customer: %v", err)
 		}
-	}
-	err = helpers.DeleteValue(data.TempID)
-	if err != nil {
-		fmt.Printf("[AcceptOrder] ERROR DeleteValue TempID: %v\n", err)
-		return 500, nil, err
-	}
-	err = helpers.DeleteValue(fmt.Sprintf("SELECT_MITRA_%s", orderData["id"]))
-	if err != nil {
-		fmt.Printf("[AcceptOrder] ERROR DeleteValue SELECT_MITRA: %v\n", err)
-		return 500, nil, err
-	}
-	onlineAdminList, err := s.UserRepo.FindOnlineAdmins()
-	if err != nil {
-		fmt.Printf("[AcceptOrder] ERROR FindOnlineAdmins: %v\n", err)
-		return 500, nil, err
-	}
-	runningCount, err := s.OrderTransactionRepo.CountRunningOrders()
-	if err != nil {
-		fmt.Printf("[AcceptOrder] ERROR CountRunningOrders: %v\n", err)
-		return 500, nil, err
 	}
 
-	waitingCount, err := s.OrderTransactionRepo.CountWaitingOrders()
+	// 15. Clean up Redis broadcast keys.
+	if err := helpers.DeleteValue(data.TempID); err != nil {
+		log.Printf("[AcceptOrder] WARNING DeleteValue TempID: %v", err)
+	}
+	if err := helpers.DeleteValue(fmt.Sprintf("SELECT_MITRA_%s", data.OrderID)); err != nil {
+		log.Printf("[AcceptOrder] WARNING DeleteValue SELECT_MITRA: %v", err)
+	}
+
+	// 16. Broadcast live order counts to all online admin sockets.
+	onlineAdminList, err := s.UserRepo.FindOnlineAdmins()
 	if err != nil {
-		fmt.Printf("[AcceptOrder] ERROR CountWaitingOrders: %v\n", err)
-		return 500, nil, err
+		log.Printf("[AcceptOrder] WARNING FindOnlineAdmins: %v", err)
 	}
-	if len(onlineAdminList) > 0 {
-		for _, socketID := range onlineAdminList {
-			realtime.Server.BroadcastToRoom(
-				"/",
-				socketID,
-				constants.MESSAGE_SOCKET_ADMIN,
-				map[string]interface{}{
-					"notification_type":   constants.NOTIFICATION_ORDER_RUNNING,
-					"order_id":            orderData["id"],
-					"order_running_count": runningCount,
-					"order_waiting_count": waitingCount,
-				},
-			)
-		}
+	runningCount, _ := s.OrderTransactionRepo.CountRunningOrders()
+	waitingCount, _ := s.OrderTransactionRepo.CountWaitingOrders()
+	for _, socketID := range onlineAdminList {
+		realtime.Server.BroadcastToRoom(
+			"/",
+			socketID,
+			constants.MESSAGE_SOCKET_ADMIN,
+			map[string]interface{}{
+				"notification_type":   constants.NOTIFICATION_ORDER_RUNNING,
+				"order_id":            data.OrderID,
+				"order_running_count": runningCount,
+				"order_waiting_count": waitingCount,
+			},
+		)
 	}
+
 	payloadResponse := map[string]interface{}{
 		"order_id":       data.OrderID,
 		"sub_id":         data.SubID,
@@ -678,10 +753,10 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		"mitra_id":       data.MitraID,
 		"order_type":     data.OrderType,
 		"payment_type":   payment.Type,
-		"server_message": "Sucessfully took the order",
+		"server_message": "successfully took the order",
 		"status":         "success",
 	}
-	if orderData["order_type"] == "now" {
+	if orderType == "now" {
 		payloadResponse["shared_prime"] = customer.SharedPrime
 	}
 	return 200, payloadResponse, nil

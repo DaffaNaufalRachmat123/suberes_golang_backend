@@ -654,3 +654,38 @@ func (c *MitraController) GetPendapatan(ctx *gin.Context) {
 	}
 	helpers.APIResponse(ctx, "success", http.StatusOK, result)
 }
+
+// PhoneChange handles PUT /api/mitra/phone_change/:mitra_id/:phone_number
+func (c *MitraController) PhoneChange(ctx *gin.Context) {
+	mitraID := ctx.Param("mitra_id")
+	phoneNumber := ctx.Param("phone_number")
+
+	otpTimeout, err := c.MitraService.PhoneChange(mitraID, phoneNumber)
+	if err != nil {
+		if err.Error() == "mitra data not found" {
+			ctx.JSON(http.StatusNotFound, gin.H{
+				"server_message": "mitra data not found",
+				"status":         "failure",
+			})
+			return
+		}
+		if err.Error() == "phone number already used" {
+			ctx.JSON(http.StatusConflict, gin.H{
+				"server_message": "phone number already used",
+				"status":         "failure",
+			})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"server_message": err.Error(),
+			"status":         "failure",
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "otp number sent",
+		"otp_timeout":    otpTimeout,
+		"status":         "success",
+	})
+}

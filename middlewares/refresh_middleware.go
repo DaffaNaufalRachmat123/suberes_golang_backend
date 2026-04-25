@@ -40,11 +40,6 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 		if secretKey == "" {
 			secretKey = "SuberesIndustries"
 		}
-
-		fmt.Println("RAW HEADER:", authHeader)
-		fmt.Println("TOKEN STRING:", tokenString)
-		fmt.Println("DOT COUNT:", strings.Count(tokenString, "."))
-
 		// ✅ parse tanpa validasi expiry
 		parser := jwt.NewParser(jwt.WithoutClaimsValidation())
 		token, err := parser.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {

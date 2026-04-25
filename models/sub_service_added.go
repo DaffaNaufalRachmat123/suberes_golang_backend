@@ -8,9 +8,10 @@ type SubServiceAdded struct {
 	BaseAmount      int    `gorm:"type:integer;default:0" json:"base_amount"`
 	Amount          int    `gorm:"type:integer;default:0" json:"amount"`
 	AdditionalType  string `gorm:"type:varchar(20);check:additional_type IN ('choice','cashback','discount','free')" json:"additional_type"`
+	CustomerID      string `gorm:"type:varchar(36)" json:"customer_id"`
 
 	// Associations
-	OrderTransaction      *OrderTransaction      `gorm:"foreignKey:OrderID;references:ID" json:"order_transaction,omitempty"`
+	OrderTransaction     *OrderTransaction     `gorm:"foreignKey:OrderID;references:ID" json:"order_transaction,omitempty"`
 	SubServiceAdditional *SubServiceAdditional `gorm:"foreignKey:SubServiceAddID;references:ID" json:"sub_service_additional,omitempty"`
 }
 

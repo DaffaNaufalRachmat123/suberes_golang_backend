@@ -241,14 +241,14 @@ func (s *DisbursementService) CreateMitraTopup(mitraID string, req *dtos.TopupRe
 		ID:                     uuid.New().String(),
 		MitraID:                mitra.ID,
 		BankName:               req.BankName,
-		BankID:                 req.BankID,
+		BankID:                 &req.BankID,
 		BankCode:               req.BankCode,
 		IdempotencyKey:         idempotencyKey,
 		UserType:               "mitra",
 		TransactionName:        "Top Up Customer",
 		TransactionAmount:      req.Amount,
 		TransactionFee:         req.TopupFee,
-		LastAmount:             int(mitra.AccountBalance),
+		LastAmount:             mitra.AccountBalance,
 		TransactionType:        "transaction_in",
 		TransactionTypeFor:     "Top Up Customer",
 		TransactionFor:         "topup",
@@ -341,13 +341,13 @@ func (s *DisbursementService) CreateCustomerTopup(customerID string, req *dtos.T
 		CustomerID:             customer.ID,
 		BankName:               req.BankName,
 		BankCode:               req.BankCode,
-		BankID:                 req.BankID,
+		BankID:                 &req.BankID,
 		IdempotencyKey:         idempotencyKey,
 		UserType:               "customer",
 		TransactionName:        "Top Up Customer",
 		TransactionAmount:      totalAmount,
 		TransactionFee:         req.TopupFee,
-		LastAmount:             int(customer.AccountBalance),
+		LastAmount:             customer.AccountBalance,
 		TransactionType:        "transaction_in",
 		TransactionTypeFor:     "Top Up Customer",
 		TransactionFor:         "topup",
@@ -424,8 +424,8 @@ func (s *DisbursementService) GetMitraTransactionDetail(id, mitraID, idempotency
 	}
 
 	var bank *models.BankList
-	if trx.BankID != 0 {
-		bank, _ = s.findBankByID(trx.BankID)
+	if trx.BankID != nil && *trx.BankID != 0 {
+		bank, _ = s.findBankByID(*trx.BankID)
 	}
 
 	return &TransactionDetailResponse{
@@ -443,8 +443,8 @@ func (s *DisbursementService) GetCustomerTransactionDetail(id, customerID string
 	}
 
 	var bank *models.BankList
-	if trx.BankID != 0 {
-		bank, _ = s.findBankByID(trx.BankID)
+	if trx.BankID != nil && *trx.BankID != 0 {
+		bank, _ = s.findBankByID(*trx.BankID)
 	}
 
 	return &TransactionDetailResponse{
@@ -517,14 +517,14 @@ func (s *DisbursementService) CreateMitraDisburse(mitraID string, req *dtos.Disb
 		IdempotencyKey:         idempotencyKey,
 		UserType:               "mitra",
 		AccountOwnerName:       req.AccountHolderName,
-		BankID:                 req.BankID,
+		BankID:                 &req.BankID,
 		BankName:               bank.Name,
 		BankCode:               bank.DisbursementCode,
 		AccountNumber:          req.AccountNumber,
 		TransactionName:        "Disbursement Mitra",
 		TransactionAmount:      totalAmount,
 		TransactionFee:         int64(bank.DisbursementFee),
-		LastAmount:             int(mitra.AccountBalance) - int(totalAmount),
+		LastAmount:             mitra.AccountBalance - totalAmount,
 		TransactionType:        "transaction_out",
 		TransactionTypeFor:     "Disbursement Mitra",
 		TransactionFor:         "disbursement",
@@ -631,14 +631,14 @@ func (s *DisbursementService) CreateCustomerDisburse(customerID string, req *dto
 		IdempotencyKey:         idempotencyKey,
 		UserType:               "customer",
 		AccountOwnerName:       req.AccountHolderName,
-		BankID:                 req.BankID,
+		BankID:                 &req.BankID,
 		BankName:               bank.Name,
 		BankCode:               bank.DisbursementCode,
 		AccountNumber:          req.AccountNumber,
 		TransactionName:        "Disbursement Mitra",
 		TransactionAmount:      totalAmount,
 		TransactionFee:         int64(bank.DisbursementFee),
-		LastAmount:             int(customer.AccountBalance) - int(totalAmount),
+		LastAmount:             customer.AccountBalance - totalAmount,
 		TransactionType:        "transaction_out",
 		TransactionTypeFor:     "Disbursement Mitra",
 		TransactionFor:         "disbursement",

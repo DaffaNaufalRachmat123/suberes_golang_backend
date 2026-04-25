@@ -64,7 +64,7 @@ func (r *TransactionRepository) GetTransactionTypesByMitraIDAndDate(mitraID stri
 	var result []map[string]interface{}
 	err := r.DB.Model(&models.Transaction{}).
 		Select("transaction_for, CASE transaction_for WHEN 'order' THEN 'Order' WHEN 'cicilan' THEN 'Cicilan' WHEN 'Other' THEN 'Lainnya' ELSE '-' END as transaction_for_show").
-		Where("mitra_id = ? AND createdAt BETWEEN ? AND ?", mitraID, startDate, endDate).
+		Where("mitra_id = ? AND created_at BETWEEN ? AND ?", mitraID, startDate, endDate).
 		Group("transaction_for").
 		Find(&result).Error
 
@@ -79,7 +79,7 @@ func (r *TransactionRepository) FindAllByMitraIDWithPagination(mitraID, transact
 	var total int64
 
 	query := r.DB.Model(&models.Transaction{}).
-		Where("mitra_id = ? AND transaction_for = ? AND createdAt BETWEEN ? AND ?", mitraID, transactionFor, startDate, endDate)
+		Where("mitra_id = ? AND transaction_for = ? AND created_at BETWEEN ? AND ?", mitraID, transactionFor, startDate, endDate)
 
 	err := query.Count(&total).Error
 	if err != nil {
@@ -90,11 +90,11 @@ func (r *TransactionRepository) FindAllByMitraIDWithPagination(mitraID, transact
 	err = query.Preload("OrderTransaction.OrderTransactionRepeats").
 		Preload("Tool").
 		Preload("ToolsCredit").
-		Preload("SubToolsCredit").
+		Preload("SubToolCredit").
 		Preload("MitraTransactionData").
 		Limit(limit).
 		Offset(offset).
-		Order("createdAt DESC").
+		Order("created_at DESC").
 		Find(&transactions).Error
 	if err != nil {
 		return nil, 0, err
@@ -116,7 +116,7 @@ func (r *TransactionRepository) FindDisbursementsByMitraID(mitraID string, page,
 	}
 
 	offset := (page - 1) * limit
-	err = query.Limit(limit).Offset(offset).Order("createdAt DESC").Find(&transactions).Error
+	err = query.Limit(limit).Offset(offset).Order("created_at DESC").Find(&transactions).Error
 	if err != nil {
 		return nil, 0, err
 	}

@@ -7,28 +7,28 @@ type Transaction struct {
 	MitraID                string    `gorm:"type:varchar(36)" json:"mitra_id"`
 	CustomerID             string    `gorm:"type:varchar(36)" json:"customer_id"`
 	OrderID                string    `gorm:"type:varchar(36)" json:"order_id"`
-	SubOrderID             int       `gorm:"type:integer" json:"sub_order_id"`
+	SubOrderID             *int      `gorm:"type:integer;default:null" json:"sub_order_id"`
 	RefundID               string    `gorm:"type:varchar(255)" json:"refund_id"`
 	UserType               string    `gorm:"type:varchar(10);check:user_type IN ('customer','mitra')" json:"user_type"`
 	RefundAmount           int64     `gorm:"type:bigint" json:"refund_amount"`
 	RefundType             string    `gorm:"type:varchar(255)" json:"refund_type"`
-	ToolID                 int       `gorm:"type:integer" json:"tool_id"`
-	ToolsCreditsID         int       `gorm:"type:integer" json:"tools_credits_id"`
-	SubToolsID             int       `gorm:"type:integer" json:"sub_tools_id"`
+	ToolID                 *int      `gorm:"type:integer;default:null" json:"tool_id"`
+	ToolsCreditsID         *int      `gorm:"type:integer;default:null" json:"tools_credits_id"`
+	SubToolsID             *int      `gorm:"type:integer;default:null" json:"sub_tools_id"`
 	TopupID                string    `gorm:"type:varchar(20)" json:"topup_id"`
 	DisbursementID         string    `gorm:"type:varchar(255)" json:"disbursement_id"`
 	OrderIDTransaction     string    `gorm:"type:varchar(10)" json:"order_id_transaction"`
 	ExternalID             string    `gorm:"type:varchar(255)" json:"external_id"`
 	IdempotencyKey         string    `gorm:"type:varchar(255)" json:"idempotency_key"`
 	AccountOwnerName       string    `gorm:"type:varchar(255)" json:"account_owner_name"`
-	BankID                 int       `gorm:"type:integer" json:"bank_id"`
+	BankID                 *int      `gorm:"type:integer;default:null" json:"bank_id"`
 	BankName               string    `gorm:"type:varchar(255)" json:"bank_name"`
 	BankCode               string    `gorm:"type:varchar(255)" json:"bank_code"`
 	AccountNumber          string    `gorm:"type:varchar(255)" json:"account_number"`
 	TransactionName        string    `gorm:"type:varchar(255)" json:"transaction_name"`
 	TransactionAmount      int64     `gorm:"type:bigint" json:"transaction_amount"`
 	TransactionFee         int64     `gorm:"type:bigint" json:"transaction_fee"`
-	LastAmount             int       `gorm:"type:integer" json:"last_amount"`
+	LastAmount             int64     `gorm:"type:bigint" json:"last_amount"`
 	MobileEwalletURL       string    `gorm:"type:text" json:"mobile_ewallet_url"`
 	TimezoneCode           string    `gorm:"type:varchar(255)" json:"timezone_code"`
 	TransactionType        string    `gorm:"type:varchar(20);check:transaction_type IN ('transaction_out','transaction_in')" json:"transaction_type"`

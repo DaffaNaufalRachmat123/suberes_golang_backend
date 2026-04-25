@@ -36,6 +36,9 @@ func main() {
 
 	r.SetTrustedProxies(nil)
 
+	// Serve static files for images (banners, etc)
+	r.Static("/api/images", "./images")
+
 	r.GET("/socket.io/*any", gin.WrapH(realtime.Server))
 	r.POST("/socket.io/*any", gin.WrapH(realtime.Server))
 
@@ -139,8 +142,17 @@ func main() {
 		DB:                       config.DB,
 	}
 
+	subServiceAdditionalService := &services.SubServiceAdditionalService{
+		SubServiceAdditionalRepo: subServiceAdditionalRepo,
+		DB:                       config.DB,
+	}
+
 	subServiceController := &controllers.SubServiceController{
 		SubServiceService: subServiceService,
+	}
+
+	subServiceAdditionalController := &controllers.SubServiceAdditionalController{
+		SubServiceAdditionalService: subServiceAdditionalService,
 	}
 
 	bantuanService := &services.BantuanService{
@@ -220,6 +232,9 @@ func main() {
 		UserRepo:                    userRepo,
 		SubServiceRepo:              subServiceRepo,
 		TransactionRepo:             transactionRepo,
+		PaymentRepo:                 paymentRepo,
+		SubPaymentRepo:              subPaymentRepo,
+		ServiceRepo:                 serviceRepo,
 	}
 
 	orderTransactionController := &controllers.OrderTransactionController{
@@ -288,6 +303,7 @@ func main() {
 	routes.LayananServiceRoutes(api, LayananServiceController, config.DB)
 	routes.ServiceRoutes(api, ServiceController, config.DB)
 	routes.SubServiceRoutes(api, subServiceController, config.DB)
+	routes.SubServiceAdditionalRoutes(api, subServiceAdditionalController, config.DB)
 	routes.AdminRoutes(api, AdminController, config.DB)
 	routes.MitraRoutes(api, MitraController, config.DB)
 	routes.OrderRoutes(api, OrderController, config.DB)

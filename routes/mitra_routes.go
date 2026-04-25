@@ -154,6 +154,12 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 			Handler: controller.Saldo,
 			Roles:   []string{helpers.MitraRole},
 		},
+		{
+			Method:  "PUT",
+			Path:    "/phone_change/:mitra_id/:phone_number",
+			Handler: controller.PhoneChange,
+			Roles:   []string{helpers.MitraRole},
+		},
 	}
 	helpers.RegisterProtectedRoutes(protected, routes)
 }

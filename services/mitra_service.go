@@ -1440,3 +1440,58 @@ func (s *MitraService) GetPendapatan(mitraID, pendapatanDate string) (*Pendapata
 		OrderListData:       orderListData,
 	}, nil
 }
+
+func (s *MitraService) PhoneChange(mitraID, phoneNumber string) (string, error) {
+	mitra, err := s.MitraRepository.FindMitraByID(mitraID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", errors.New("mitra data not found")
+		}
+		return "", err
+	}
+
+	existingUser, err := s.UserRepository.FindUserByPhoneNumber(phoneNumber)
+	if err == nil && existingUser != nil {
+		return "", errors.New("phone number already used")
+	}
+
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return "", tx.Error
+	}
+
+	otpCode := fmt.Sprintf("%06d", rand.Intn(900000)+100000)
+	hashOtpCode, err := bcrypt.GenerateFromPassword([]byte(otpCode), 12)
+	if err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	err = s.UserOtpRepository.DeleteByUserId(tx, mitra.ID, map[string]interface{}{
+		"otp_type": "change_phone_number",
+	})
+	if err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	newOtp := &models.UserOTP{
+		UsersID:     mitra.ID,
+		OTPCode:     string(hashOtpCode),
+		OTPType:     "change_phone_number",
+		SessionTime: time.Now(),
+	}
+
+	if err := s.UserOtpRepository.Create(newOtp, tx); err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	log.Printf("OTP Code : %s\n", otpCode)
+
+	if err := tx.Commit().Error; err != nil {
+		return "", err
+	}
+
+	return os.Getenv("OTP_TIMEOUT"), nil
+}

@@ -43,6 +43,13 @@ func (s *BannerService) CreateBanner(ctx *gin.Context) error {
 	if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
 		return errors.New("Invalid data format")
 	}
+
+	adminRepo := &repositories.AdminRepository{DB: s.DB}
+	adminData, err := adminRepo.FindAdminByID(req.CreatorID)
+	if err != nil || adminData == nil {
+		return errors.New("admin not found")
+	}
+
 	fileHeader, err := ctx.FormFile("file")
 	if err != nil {
 		return errors.New("Banner image required")
@@ -158,7 +165,7 @@ func (s *BannerService) CreateBanner(ctx *gin.Context) error {
 		BannerType:           req.BannerType,
 		IsBroadcast:          req.IsBroadcast,
 		BannerImage:          "/banner/" + mainFilename,
-		BannerImageSize:      strconv.FormatInt(fileHeader.Size/(1024*1024), 10),
+		BannerImageSize:      strconv.FormatInt(fileHeader.Size, 10),
 		BannerImageDimension: fmt.Sprintf("%dpx and %dpx", width, height),
 	}
 	if err := s.BannerRepo.Create(tx, &banner); err != nil {
@@ -181,6 +188,13 @@ func (s *BannerService) UpdateBanner(ctx *gin.Context, id uint) error {
 	if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
 		return err
 	}
+
+	adminRepo := &repositories.AdminRepository{DB: s.DB}
+	adminData, err := adminRepo.FindAdminByID(req.CreatorID)
+	if err != nil || adminData == nil {
+		return errors.New("admin not found")
+	}
+
 	tx := s.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -233,7 +247,7 @@ func (s *BannerService) UpdateBanner(ctx *gin.Context, id uint) error {
 				}
 
 				fileUrl := fmt.Sprintf(
-					"%s/api/images/banner/%s",
+					"%s/api/images/banners/%s",
 					helpers.GetHostURL(ctx),
 					filename,
 				)
@@ -298,7 +312,7 @@ func (s *BannerService) UpdateBanner(ctx *gin.Context, id uint) error {
 		oldPath := filepath.Join(bannerPath, oldFilename)
 		_ = os.Remove(oldPath)
 
-		newSize = strconv.FormatInt(fileHeader.Size/(1024*1024), 10)
+		newSize = strconv.FormatInt(fileHeader.Size, 10)
 		newDim = fmt.Sprintf("%dpx and %dpx", width, height)
 	}
 

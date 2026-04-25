@@ -676,6 +676,46 @@ func RegisterProtectedRoutes(
 	}
 }
 
+func FormatDate(input string, format string, locale string) (string, error) {
+	// parse ISO (support nano juga)
+	t, err := time.Parse(time.RFC3339Nano, input)
+	if err != nil {
+		return "", err
+	}
+
+	// bulan Indonesia
+	monthID := map[time.Month]string{
+		time.January:   "Januari",
+		time.February:  "Februari",
+		time.March:     "Maret",
+		time.April:     "April",
+		time.May:       "Mei",
+		time.June:      "Juni",
+		time.July:      "Juli",
+		time.August:    "Agustus",
+		time.September: "September",
+		time.October:   "Oktober",
+		time.November:  "November",
+		time.December:  "Desember",
+	}
+
+	switch format {
+
+	case "DD-MM-YYYY":
+		return t.Format("02-01-2006"), nil
+
+	case "DD Month YYYY":
+		if locale == "id" {
+			return fmt.Sprintf("%d %s %d", t.Day(), monthID[t.Month()], t.Year()), nil
+		}
+		return t.Format("2 January 2006"), nil
+
+	default:
+		// custom format (Go layout)
+		return t.Format(format), nil
+	}
+}
+
 func RootPath() string {
 	wd, err := os.Getwd()
 	if err != nil {

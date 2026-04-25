@@ -1,9 +1,12 @@
 package controllers
 
 import (
+	"bytes"
+	"html/template"
 	"net/http"
 	"strconv"
 
+	"suberes_golang/constants"
 	"suberes_golang/helpers"
 	"suberes_golang/services"
 
@@ -17,12 +20,25 @@ type OrderTransactionController struct {
 // GET /orders/order_payment_status/:id_transaction
 func (c *OrderTransactionController) GetPaymentStatus(ctx *gin.Context) {
 	idTransaction := ctx.Param("id_transaction")
-	order, err := c.OrderTransactionService.GetPaymentStatus(idTransaction)
+	statusData, err := c.OrderTransactionService.GetPaymentStatus(idTransaction)
 	if err != nil {
 		helpers.APIErrorResponse(ctx, err.Error(), http.StatusNotFound)
 		return
 	}
-	helpers.APIResponse(ctx, "OK", http.StatusOK, order)
+
+	tmpl, err := template.New("order_payment_page").Parse(constants.OrderPaymentPageTemplate)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, "Failed to parse HTML template", http.StatusInternalServerError)
+		return
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, statusData); err != nil {
+		helpers.APIErrorResponse(ctx, "Failed to execute HTML template", http.StatusInternalServerError)
+		return
+	}
+
+	ctx.Data(http.StatusOK, "text/html; charset=utf-8", buf.Bytes())
 }
 
 // GET /orders/index/admin/dashboard

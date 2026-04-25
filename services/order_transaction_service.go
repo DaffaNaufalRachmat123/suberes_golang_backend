@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"suberes_golang/dtos"
 	"suberes_golang/helpers"
 	"suberes_golang/models"
 	"suberes_golang/queue"
@@ -25,9 +26,12 @@ type OrderTransactionService struct {
 	OrderTransactionRepo        *repositories.OrderTransactionRepository
 	OrderTransactionRepeatsRepo *repositories.OrderTransactionRepeatsRepository
 	OrderRepo                   *repositories.OrderRepository
-	UserRepo                    *repositories.UserRepository
+	PaymentRepo                 *repositories.PaymentRepository
+	SubPaymentRepo              *repositories.SubPaymentRepository
+	ServiceRepo                 *repositories.ServiceRepository
 	SubServiceRepo              *repositories.SubServiceRepository
 	TransactionRepo             *repositories.TransactionRepository
+	UserRepo                    *repositories.UserRepository
 }
 
 // ---------- 1. FindAllByStatusWithPagination ----------
@@ -36,8 +40,34 @@ func (s *OrderTransactionService) FindAllByStatusWithPagination(status string, p
 }
 
 // ---------- 2. GetPaymentStatus ----------
-func (s *OrderTransactionService) GetPaymentStatus(idTransaction string) (*models.OrderTransaction, error) {
-	return s.OrderTransactionRepo.FindByIDTransaction(idTransaction)
+func (s *OrderTransactionService) GetPaymentStatus(idTransaction string) (*dtos.PaymentStatusResponse, error) {
+	data, err := s.OrderTransactionRepo.FindByIDTransaction(idTransaction)
+	if err != nil {
+		return nil, err
+	}
+
+	amountFormatted := helpers.FormatRupiah(data.GrossAmount)
+	
+	statusStr := "Gagal"
+	descSuffix := "Kami akan langsung balikin uang nya ke E-Wallet yang kamu pakai untuk bayar order ini"
+	if data.IsPaidCustomer == "1" {
+		statusStr = "Berhasil"
+		descSuffix = "Kami akan langsung cariin Mitra Suberes buat kamu."
+	}
+
+	title := fmt.Sprintf("Pembayaran Order %s\nsebesar %s\n%s", data.IDTransaction, amountFormatted, statusStr)
+	description := fmt.Sprintf("Pembayaran Order dengan ID Transaksi %s sebesar %s %s. %s", data.IDTransaction, amountFormatted, statusStr, descSuffix)
+
+	supportMail := os.Getenv("SUPPORT_EMAIL")
+	officeAddress := os.Getenv("SUPPORT_OFFICE_ADDRESS")
+
+	return &dtos.PaymentStatusResponse{
+		Title:          title,
+		Description:    description,
+		IsPaidCustomer: data.IsPaidCustomer,
+		SupportMail:    supportMail,
+		OfficeAddress:  officeAddress,
+	}, nil
 }
 
 // ---------- 2. GetAdminDashboard ----------
@@ -349,15 +379,42 @@ func (s *OrderTransactionService) UpdateToOnProgressRepeat(id string, subID int,
 	return nil
 }
 
-// ---------- 20. UpdateToFinish ----------
 func (s *OrderTransactionService) UpdateToFinish(id, customerID, mitraID string) error {
 	order, err := s.OrderTransactionRepo.FindFullForFinish(id)
 	if err != nil {
 		return fmt.Errorf("order not found: %v", err)
 	}
+
 	if order.OrderStatus != "ON_PROGRESS" && order.OrderStatus != "OTW" {
 		return fmt.Errorf("order cannot be finished from status %s", order.OrderStatus)
 	}
+
+	// 🔴 VALIDASI
+	customer, err := s.UserRepo.FindCustomerById(customerID)
+	if err != nil {
+		return fmt.Errorf("customer not found")
+	}
+
+	mitra, err := s.UserRepo.FindMitraById(mitraID)
+	if err != nil {
+		return fmt.Errorf("mitra not found")
+	}
+
+	if order.ServiceID == 0 {
+		return fmt.Errorf("order missing service_id")
+	}
+
+	service, err := s.ServiceRepo.FindByID(order.ServiceID)
+	if err != nil {
+		return fmt.Errorf("service not found")
+	}
+
+	payment, err := s.PaymentRepo.FindById(order.PaymentID)
+	if err != nil {
+		return fmt.Errorf("payment not found")
+	}
+
+	subPayment, _ := s.SubPaymentRepo.FindById(order.SubPaymentID)
 
 	tx := s.DB.Begin()
 	if tx.Error != nil {
@@ -366,114 +423,343 @@ func (s *OrderTransactionService) UpdateToFinish(id, customerID, mitraID string)
 
 	now := time.Now()
 
-	if err := tx.Model(&models.OrderTransaction{}).Where("id = ?", id).
+	// =========================
+	// 🔴 UPDATE ORDER
+	// =========================
+	if err := tx.Model(&models.OrderTransaction{}).
+		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"order_status": "FINISH",
+			"shared_prime": nil,
 			"updated_at":   now,
 		}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	if err := tx.Model(&models.User{}).Where("id = ?", mitraID).
-		Updates(map[string]interface{}{
-			"user_status":  "stay",
-			"is_busy":      "no",
-			"today_order":  gorm.Expr("today_order + 1"),
-			"total_order":  gorm.Expr("total_order + 1"),
-			"today_income": gorm.Expr("today_income + ?", order.GrossAmountMitra),
-			"updated_at":   now,
-		}).Error; err != nil {
+	// =========================
+	// 🔴 UPDATE SERVICE COUNT
+	// =========================
+	if err := tx.Model(&models.Service{}).
+		Where("id = ?", service.ID).
+		Update("service_count", gorm.Expr("service_count + 1")).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	mitraTxID := uuid.New().String()
-	mitraTx := models.Transaction{
-		ID:                     mitraTxID,
+	// =========================
+	// 🔴 UPDATE MITRA BASE STATE
+	// =========================
+	mitraUpdate := map[string]interface{}{
+		"user_status":            "stay",
+		"is_busy":                "no",
+		"order_id_running":       nil,
+		"sub_order_id_running":   nil,
+		"service_id_running":     nil,
+		"sub_service_id_running": nil,
+		"total_order":            gorm.Expr("total_order + 1"),
+		"updated_at":             now,
+	}
+
+	// =========================
+	// 🔴 PAYMENT LOGIC (FINAL)
+	// =========================
+
+	currentMitraBalance := mitra.AccountBalance
+	currentCustomerBalance := customer.AccountBalance
+
+	var transactions []models.Transaction
+
+	// handle null sub payment
+	bankName := ""
+	if subPayment != nil {
+		bankName = subPayment.Title
+	}
+
+	t1 := now
+	t2 := now.Add(1 * time.Millisecond)
+	t3 := now.Add(2 * time.Millisecond)
+
+	// =========================
+	// 🔴 1. PEMBAYARAN ORDER SELESAI (LOG ONLY)
+	// =========================
+	transactions = append(transactions, models.Transaction{
+		ID:                     uuid.New().String(),
 		MitraID:                mitraID,
 		CustomerID:             customerID,
 		OrderID:                id,
+		OrderIDTransaction:     order.IDTransaction,
 		UserType:               "mitra",
-		TransactionName:        "Pendapatan Order",
-		TransactionAmount:      order.GrossAmountMitra,
+		BankName:               bankName,
+		LastAmount:             currentMitraBalance, // saldo awal
+		TransactionName:        "Pembayaran order selesai",
+		TransactionAmount:      order.GrossAmount,
 		TransactionType:        "transaction_in",
-		TransactionTypeFor:     "order_finish_mitra",
+		TransactionTypeFor:     "Uang Order",
 		TransactionFor:         "order",
 		TransactionStatus:      "success",
-		TransactionDescription: "Pendapatan dari order yang telah selesai",
+		TransactionDescription: "Pembayaran dari customer",
 		TimezoneCode:           order.TimezoneCode,
-		CreatedAt:              now,
-		UpdatedAt:              now,
+		CreatedAt:              t1,
+		UpdatedAt:              t1,
+	})
+
+	// =========================
+	// 🔴 2. PENDAPATAN MITRA (+)
+	// =========================
+	currentMitraBalance += order.GrossAmountMitra
+
+	transactions = append(transactions, models.Transaction{
+		ID:                     uuid.New().String(),
+		MitraID:                mitraID,
+		CustomerID:             customerID,
+		OrderID:                id,
+		OrderIDTransaction:     order.IDTransaction,
+		UserType:               "mitra",
+		BankName:               bankName,
+		LastAmount:             currentMitraBalance, // setelah penambahan
+		TransactionName:        "Pendapatan dari order selesai",
+		TransactionAmount:      order.GrossAmountMitra,
+		TransactionType:        "transaction_in",
+		TransactionTypeFor:     "Uang Order",
+		TransactionFor:         "order",
+		TransactionStatus:      "success",
+		TransactionDescription: "Pendapatan mitra",
+		TimezoneCode:           order.TimezoneCode,
+		CreatedAt:              t2,
+		UpdatedAt:              t2,
+	})
+
+	// =========================
+	// 🔴 3. POTONGAN (KHUSUS TUNAI)
+	// =========================
+	if payment.Type == "tunai" {
+
+		currentMitraBalance -= order.GrossAmountCompany
+
+		transactions = append(transactions, models.Transaction{
+			ID:                     uuid.New().String(),
+			MitraID:                mitraID,
+			CustomerID:             customerID,
+			OrderID:                id,
+			OrderIDTransaction:     order.IDTransaction,
+			UserType:               "mitra",
+			BankName:               bankName,
+			LastAmount:             currentMitraBalance, // setelah potongan
+			TransactionName:        "Potongan order suberes",
+			TransactionAmount:      order.GrossAmountCompany,
+			TransactionType:        "transaction_out",
+			TransactionTypeFor:     "Potongan Suberes",
+			TransactionFor:         "order",
+			TransactionStatus:      "success",
+			TransactionDescription: "Potongan karena pembayaran tunai",
+			TimezoneCode:           order.TimezoneCode,
+			CreatedAt:              t3,
+			UpdatedAt:              t3,
+		})
+
+	} else if payment.Type == "balance" {
+
+		// =========================
+		// 🔴 CUSTOMER BALANCE (NON-TUNAI)
+		// =========================
+		transactions = append(transactions, models.Transaction{
+			ID:                     uuid.New().String(),
+			MitraID:                mitraID,
+			CustomerID:             customerID,
+			OrderID:                id,
+			OrderIDTransaction:     order.IDTransaction,
+			UserType:               "customer",
+			BankName:               bankName,
+			LastAmount:             currentCustomerBalance,
+			TransactionName:        "Pembayaran order",
+			TransactionAmount:      order.GrossAmount,
+			TransactionType:        "transaction_out",
+			TransactionTypeFor:     "Uang Order",
+			TransactionFor:         "order",
+			TransactionStatus:      "success",
+			TransactionDescription: "Pembayaran order selesai",
+			TimezoneCode:           order.TimezoneCode,
+			CreatedAt:              now,
+			UpdatedAt:              now,
+		})
+
+		newCustomerBalance := currentCustomerBalance - order.GrossAmount
+
+		if err := tx.Model(&models.User{}).
+			Where("id = ?", customerID).
+			Update("account_balance", newCustomerBalance).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
 	}
-	if err := tx.Create(&mitraTx).Error; err != nil {
+
+	// =========================
+	// 🔴 UPDATE SALDO MITRA (FINAL)
+	// =========================
+	if err := tx.Model(&models.User{}).
+		Where("id = ?", mitraID).
+		Update("account_balance", currentMitraBalance).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	if order.PaymentType == "balance" {
-		if err := tx.Model(&models.User{}).Where("id = ?", customerID).
-			Update("account_balance", gorm.Expr("account_balance - ?", order.GrossAmount)).Error; err != nil {
-			tx.Rollback()
-			return err
-		}
-		customerTxID := uuid.New().String()
-		customerTx := models.Transaction{
-			ID:                     customerTxID,
-			MitraID:                mitraID,
-			CustomerID:             customerID,
-			OrderID:                id,
-			UserType:               "customer",
-			TransactionName:        "Pembayaran Order",
-			TransactionAmount:      order.GrossAmount,
-			TransactionType:        "transaction_out",
-			TransactionTypeFor:     "order_finish_customer",
-			TransactionFor:         "order",
-			TransactionStatus:      "success",
-			TransactionDescription: "Pembayaran order yang telah selesai",
-			TimezoneCode:           order.TimezoneCode,
-			CreatedAt:              now,
-			UpdatedAt:              now,
-		}
-		if err := tx.Create(&customerTx).Error; err != nil {
-			tx.Rollback()
-			return err
-		}
+	// =========================
+	// 🔴 APPLY UPDATE MITRA STATE
+	// =========================
+	if err := tx.Model(&models.User{}).
+		Where("id = ?", mitraID).
+		Updates(mitraUpdate).Error; err != nil {
+		tx.Rollback()
+		return err
 	}
 
-	// Delete the on_progress job if it exists
-	if order.OnProgressJobID != "" {
-		if err := queue.Inspector.DeleteTask("default", order.OnProgressJobID); err != nil {
-			log.Printf("could not delete on_progress_job %s: %v", order.OnProgressJobID, err)
-		}
+	// =========================
+	// 🔴 INSERT TRANSACTIONS
+	// =========================
+	if err := tx.Create(&transactions).Error; err != nil {
+		tx.Rollback()
+		return err
 	}
-
-	notifID := uuid.New().String()
-	notif := models.Notification{
-		ID:                  notifID,
-		CustomerID:          customerID,
-		MitraID:             mitraID,
-		OrderID:             id,
-		ServiceID:           order.ServiceID,
-		SubServiceID:        order.SubServiceID,
-		UserType:            "customer",
-		NotificationType:    "ORDER_FINISH",
-		NotificationTitle:   "Pesanan Selesai",
-		NotificationMessage: "Pesanan Anda telah selesai dikerjakan",
-		NotifType:           "order",
-		IsRead:              "0",
-	}
-	_ = tx.Create(&notif).Error
 
 	if err := tx.Commit().Error; err != nil {
 		return err
 	}
 
-	// TODO: FCM notify customer
-	// TODO: Socket.io emit admin
-	log.Printf("UpdateToFinish: order %s is now FINISH", id)
+	log.Printf("Order %s finished (final clean version)", id)
 	return nil
 }
+
+// ---------- 20. UpdateToFinish ----------
+// func (s *OrderTransactionService) UpdateToFinish(id, customerID, mitraID string) error {
+// 	order, err := s.OrderTransactionRepo.FindFullForFinish(id)
+// 	if err != nil {
+// 		return fmt.Errorf("order not found: %v", err)
+// 	}
+// 	if order.OrderStatus != "ON_PROGRESS" && order.OrderStatus != "OTW" {
+// 		return fmt.Errorf("order cannot be finished from status %s", order.OrderStatus)
+// 	}
+
+// 	tx := s.DB.Begin()
+// 	if tx.Error != nil {
+// 		return tx.Error
+// 	}
+
+// 	now := time.Now()
+
+// 	if err := tx.Model(&models.OrderTransaction{}).Where("id = ?", id).
+// 		Updates(map[string]interface{}{
+// 			"order_status": "FINISH",
+// 			"updated_at":   now,
+// 		}).Error; err != nil {
+// 		tx.Rollback()
+// 		return err
+// 	}
+
+// 	if err := tx.Model(&models.User{}).Where("id = ?", mitraID).
+// 		Updates(map[string]interface{}{
+// 			"user_status":  "stay",
+// 			"is_busy":      "no",
+// 			"today_order":  gorm.Expr("today_order + 1"),
+// 			"total_order":  gorm.Expr("total_order + 1"),
+// 			"today_income": gorm.Expr("today_income + ?", order.GrossAmountMitra),
+// 			"updated_at":   now,
+// 		}).Error; err != nil {
+// 		tx.Rollback()
+// 		return err
+// 	}
+
+// 	mitraTxID := uuid.New().String()
+// 	mitraTx := models.Transaction{
+// 		ID:                     mitraTxID,
+// 		MitraID:                mitraID,
+// 		CustomerID:             customerID,
+// 		OrderID:                id,
+// 		OrderIDTransaction: order.IDTransaction,
+// 		BankName: "",
+// 		LastAmount: 0,
+// 		UserType:               "mitra",
+// 		TransactionName:        "Pendapatan Order",
+// 		TransactionAmount:      order.GrossAmountMitra,
+// 		TransactionType:        "transaction_in",
+// 		TransactionTypeFor:     "Uang Order",
+// 		TransactionFor:         "order",
+// 		TransactionStatus:      "success",
+// 		TransactionDescription: "Pendapatan dari order yang telah selesai",
+// 		TimezoneCode:           order.TimezoneCode,
+// 		CreatedAt:              now,
+// 		UpdatedAt:              now,
+// 	}
+// 	if err := tx.Create(&mitraTx).Error; err != nil {
+// 		tx.Rollback()
+// 		return err
+// 	}
+
+// 	if order.PaymentType == "balance" {
+// 		if err := tx.Model(&models.User{}).Where("id = ?", customerID).
+// 			Update("account_balance", gorm.Expr("account_balance - ?", order.GrossAmount)).Error; err != nil {
+// 			tx.Rollback()
+// 			return err
+// 		}
+// 		customerTxID := uuid.New().String()
+// 		customerTx := models.Transaction{
+// 			ID:                     customerTxID,
+// 			MitraID:                mitraID,
+// 			CustomerID:             customerID,
+// 			OrderID:                id,
+// 			UserType:               "customer",
+// 			BankName: "",
+// 			LastAmount: 0,
+// 			TransactionName:        "Pembayaran Order",
+// 			TransactionAmount:      order.GrossAmount,
+// 			TransactionType:        "transaction_out",
+// 			TransactionTypeFor:     "Uang Order",
+// 			TransactionFor:         "order",
+// 			TransactionStatus:      "success",
+// 			TransactionDescription: "Pembayaran order yang telah selesai",
+// 			TimezoneCode:           order.TimezoneCode,
+// 			CreatedAt:              now,
+// 			UpdatedAt:              now,
+// 		}
+// 		if err := tx.Create(&customerTx).Error; err != nil {
+// 			tx.Rollback()
+// 			return err
+// 		}
+// 	}
+
+// 	// Delete the on_progress job if it exists
+// 	if order.OnProgressJobID != "" {
+// 		if err := queue.Inspector.DeleteTask("default", order.OnProgressJobID); err != nil {
+// 			log.Printf("could not delete on_progress_job %s: %v", order.OnProgressJobID, err)
+// 		}
+// 	}
+
+// 	notifID := uuid.New().String()
+// 	notif := models.Notification{
+// 		ID:                  notifID,
+// 		CustomerID:          customerID,
+// 		MitraID:             mitraID,
+// 		OrderID:             id,
+// 		ServiceID:           order.ServiceID,
+// 		SubServiceID:        order.SubServiceID,
+// 		UserType:            "customer",
+// 		NotificationType:    "ORDER_FINISH",
+// 		NotificationTitle:   "Pesanan Selesai",
+// 		NotificationMessage: "Pesanan Anda telah selesai dikerjakan",
+// 		NotifType:           "order",
+// 		IsRead:              "0",
+// 	}
+// 	_ = tx.Create(&notif).Error
+
+// 	if err := tx.Commit().Error; err != nil {
+// 		return err
+// 	}
+
+// 	// TODO: FCM notify customer
+// 	// TODO: Socket.io emit admin
+// 	log.Printf("UpdateToFinish: order %s is now FINISH", id)
+// 	return nil
+// }
 
 // ---------- 21. UpdateToFinishRepeat ----------
 func (s *OrderTransactionService) UpdateToFinishRepeat(id string, subID int, customerID, mitraID string) error {
@@ -518,7 +804,7 @@ func (s *OrderTransactionService) UpdateToFinishRepeat(id string, subID int, cus
 		MitraID:                mitraID,
 		CustomerID:             customerID,
 		OrderID:                id,
-		SubOrderID:             subID,
+		SubOrderID:             &subID,
 		UserType:               "mitra",
 		TransactionName:        "Pendapatan Order Repeat",
 		TransactionAmount:      repeat.GrossAmountMitra,
@@ -530,6 +816,7 @@ func (s *OrderTransactionService) UpdateToFinishRepeat(id string, subID int, cus
 		TimezoneCode:           repeat.OrderTransaction.TimezoneCode,
 		CreatedAt:              now,
 		UpdatedAt:              now,
+		LastAmount:             0,
 	}
 	if err := tx.Create(&mitraTx).Error; err != nil {
 		tx.Rollback()
@@ -548,7 +835,7 @@ func (s *OrderTransactionService) UpdateToFinishRepeat(id string, subID int, cus
 			MitraID:                mitraID,
 			CustomerID:             customerID,
 			OrderID:                id,
-			SubOrderID:             subID,
+			SubOrderID:             &subID,
 			UserType:               "customer",
 			TransactionName:        "Pembayaran Order Repeat",
 			TransactionAmount:      repeat.GrossAmount,
@@ -560,6 +847,7 @@ func (s *OrderTransactionService) UpdateToFinishRepeat(id string, subID int, cus
 			TimezoneCode:           repeat.OrderTransaction.TimezoneCode,
 			CreatedAt:              now,
 			UpdatedAt:              now,
+			LastAmount:             0,
 		}
 		if err := tx.Create(&customerTx).Error; err != nil {
 			tx.Rollback()

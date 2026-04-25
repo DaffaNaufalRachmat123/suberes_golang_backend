@@ -309,7 +309,6 @@ func (s *AdminService) RefreshToken(userID string, stored models.RefreshToken) (
 		Status:        "SUCCESS",
 		Token:         "Bearer " + accessString,
 		RefreshToken:  "Bearer " + refreshString,
-		Data:          *mitra,
 	}, nil
 }
 

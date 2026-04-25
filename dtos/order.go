@@ -59,3 +59,11 @@ type AcceptOrderDTO struct {
 	MitraID    string `json:"mitra_id" form:"mitra_id" binding:"required"`
 	OrderType  string `json:"order_type" form:"order_type" binding:"required"`
 }
+
+type PaymentStatusResponse struct {
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	IsPaidCustomer string `json:"is_paid_customer"`
+	SupportMail    string `json:"support_mail"`
+	OfficeAddress  string `json:"office_address"`
+}

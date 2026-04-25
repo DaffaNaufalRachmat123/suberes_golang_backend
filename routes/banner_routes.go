@@ -33,7 +33,7 @@ func BannerRoutes(r *gin.RouterGroup, controller *controllers.BannerController, 
 		},
 		{
 			Method:  "PUT",
-			Path:    "/update/image/:id",
+			Path:    "/update/:id",
 			Handler: controller.Update,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},

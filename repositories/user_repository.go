@@ -226,6 +226,15 @@ func (r *UserRepository) FindCustomerByEmail(email string) (*models.User, error)
 	return &user, nil
 }
 
+func (r *UserRepository) FindUserByPhoneNumber(phone string) (*models.User, error) {
+	var user models.User
+	err := r.DB.Where("phone_number = ?", phone).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (r *UserRepository) FindMitraByEmail(email string) (*models.User, error) {
 	var user models.User
 	err := r.DB.Where("email = ? AND user_type = ?", email, "mitra").First(&user).Error
