@@ -234,6 +234,10 @@ func (c *MitraController) ChangePassword(ctx *gin.Context) {
 
 	err := c.MitraService.ChangePassword(mitraID, changePasswordDTO)
 	if err != nil {
+		if appErr, ok := err.(*helpers.AppError); ok {
+			ctx.JSON(appErr.Code, gin.H{"error": appErr.Message})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -520,6 +524,40 @@ func (c *MitraController) ChangeEmail(ctx *gin.Context) {
 	})
 }
 
+// OtpValidatorEmailVerification handles PUT /api/mitra/otp_validator/email_verification_code
+func (c *MitraController) OtpValidatorEmailVerification(ctx *gin.Context) {
+	var dto dtos.OtpValidatorEmailVerificationDTO
+	if err := ctx.ShouldBindJSON(&dto); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"server_message": err.Error(),
+			"status":         "failure",
+		})
+		return
+	}
+
+	newEmail, err := c.MitraService.OtpValidatorEmailVerification(dto)
+	if err != nil {
+		if appErr, ok := err.(*helpers.AppError); ok {
+			ctx.JSON(appErr.Code, gin.H{
+				"server_message": appErr.Message,
+				"status":         "failure",
+			})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"server_message": err.Error(),
+			"status":         "failure",
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "email changed",
+		"status":         "success",
+		"email":          newEmail,
+	})
+}
+
 func (c *MitraController) ChangeForgotPassword(ctx *gin.Context) {
 	var forgotPasswordDTO dtos.ForgotPasswordDTO
 	if err := ctx.ShouldBindJSON(&forgotPasswordDTO); err != nil {
@@ -686,6 +724,67 @@ func (c *MitraController) PhoneChange(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "otp number sent",
 		"otp_timeout":    otpTimeout,
+		"status":         "success",
+	})
+}
+
+// OtpValidatorChangePhoneNumber handles PUT /api/mitra/otp_validator/change_phone_number
+func (c *MitraController) OtpValidatorChangePhoneNumber(ctx *gin.Context) {
+	var dto dtos.OtpValidatorChangePhoneDTO
+	if err := ctx.ShouldBindJSON(&dto); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"server_message": err.Error(),
+			"status":         "failure",
+		})
+		return
+	}
+
+	newPhone, err := c.MitraService.OtpValidatorChangePhoneNumber(dto)
+	if err != nil {
+		switch err.Error() {
+		case "mitra not found":
+			ctx.JSON(http.StatusNotFound, gin.H{
+				"server_message": err.Error(),
+				"status":         "failure",
+			})
+		case "Your OTP number not found":
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"server_message": err.Error(),
+				"status":         "failure",
+			})
+		case "otp code is wrong":
+			ctx.JSON(http.StatusUnauthorized, gin.H{
+				"server_message": err.Error(),
+				"status":         "failure",
+			})
+		default:
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"server_message": err.Error(),
+				"status":         "failure",
+			})
+		}
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "phone number changed",
+		"status":         "success",
+		"phone_number":   newPhone,
+	})
+}
+
+func (c *MitraController) UpdateRejectionOrderCount(ctx *gin.Context) {
+	orderID := ctx.Param("order_id")
+	mitraID := ctx.Param("mitra_id")
+
+	code, err := c.MitraService.UpdateRejectionOrderCount(orderID, mitraID)
+	if err != nil {
+		helpers.JSONError(ctx, code, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"server_message": "rejection count updated",
 		"status":         "success",
 	})
 }

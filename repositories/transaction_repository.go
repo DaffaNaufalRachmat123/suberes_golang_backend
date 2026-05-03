@@ -16,7 +16,17 @@ func (r *TransactionRepository) FindById(id int) (*models.Transaction, error) {
 	return &transaction, err.Error
 }
 func (r *TransactionRepository) CreateTransaction(tx *gorm.DB, transaction *models.Transaction) error {
-	return tx.Create(transaction).Error
+	query := tx
+
+	// For non-order transactions (topup/disbursement), keep order foreign keys NULL.
+	if transaction.OrderID == nil {
+		query = query.Omit("OrderID")
+	}
+	if transaction.SubOrderID == nil {
+		query = query.Omit("SubOrderID")
+	}
+
+	return query.Create(transaction).Error
 }
 
 func (r *TransactionRepository) FindTransactionByExternalID(tx *gorm.DB, externalID string) (*models.Transaction, error) {
@@ -231,4 +241,15 @@ func (r *TransactionRepository) UpdateDisbursementStatus(tx *gorm.DB, transactio
 	return tx.Model(&models.Transaction{}).
 		Where("id = ?", transactionID).
 		Update("transaction_status", status).Error
+}
+
+func (r *TransactionRepository) FindByTopupID(topupID string) (*models.Transaction, error) {
+	var transaction models.Transaction
+	err := r.DB.Select("id, topup_id, transaction_amount, transaction_status, bank_name").
+		Where("topup_id = ?", topupID).
+		First(&transaction).Error
+	if err != nil {
+		return nil, err
+	}
+	return &transaction, nil
 }

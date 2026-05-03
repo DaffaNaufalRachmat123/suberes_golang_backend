@@ -15,5 +15,5 @@ func SetupCallbackRoutes(router *gin.RouterGroup) {
 	{
 		xenditGroup.POST("/ewallet", xenditController.EwalletCallback)
 	}
-	router.POST("/notification", xenditController.CallbackNotification)
+	xenditGroup.POST("/notification", xenditController.CallbackNotification)
 }

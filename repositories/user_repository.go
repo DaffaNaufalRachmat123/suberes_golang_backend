@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"errors"
+	"suberes_golang/helpers"
 	"suberes_golang/models"
 
 	"gorm.io/gorm"
@@ -398,12 +399,12 @@ func (r *UserRepository) FindUserForTransaction(tx *gorm.DB, transaction *models
 	userID := transaction.CustomerID
 	userType := "customer"
 
-	if userID == "" || userID == "NULL" {
+	if userID == nil || *userID == "" || *userID == "NULL" {
 		userID = transaction.MitraID
 		userType = "mitra"
 	}
 
-	err := tx.Where("id = ? AND user_type = ?", userID, userType).First(&user).Error
+	err := tx.Where("id = ? AND user_type = ?", helpers.DerefStr(userID), userType).First(&user).Error
 	if err != nil {
 		return nil, err
 	}

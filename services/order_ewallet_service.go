@@ -23,6 +23,7 @@ import (
 	"suberes_golang/repositories"
 	"suberes_golang/service"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"gorm.io/gorm"
@@ -72,6 +73,10 @@ func (s *OrderEwalletService) CallbackPaidPayment(payload dtos.XenditCallbackPay
 	now := time.Now()
 	logTime := now.Format("2006-01-02 15:04:05")
 
+	// --- DEBUG: Print XenditCallbackPayload ---
+	payloadBytes, _ := json.MarshalIndent(payload, "", "  ")
+	fmt.Println("[XENDIT CALLBACK PAYLOAD]", string(payloadBytes))
+
 	switch payload.Event {
 	case "ewallet.capture":
 		orderData, err := s.OrderTransactionRepo.FindDynamicOrderTransactionMap(
@@ -103,7 +108,7 @@ func (s *OrderEwalletService) CallbackPaidPayment(payload dtos.XenditCallbackPay
 					return http.StatusInternalServerError, err
 				}
 				taskPayload, _ := queue.NewOrderQueueVATask(orderID)
-				queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload))
+				queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
 
 				s.pushFCM("customer", customerID,
 					"NOW_EWALLET_ORDER_PAID_NOTIFICATION",
@@ -136,7 +141,7 @@ func (s *OrderEwalletService) CallbackPaidPayment(payload dtos.XenditCallbackPay
 				}
 
 				taskPayload, _ := queue.NewOrderQueueVATask(orderID)
-				queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload))
+				queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
 
 				s.pushFCM("customer", customerID,
 					"REPEAT_EWALLET_ORDER_PAID_NOTIFICATION",
@@ -164,7 +169,7 @@ func (s *OrderEwalletService) CallbackPaidPayment(payload dtos.XenditCallbackPay
 				queue.ScheduleOnceAt(queue.TypeOrderComingSoonWarning, warnPayload, warningAt)
 
 				taskPayload, _ := queue.NewOrderQueueVATask(orderID)
-				queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload))
+				queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
 
 				s.pushFCM("customer", customerID,
 					"COMING_SOON_EWALLET_ORDER_PAID_NOTIFICATION",
@@ -250,7 +255,7 @@ func (s *OrderEwalletService) CallbackNotification() (int, error) {
 }
 
 // CreateOrderEwallet creates a new ewallet order and triggers a Xendit ewallet charge.
-func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.CreateOrderDTO) (string, int, string, string, int, error) {
+func (s *OrderEwalletService) CreateOrderEwallet(ctx *gin.Context, customerID string, dto dtos.CreateOrderDTO) (string, int, string, string, int, error) {
 	serviceData, err := s.ServiceRepo.FindByID(dto.ServiceID)
 	if err != nil || serviceData == nil {
 		return "", 0, "", "", http.StatusNotFound, errors.New("service not found")
@@ -407,9 +412,11 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 
 	if subPayment.TitlePayment == "ID_DANA" {
 		referenceID := fmt.Sprintf("ORDER_ID_%s#%s", orderID, customerID)
+		// Ambil baseURL dari Gin context agar dinamis sesuai request
+		baseURL := helpers.GetHostURL(ctx)
 		successURL := os.Getenv("EWALLET_SUCCESS_REDIRECT_URL")
 		if successURL == "" {
-			successURL = fmt.Sprintf("https://development.suberes.com/api/orders/order_payment_status/%s", idTransaction)
+			successURL = fmt.Sprintf("%s/api/orders/order_payment_status/%s", strings.TrimRight(baseURL, "/"), idTransaction)
 		} else {
 			if strings.Contains(successURL, "%s") {
 				successURL = fmt.Sprintf(successURL, idTransaction)
@@ -542,6 +549,7 @@ func (s *OrderEwalletService) CreateOrderEwallet(customerID string, dto dtos.Cre
 
 	order, err := s.OrderTransactionRepo.CreateOrderData(tx, *orderData)
 	if err != nil {
+		fmt.Println("Error creating order data:", err.Error())
 		tx.Rollback()
 		return "", 0, "", "", http.StatusInternalServerError, err
 	}
@@ -602,7 +610,7 @@ func (s *OrderEwalletService) AcceptOrderEwallet(dto dtos.AcceptOrderDTO) (int, 
 	playerMitraIDs, _ := helpers.GetValue(dto.TempID)
 	helpers.DeleteValue(dto.TempID)
 
-	if playerMitraIDs == "" {
+	if playerMitraIDs != "" {
 		return http.StatusConflict, nil, errors.New("this order was taken by another mitra")
 	}
 

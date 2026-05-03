@@ -12,5 +12,11 @@ func GenerateOTP() string {
 }
 
 func GenerateInvoice(prefix string) string {
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	charset := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, 4)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return fmt.Sprintf("%s-%s", prefix, string(b))
 }

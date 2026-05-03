@@ -385,7 +385,7 @@ func (c *OrderTransactionController) UpdateToFinishRepeat(ctx *gin.Context) {
 func (c *OrderTransactionController) CancelBlast(ctx *gin.Context) {
 	orderID := ctx.Param("order_id")
 
-	if err := c.OrderTransactionService.CancelBlast(orderID); err != nil {
+	if err := c.OrderTransactionService.CancelBlast(ctx, orderID); err != nil {
 		helpers.APIErrorResponse(ctx, err.Error(), http.StatusBadRequest)
 		return
 	}

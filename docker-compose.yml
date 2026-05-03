@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  suberes_backend:
+    build: .
+    container_name: suberes_backend
+    restart: always
+    ports:
+      - "8080:8080"
+    # Load credentials dari file .env di host
+    env_file:
+      - .env
+    environment:
+      # Beri tahu aplikasi untuk connect ke Redis di container sebelah
+      - REDIS_ADDR=redis_queue:6379
+    depends_on:
+      - redis_queue
+    # Log Rotation agar disk tidak penuh
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis_queue:
+    image: redis:7-alpine
+    container_name: suberes_redis
+    restart: always
+    # Tidak perlu di-expose ke publik (port di-comment) demi keamanan,
+    # hanya 'suberes_backend' yang bisa akses ke dalam container ini
+    # ports:
+    #   - "6379:6379"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"

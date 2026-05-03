@@ -58,12 +58,13 @@ type MitraOrderToday struct {
 }
 
 type MitraDashboardCountResponse struct {
-	OrderSoonCount     int64                    `json:"order_soon_count"`
-	OrderDoneCount     int64                    `json:"order_done_count"`
-	OrderRepeatCount   int64                    `json:"order_repeat_count"`
-	OrderCanceledCount int64                    `json:"order_canceled_count"`
-	OrderOfferCount    int64                    `json:"order_offer_count"`
-	IsSuspended        string                   `json:"is_suspended"`
+	OrderSoonCount     int64  `json:"order_soon_count"`
+	OrderDoneCount     int64  `json:"order_done_count"`
+	OrderRepeatCount   int64  `json:"order_repeat_count"`
+	OrderCanceledCount int64  `json:"order_canceled_count"`
+	OrderOfferCount    int64  `json:"order_offer_count"`
+	IsSuspended        string `json:"is_suspended"`
+	OrderOffer         int64
 	Status             string                   `json:"status"`
 	OrderRunningData   *models.OrderTransaction `json:"order_running_data"`
 }

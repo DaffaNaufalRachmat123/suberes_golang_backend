@@ -11,9 +11,9 @@ import (
 // XenditCallbackTokenMiddleware validates the Xendit callback token.
 func XenditCallbackTokenMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		xenditCallbackToken := os.Getenv("XENDIT_CALLBACK_TOKEN")
+		xenditCallbackToken := os.Getenv("XENDIT_VERIFICATION_TOKEN")
 		if xenditCallbackToken == "" {
-			log.Println("XENDIT_CALLBACK_TOKEN environment variable not set")
+			log.Println("XENDIT_VERIFICATION_TOKEN environment variable not set")
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}

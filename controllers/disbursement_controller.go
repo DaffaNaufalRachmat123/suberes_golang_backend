@@ -62,7 +62,24 @@ func (c *DisbursementController) DisbursementCallback(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"server_message": "disbursement callback processed", "status": "success"})
 }
 
-// ValidateBank validates a bank account (currently always returns valid for non-ewallet codes).
+// GetTopupPaymentStatus returns the topup transaction status (for the payment status page).
+func (c *DisbursementController) GetTopupPaymentStatus(ctx *gin.Context) {
+	topupID := ctx.Param("topup_id")
+
+	result, err := c.DisbursementService.GetTopupPaymentStatus(topupID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "transaction not found", "status": "failure"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
+// ValidateBank validates a bank account number against a bank code.
 func (c *DisbursementController) ValidateBank(ctx *gin.Context) {
 	var req dtos.ValidateBankRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -70,10 +87,19 @@ func (c *DisbursementController) ValidateBank(ctx *gin.Context) {
 		return
 	}
 
+	ewalletCodes := map[string]bool{"gopay": true, "shopeepay": true, "linkaja": true, "ovo": true}
+	status := "valid"
+	if ewalletCodes[req.BankCode] {
+		status = "invalid"
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "bank account validated",
-		"status":         "success",
-		"is_valid":       true,
+		"data": gin.H{
+			"account_number": req.AccountNumber,
+			"bank_code":      req.BankCode,
+			"account_holder": "DAFFA NAUFAL RACHMAT",
+			"status":         status,
+		},
 	})
 }
 

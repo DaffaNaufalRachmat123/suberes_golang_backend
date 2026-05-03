@@ -120,13 +120,23 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.UserLoginRespon
 		"exp":                time.Now().Add(7 * 24 * time.Hour).Unix(),
 	})
 
-	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+	secretKey := os.Getenv("SECRET_KEY")
+	if secretKey == "" {
+		tx.Rollback()
+		return nil, errors.New("internal server error: secret key is missing")
+	}
+	tokenString, err := token.SignedString([]byte(secretKey))
 	if err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
-	refreshString, err := refreshToken.SignedString([]byte(os.Getenv("SECRET_KEY_REFRESH")))
+	secretKeyRefresh := os.Getenv("SECRET_KEY_REFRESH")
+	if secretKeyRefresh == "" {
+		tx.Rollback()
+		return nil, errors.New("internal server error: refresh secret key is missing")
+	}
+	refreshString, err := refreshToken.SignedString([]byte(secretKeyRefresh))
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -170,12 +180,12 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.UserLoginRespon
 func (s *MitraService) RefreshToken(userID string, stored models.RefreshToken) (*dtos.UserLoginResponseDTO, error) {
 	secretKey := os.Getenv("SECRET_KEY_REFRESH")
 	if secretKey == "" {
-		secretKey = "SuberesIndustries"
+		return nil, errors.New("internal server error: refresh secret key is missing")
 	}
 
 	secretKeyToken := os.Getenv("SECRET_KEY")
 	if secretKeyToken == "" {
-		secretKeyToken = "SuberesIndustries"
+		return nil, errors.New("internal server error: access token secret key is missing")
 	}
 
 	// ambil user
@@ -418,7 +428,7 @@ func (s *MitraService) ChangePassword(mitraID string, changePasswordDTO dtos.Cha
 
 	err = bcrypt.CompareHashAndPassword([]byte(mitra.Password), []byte(changePasswordDTO.OldPassword))
 	if err != nil {
-		return errors.New("password lama kamu salah")
+		return helpers.NewAppError("password lama kamu salah", 401)
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(changePasswordDTO.Password), 12)
@@ -483,6 +493,54 @@ func (s *MitraService) ChangeEmail(mitraID string, changeEmailDTO dtos.ChangeEma
 	}
 
 	return os.Getenv("OTP_TIMEOUT"), nil
+}
+
+// OtpValidatorEmailVerification validates the OTP and updates the mitra's email.
+// Mirrors PUT /otp_validator/email_verification_code from the Node.js project.
+func (s *MitraService) OtpValidatorEmailVerification(dto dtos.OtpValidatorEmailVerificationDTO) (string, error) {
+	mitra, err := s.MitraRepository.FindMitraByID(dto.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", helpers.NewAppError("mitra not found", 404)
+		}
+		return "", err
+	}
+
+	// Cek email sudah dipakai user lain (selain user ini)
+	var existingUser models.User
+	err = s.DB.Table("users").Where("email = ? AND id != ?", dto.Email, dto.ID).First(&existingUser).Error
+	if err == nil {
+		return "", helpers.NewAppError("email already used", 409)
+	}
+
+	otp, err := s.UserOtpRepository.GetValidOtp(mitra.ID, map[string]interface{}{
+		"otp_type": "email_verification_code",
+	})
+	if err != nil {
+		return "", helpers.NewAppError("Your OTP number not found", 400)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(otp.OtpCode), []byte(dto.OTPCode)); err != nil {
+		return "", helpers.NewAppError("otp code is wrong", 401)
+	}
+
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return "", tx.Error
+	}
+
+	if err := s.MitraRepository.UpdateMitraByID(tx, mitra.ID, map[string]interface{}{
+		"email": dto.Email,
+	}); err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return "", err
+	}
+
+	return dto.Email, nil
 }
 
 func (s *MitraService) ChangeForgotPassword(dto dtos.ForgotPasswordDTO) error {
@@ -753,8 +811,8 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 			transactionDate := time.Now().UTC().In(loc)
 			transPayload := models.Transaction{
 				ID:                 orderData.ID,
-				MitraID:            helpers.DerefStr(orderData.MitraID),
-				OrderID:            orderData.ID,
+				MitraID:            orderData.MitraID,
+				OrderID:            helpers.StringPtr(orderData.ID),
 				RefundAmount:       orderData.GrossAmount,
 				RefundType:         "full refund",
 				TimezoneCode:       orderData.TimezoneCode,
@@ -1494,4 +1552,115 @@ func (s *MitraService) PhoneChange(mitraID, phoneNumber string) (string, error) 
 	}
 
 	return os.Getenv("OTP_TIMEOUT"), nil
+}
+
+// OtpValidatorChangePhoneNumber validates the OTP and updates the mitra's phone number.
+// Mirrors PUT /otp_validator/change_phone_number from the Node.js project.
+func (s *MitraService) OtpValidatorChangePhoneNumber(dto dtos.OtpValidatorChangePhoneDTO) (string, error) {
+	mitra, err := s.MitraRepository.FindMitraByID(dto.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", errors.New("mitra not found")
+		}
+		return "", err
+	}
+
+	otp, err := s.UserOtpRepository.GetValidOtp(mitra.ID, map[string]interface{}{
+		"otp_type": "change_phone_number",
+	})
+	if err != nil {
+		return "", errors.New("Your OTP number not found")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(otp.OtpCode), []byte(dto.OTPCode)); err != nil {
+		return "", errors.New("otp code is wrong")
+	}
+
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return "", tx.Error
+	}
+
+	if err := s.MitraRepository.UpdateMitraByID(tx, mitra.ID, map[string]interface{}{
+		"country_code": dto.CountryCode,
+		"phone_number": dto.PhoneNumber,
+	}); err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return "", err
+	}
+
+	return dto.PhoneNumber, nil
+}
+
+// UpdateRejectionOrderCount handles a mitra rejecting an order offer.
+// It deletes the mitra's offer entry and increments the rejection count on the
+// mitra assigned to the order. If the order status is WAITING_FOR_SELECTED_MITRA,
+// all online admins are notified via socket.
+func (s *MitraService) UpdateRejectionOrderCount(orderID, mitraID string) (int, error) {
+	orderData, err := s.OrderTransactionRepository.FindByIDWithStatuses(
+		orderID,
+		[]string{"FINDING_MITRA", "WAITING_FOR_SELECTED_MITRA"},
+	)
+	if err != nil {
+		return 500, err
+	}
+	if orderData == nil {
+		return 404, errors.New("order data not found")
+	}
+
+	mitraData, err := s.MitraRepository.FindMitraByID(mitraID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 404, errors.New("mitra data not found")
+		}
+		return 500, err
+	}
+
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return 500, tx.Error
+	}
+
+	// Delete order offer for this mitra + temp_id combination
+	if err := s.OrderOfferRepository.DeleteByWhere(tx, map[string]interface{}{
+		"temp_id":  orderData.TempID,
+		"mitra_id": mitraID,
+	}); err != nil {
+		tx.Rollback()
+		return 500, err
+	}
+
+	// Increment rejection_count on the mitra who was assigned to the order
+	if orderData.MitraID != nil && *orderData.MitraID != "" {
+		if err := s.MitraRepository.IncrementRejectionCount(tx, *orderData.MitraID); err != nil {
+			tx.Rollback()
+			return 500, err
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return 500, err
+	}
+
+	// Notify online admins via socket when order was specifically assigned (not broadcasted)
+	if orderData.OrderStatus == "WAITING_FOR_SELECTED_MITRA" {
+		adminSocketIDs, err := s.UserRepository.FindOnlineAdmins()
+		if err != nil {
+			log.Printf("[UpdateRejectionOrderCount] WARNING FindOnlineAdmins: %v", err)
+		}
+		for _, socketID := range adminSocketIDs {
+			realtime.Server.BroadcastToRoom("/", socketID, constants.MESSAGE_SOCKET_ADMIN, map[string]interface{}{
+				"notification_type": constants.NOTIFICATION_REJECTED_MITRA,
+				"order_id":          orderID,
+				"mitra_id":          mitraData.ID,
+				"mitra_name":        mitraData.CompleteName,
+			})
+		}
+	}
+
+	return 200, nil
 }

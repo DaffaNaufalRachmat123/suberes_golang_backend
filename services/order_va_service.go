@@ -110,6 +110,15 @@ func (s *OrderVAService) CallbackCreate(body map[string]interface{}) (int, error
 		service.SendMulticast(s.DB, "customer", payload)
 	}
 
+	tx.Create(&models.Notification{
+		ID:                  uuid.New().String(),
+		CustomerID:          orderData.CustomerID,
+		OrderID:             orderData.ID,
+		NotificationType:    "PAYMENT_PROCEED",
+		NotificationTitle:   "Pembayaran telah diproses",
+		NotificationMessage: "Kamu bisa melakukan pembayaran sekarang",
+	})
+
 	if err := tx.Commit().Error; err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -238,7 +247,7 @@ func (s *OrderVAService) CallbackPaidPayment(body map[string]interface{}) (int, 
 
 		// Enqueue VA search
 		taskPayload, _ := queue.NewOrderQueueVATask(orderData.ID)
-		queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload))
+		queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
 	}
 
 	// Create log
@@ -263,7 +272,7 @@ func (s *OrderVAService) handleVATopupPaid(tx *gorm.DB, body map[string]interfac
 
 	var mitraData models.User
 	if err := s.DB.
-		Where("id = ? AND user_type = ?", txData.MitraID, "mitra").
+		Where("id = ? AND user_type = ?", helpers.DerefStr(txData.MitraID), "mitra").
 		First(&mitraData).Error; err != nil {
 		return errors.New("mitra not found")
 	}

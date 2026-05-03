@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"suberes_golang/config"
 	"suberes_golang/helpers"
+	"time"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
@@ -29,7 +30,8 @@ func SendTest(firebaseToken string) (string, error) {
 
 func SendToDevice(db *gorm.DB, userType string, token string, payload map[string]interface{}) (string, error) {
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	payloadNotification := map[string]interface{}{
 		"id":        uuid.New().String(),
@@ -54,11 +56,6 @@ func SendToDevice(db *gorm.DB, userType string, token string, payload map[string
 		return "", err
 	}
 
-	tx := db.Begin()
-	if tx.Error != nil {
-		return "", tx.Error
-	}
-
 	var strData map[string]string
 	var dataForCopy map[string]interface{}
 	switch d := payload["data"].(type) {
@@ -75,7 +72,6 @@ func SendToDevice(db *gorm.DB, userType string, token string, payload map[string
 			strData[k] = fmt.Sprintf("%v", v)
 		}
 	default:
-		tx.Rollback()
 		return "", fmt.Errorf("invalid data type in payload")
 	}
 
@@ -84,27 +80,30 @@ func SendToDevice(db *gorm.DB, userType string, token string, payload map[string
 		Data:  strData,
 	}
 
+	// Send FCM first — THEN write to DB. Avoids holding a DB connection while
+	// waiting for the Firebase network round-trip.
 	response, err := client.Send(ctx, msg)
 	if err != nil {
-		tx.Rollback()
 		return "", err
 	}
 
-	// Copy optional fields
 	helpers.GetOtpDuration()
 	helpers.CopyFields(dataForCopy, payloadNotification)
 
-	if err := tx.Table("notifications").Create(payloadNotification).Error; err != nil {
-		tx.Rollback()
-		return "", err
-	}
+	// Persist notification log asynchronously so the caller is not blocked.
+	go func() {
+		if err := db.Table("notifications").Create(payloadNotification).Error; err != nil {
+			// Non-fatal: FCM was already sent; log and move on.
+			_ = err
+		}
+	}()
 
-	tx.Commit()
 	return response, nil
 }
 func SendMulticast(db *gorm.DB, userType string, payload map[string]interface{}) (*messaging.BatchResponse, error) {
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	payloadNotification := map[string]interface{}{
 		"id":        uuid.New().String(),
@@ -129,11 +128,6 @@ func SendMulticast(db *gorm.DB, userType string, payload map[string]interface{})
 		return nil, err
 	}
 
-	tx := db.Begin()
-	if tx.Error != nil {
-		return nil, tx.Error
-	}
-
 	var strData map[string]string
 	var rawData map[string]interface{}
 	switch d := payload["data"].(type) {
@@ -150,7 +144,6 @@ func SendMulticast(db *gorm.DB, userType string, payload map[string]interface{})
 			strData[k] = fmt.Sprintf("%v", v)
 		}
 	default:
-		tx.Rollback()
 		return nil, fmt.Errorf("invalid data type in payload")
 	}
 
@@ -159,21 +152,22 @@ func SendMulticast(db *gorm.DB, userType string, payload map[string]interface{})
 		Data:   strData,
 	}
 
+	// Send FCM first — THEN write to DB. Avoids holding a DB connection while
+	// waiting for the Firebase network round-trip.
 	responses, err := client.SendEachForMulticast(ctx, msg)
 	if err != nil {
-		tx.Rollback()
 		return nil, err
 	}
 
 	helpers.CopyFields(rawData, payloadNotification)
 
-	if err := tx.Table("notifications").Create(payloadNotification).Error; err != nil {
-		tx.Rollback()
-		return nil, err
-	}
+	// Persist notification log asynchronously so the caller is not blocked.
+	go func() {
+		if err := db.Table("notifications").Create(payloadNotification).Error; err != nil {
+			// Non-fatal: FCM was already sent; log and move on.
+			_ = err
+		}
+	}()
 
-	tx.Commit()
-
-	// Adapt to BatchResponse-like return for compatibility
 	return responses, nil
 }

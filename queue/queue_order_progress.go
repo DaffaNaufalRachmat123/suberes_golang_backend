@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"suberes_golang/config"
+	"suberes_golang/helpers"
 	"suberes_golang/models"
 
 	"github.com/google/uuid"
@@ -73,9 +74,9 @@ func HandleOrderOnProgressToFinishTask(ctx context.Context, t *asynq.Task) error
 	mitraTransactionID := uuid.New().String()
 	mitraTransaction := models.Transaction{
 		ID:                     mitraTransactionID,
-		MitraID:                p.MitraID,
-		CustomerID:             p.CustomerID,
-		OrderID:                p.ID,
+		MitraID:                helpers.StringPtr(p.MitraID),
+		CustomerID:             helpers.StringPtr(p.CustomerID),
+		OrderID:                helpers.StringPtr(p.ID),
 		UserType:               "mitra",
 		TransactionName:        "Pendapatan Order",
 		TransactionAmount:      orderData.GrossAmountMitra,
@@ -106,9 +107,9 @@ func HandleOrderOnProgressToFinishTask(ctx context.Context, t *asynq.Task) error
 		customerTransactionID := uuid.New().String()
 		customerTransaction := models.Transaction{
 			ID:                     customerTransactionID,
-			MitraID:                p.MitraID,
-			CustomerID:             p.CustomerID,
-			OrderID:                p.ID,
+			MitraID:                helpers.StringPtr(p.MitraID),
+			CustomerID:             helpers.StringPtr(p.CustomerID),
+			OrderID:                helpers.StringPtr(p.ID),
 			UserType:               "customer",
 			TransactionName:        "Pembayaran Order",
 			TransactionAmount:      orderData.GrossAmount,

@@ -10,11 +10,15 @@ import (
 )
 
 func OrderEwalletRoutes(r *gin.RouterGroup, controller *controllers.OrderEwalletController, db *gorm.DB) {
-	ewallet := r.Group("/order_ewallet")
+	ewallet := r.Group("/ewallet_order")
 
-	// ── Public routes (webhook callbacks, no auth) ───────────────────────────────
-	ewallet.POST("/callback", controller.CallbackPaidPayment)
-	ewallet.POST("/notification/create", controller.CallbackNotification)
+	// ── Xendit webhook endpoints (callback token required) ─────────────────────────
+	xenditWebhook := ewallet.Group("")
+	xenditWebhook.Use(middleware.XenditCallbackTokenMiddleware())
+	{
+		xenditWebhook.POST("/callback", controller.CallbackPaidPayment)
+		xenditWebhook.POST("/notification/create", controller.CallbackNotification)
+	}
 
 	// ── Protected routes ──────────────────────────────────────────────────────────
 	protected := ewallet.Group("")

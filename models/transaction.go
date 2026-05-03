@@ -4,9 +4,9 @@ import "time"
 
 type Transaction struct {
 	ID                     string    `gorm:"type:varchar(36);primaryKey;column:id" json:"id"`
-	MitraID                string    `gorm:"type:varchar(36)" json:"mitra_id"`
-	CustomerID             string    `gorm:"type:varchar(36)" json:"customer_id"`
-	OrderID                string    `gorm:"type:varchar(36)" json:"order_id"`
+	MitraID                *string   `gorm:"type:varchar(36);default:null" json:"mitra_id"`
+	CustomerID             *string   `gorm:"type:varchar(36);default:null" json:"customer_id"`
+	OrderID                *string   `gorm:"type:varchar(36);default:null" json:"order_id"`
 	SubOrderID             *int      `gorm:"type:integer;default:null" json:"sub_order_id"`
 	RefundID               string    `gorm:"type:varchar(255)" json:"refund_id"`
 	UserType               string    `gorm:"type:varchar(10);check:user_type IN ('customer','mitra')" json:"user_type"`
@@ -15,8 +15,8 @@ type Transaction struct {
 	ToolID                 *int      `gorm:"type:integer;default:null" json:"tool_id"`
 	ToolsCreditsID         *int      `gorm:"type:integer;default:null" json:"tools_credits_id"`
 	SubToolsID             *int      `gorm:"type:integer;default:null" json:"sub_tools_id"`
-	TopupID                string    `gorm:"type:varchar(20)" json:"topup_id"`
-	DisbursementID         string    `gorm:"type:varchar(255)" json:"disbursement_id"`
+	TopupID                string    `gorm:"type:varchar(10)" json:"topup_id"`
+	DisbursementID         string    `gorm:"type:varchar(18)" json:"disbursement_id"`
 	OrderIDTransaction     string    `gorm:"type:varchar(10)" json:"order_id_transaction"`
 	ExternalID             string    `gorm:"type:varchar(255)" json:"external_id"`
 	IdempotencyKey         string    `gorm:"type:varchar(255)" json:"idempotency_key"`

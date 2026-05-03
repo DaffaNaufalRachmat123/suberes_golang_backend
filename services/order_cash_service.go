@@ -347,7 +347,7 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 		CustomerID: order.CustomerID,
 	})
 	task := asynq.NewTask(queue.TypeOrderQueueCash, payload)
-	_, err = queue.AsynqClient.Enqueue(task)
+	_, err = queue.AsynqClient.Enqueue(task, asynq.Queue("critical"))
 	if err != nil {
 		return "", 0, "", "", 500, err
 	}

@@ -461,6 +461,11 @@ func NormalizeDateTimeString(s string) string {
 	return fmt.Sprintf("%s-%02d-%02d %s", dateParts[0], month, day, timePart)
 }
 
+// StringPtr returns a pointer to the given string value.
+func StringPtr(s string) *string {
+	return &s
+}
+
 // DerefStr safely dereferences a *string, returning "" if nil.
 func DerefStr(s *string) string {
 	if s == nil {

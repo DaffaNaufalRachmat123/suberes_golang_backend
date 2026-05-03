@@ -26,7 +26,7 @@ func NewTaskServer() *asynq.Server {
 			DB:       0,
 		},
 		asynq.Config{
-			Concurrency: 10,
+			Concurrency: 30,
 			Queues: map[string]int{
 				"critical": 6,
 				"default":  3,

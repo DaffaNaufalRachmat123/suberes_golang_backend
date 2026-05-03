@@ -130,7 +130,7 @@ func (s *XenditService) handleSuccessfulPayment(tx *gorm.DB, orderData *models.O
 		if err != nil {
 			return err
 		}
-		_, err = queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload))
+		_, err = queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
 		if err != nil {
 			return err
 		}

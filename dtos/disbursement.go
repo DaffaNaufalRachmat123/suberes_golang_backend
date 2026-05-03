@@ -30,9 +30,12 @@ type DisburseCustomerRequest struct {
 }
 
 type TopupCallbackPayload struct {
-	ID     string `json:"id"`
-	Amount int64  `json:"amount"`
-	Status string `json:"status"`
+	BankCode      string `json:"bank_code"`
+	ExternalID    string `json:"external_id"`
+	Amount        int64  `json:"amount"`
+	Status        string `json:"status"`
+	AccountNumber string `json:"account_number"`
+	Currency      string `json:"currency"`
 }
 
 type DisbursementCallbackPayload struct {
@@ -60,4 +63,16 @@ type XenditEwalletChargeAPIResponse struct {
 type XenditDisbursementAPIResponse struct {
 	ID         string `json:"id"`
 	ExternalID string `json:"external_id"`
+}
+
+// XenditVAAPIResponse is the Xendit virtual account creation response.
+type XenditVAAPIResponse struct {
+	ID             string `json:"id"`
+	ExternalID     string `json:"external_id"`
+	AccountNumber  string `json:"account_number"`
+	BankCode       string `json:"bank_code"`
+	MerchantCode   string `json:"merchant_code"`
+	Name           string `json:"name"`
+	ExpectedAmount int64  `json:"expected_amount"`
+	Status         string `json:"status"`
 }

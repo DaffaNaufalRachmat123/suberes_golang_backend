@@ -10,6 +10,12 @@ import (
 )
 
 type OrderTransaction struct {
+	// ...existing fields...
+
+	// Virtual fields for countdown/timeout (tidak disimpan di DB, hanya untuk response JSON)
+	CountDownPaymentTimeout          *int64    `gorm:"-" json:"count_down_payment_timeout,omitempty"`
+	TimeoutComingSoon                *int64    `gorm:"-" json:"timeout_coming_soon,omitempty"`
+	TimeoutLimit                     *int64    `gorm:"-" json:"timeout_limit,omitempty"`
 	ID                               string    `gorm:"type:varchar(36);primaryKey" json:"id"`
 	NotificationID                   int       `gorm:"type:integer" json:"notification_id"`
 	TempID                           string    `gorm:"type:varchar(255)" json:"temp_id"`
@@ -27,7 +33,7 @@ type OrderTransaction struct {
 	OrderTimeTemp                    time.Time `gorm:"type:timestamp" json:"order_time_temp"`
 	OrderOriginSoonTime              string    `gorm:"type:varchar(255)" json:"order_origin_soon_time"`
 	OrderTimestamp                   string    `gorm:"type:varchar(255)" json:"order_timestamp"`
-	Address                          string    `gorm:"type:varchar(255)" json:"address"`
+	Address                          string    `gorm:"type:text" json:"address"`
 	CanceledUser                     *string   `gorm:"type:varchar(20);check:canceled_user IN ('customer','mitra','admin','superadmin')" json:"canceled_user"`
 	CanceledReason                   string    `gorm:"type:text" json:"canceled_reason"`
 	OrderNote                        string    `gorm:"type:varchar(255)" json:"order_note"`
@@ -85,11 +91,11 @@ type OrderTransaction struct {
 	ExpireTime                       string    `gorm:"type:varchar(255)" json:"expire_time"`
 	ExpiryDate                       string    `gorm:"type:varchar(255)" json:"expiry_date"`
 	AccountNumberVA                  string    `gorm:"type:varchar(255)" json:"account_number_va"`
-	MobileEwallet                    string    `gorm:"type:varchar(255)" json:"mobile_ewallet"`
-	CheckoutURLEwallet               string    `gorm:"type:text" json:"checkout_url_ewallet"`
-	WebURLEwallet                    string    `gorm:"type:text" json:"web_url_ewallet"`
-	QRString                         string    `gorm:"type:text" json:"qr_string"`
-	QRCode                           string    `gorm:"type:text" json:"qr_code"`
+	MobileEwallet                    string    `gorm:"type:text" json:"mobile_ewallet"`
+	CheckoutURLEwallet               string    `gorm:"type:text" json:"checkout_url_ewallet"` // pastikan di DB: text
+	WebURLEwallet                    string    `gorm:"type:text" json:"web_url_ewallet"`      // pastikan di DB: text
+	QRString                         string    `gorm:"type:text" json:"qr_string"`            // pastikan di DB: text
+	QRCode                           string    `gorm:"type:text" json:"qr_code"`              // pastikan di DB: text
 	VAID                             string    `gorm:"type:varchar(255)" json:"va_id"`
 	OwnerID                          string    `gorm:"type:varchar(255)" json:"owner_id"`
 	ExternalID                       string    `gorm:"type:varchar(255)" json:"external_id"`
@@ -148,12 +154,12 @@ func (o *OrderTransaction) BeforeCreate(tx *gorm.DB) error {
 }
 
 // Custom MarshalJSON agar SubServiceAddeds selalu [] jika nil
-func (o OrderTransaction) MarshalJSON() ([]byte, error) {
+func (o *OrderTransaction) MarshalJSON() ([]byte, error) {
 	type Alias OrderTransaction
 	// Pastikan SubServiceAddeds tidak nil
 	if o.SubServiceAddeds == nil {
 		o.SubServiceAddeds = make([]SubServiceAdded, 0)
 	}
 
-	return json.Marshal((Alias)(o))
+	return json.Marshal((*Alias)(o))
 }

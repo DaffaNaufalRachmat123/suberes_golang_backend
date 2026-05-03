@@ -78,7 +78,7 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 		},
 		{
 			Method:  "PUT",
-			Path:    "/update_mitra_auto_bid/:id/:isautobid",
+			Path:    "/update_mitra_autobid/:id/:isautobid",
 			Handler: controller.UpdateMitraAutoBid,
 			Roles:   []string{helpers.MitraRole},
 		},
@@ -158,6 +158,24 @@ func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraControlle
 			Method:  "PUT",
 			Path:    "/phone_change/:mitra_id/:phone_number",
 			Handler: controller.PhoneChange,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/otp_validator/change_phone_number",
+			Handler: controller.OtpValidatorChangePhoneNumber,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/otp_validator/email_verification_code",
+			Handler: controller.OtpValidatorEmailVerification,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "PUT",
+			Path:    "/update/rejection_order_count/:order_id/:mitra_id",
+			Handler: controller.UpdateRejectionOrderCount,
 			Roles:   []string{helpers.MitraRole},
 		},
 	}

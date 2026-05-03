@@ -38,7 +38,7 @@ func InitAsynq() {
 	AsynqServer = asynq.NewServer(
 		redisOpt,
 		asynq.Config{
-			Concurrency: 10,
+			Concurrency: 30,
 			Queues: map[string]int{
 				"critical": 6,
 				"default":  3,
@@ -54,6 +54,7 @@ func StartWorker() {
 
 	// register handlers
 	mux.HandleFunc(TypeOrderQueueCash, HandleOrderQueueCashTask)
+	mux.HandleFunc(TypeOrderQueueVA, HandleOrderQueueVATask)
 	mux.HandleFunc(TypeOrderOfferExpired, HandleOrderOfferExpiredTask)
 	mux.HandleFunc(TypeOrderSelectedExpired, HandleOrderSelectedExpiredTask)
 	mux.HandleFunc(TypeOrderOnProgressToFinish, HandleOrderOnProgressToFinishTask)

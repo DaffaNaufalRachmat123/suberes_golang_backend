@@ -56,7 +56,7 @@ func (c *OrderEwalletController) CreateOrderEwallet(ctx *gin.Context) {
 		return
 	}
 	customerID := ctx.Param("customer_id")
-	orderID, subID, custID, mitraID, code, err := c.OrderEwalletService.CreateOrderEwallet(customerID, req)
+	orderID, subID, custID, mitraID, code, err := c.OrderEwalletService.CreateOrderEwallet(ctx, customerID, req)
 	if err != nil {
 		helpers.APIErrorResponse(ctx, err.Error(), code)
 		return

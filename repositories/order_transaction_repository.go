@@ -2,9 +2,11 @@ package repositories
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"suberes_golang/dtos"
 	"suberes_golang/models"
+	"syscall"
 	"time"
 
 	"gorm.io/gorm"
@@ -44,6 +46,15 @@ func (r *OrderTransactionRepository) FindById(id string) (*models.OrderTransacti
 	var orderData models.OrderTransaction
 	err := r.DB.Where("id = ?", id).First(&orderData)
 	return &orderData, err.Error
+}
+
+func (r *OrderTransactionRepository) FindByIDWithStatuses(id string, statuses []string) (*models.OrderTransaction, error) {
+	var orderData models.OrderTransaction
+	err := r.DB.Where("id = ? AND order_status IN ?", id, statuses).First(&orderData).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &orderData, err
 }
 
 func (r *OrderTransactionRepository) UpdateData(tx *gorm.DB, user *models.OrderTransaction, data map[string]interface{}) error {
@@ -175,7 +186,7 @@ func (r *OrderTransactionRepository) MitraOrderToday(start time.Time, end time.T
 		Select("COUNT(mitra_id) as order_count, users.id, users.complete_name").
 		Joins("JOIN users ON users.id = order_transactions.mitra_id").
 		Where("order_transactions.created_at >= ? AND order_transactions.created_at <= ?", start, end).
-		Group("mitra_id").
+		Group("users.id, users.complete_name, mitra_id").
 		Order("order_count DESC").
 		Scan(&result).Error
 	return result, err
@@ -531,25 +542,87 @@ func (r *OrderTransactionRepository) FindVirtualAccountOrders(customerID string,
 
 func (r *OrderTransactionRepository) FindOrderDetailFull(orderID, customerID, mitraID string, loadAllRepeat bool) (*models.OrderTransaction, error) {
 	var order models.OrderTransaction
+
 	query := r.DB.Where("id = ?", orderID)
+
 	if customerID != "0" && customerID != "" {
 		query = query.Where("customer_id = ?", customerID)
 	}
 	if mitraID != "0" && mitraID != "" {
 		query = query.Where("mitra_id = ?", mitraID)
 	}
+
 	query = query.
-		Preload("Customer").Preload("Mitra").
-		Preload("Service").Preload("SubService").
-		Preload("Payment").Preload("SubPayment").
-		Preload("SubServiceAddeds.SubServiceAdditional").
+		Preload("Customer").
+		Preload("Mitra").
+		Preload("Service").
+		Preload("Service.ServiceGuarantee").
+		Preload("SubService").
+		Preload("Payment").
+		Preload("SubPayment").
+		Preload("SubPayment.SubPaymentTutorial").
 		Preload("SubServiceAddeds").
-		Preload("UserRatings")
-	if loadAllRepeat {
-		query = query.Preload("OrderTransactionRepeats")
+		Preload("SubServiceAddeds.SubServiceAdditional").
+		Preload("UserRatings").
+		Preload("OrderChat").
+		Preload("OrderTransactionRepeats").
+		Preload("OrderTransactionRepeats.SubService")
+
+	if err := query.First(&order).Error; err != nil {
+		return nil, err
 	}
-	err := query.First(&order).Error
-	return &order, err
+
+	// --- Inject countdown/timeout fields (mirroring Node.js logic) ---
+	timeoutMinutes := GetEnvInt("TIMEOUT_COMING_SOON_VA_PAYMENT", 30)
+	timeoutRun := GetEnvInt("TIMEOUT_COMING_SOON_ORDER_RUN", 1800)
+	now := time.Now().UTC()
+
+	if !order.OrderTime.IsZero() {
+		// count_down_payment_timeout = detik ke (order_time + timeoutMinutes) - now
+		deadline := order.OrderTime.Add(time.Duration(timeoutMinutes) * time.Minute)
+		cdpt := int64(deadline.Sub(now).Seconds())
+		order.CountDownPaymentTimeout = &cdpt
+
+		// timeout_coming_soon = detik ke order_time - now
+		tcs := int64(order.OrderTime.Sub(now).Seconds())
+		order.TimeoutComingSoon = &tcs
+
+		// timeout_limit = timeoutRun (detik)
+		tl := int64(timeoutRun)
+		order.TimeoutLimit = &tl
+	}
+
+	for i := range order.OrderTransactionRepeats {
+		rep := &order.OrderTransactionRepeats[i]
+		if !rep.OrderTime.IsZero() {
+			deadline := rep.OrderTime.Add(time.Duration(timeoutMinutes) * time.Minute)
+			cdpt := int64(deadline.Sub(now).Seconds())
+			rep.CountDownPaymentTimeout = &cdpt
+
+			tcs := int64(rep.OrderTime.Sub(now).Seconds())
+			rep.TimeoutComingSoon = &tcs
+
+			tl := int64(timeoutRun)
+			rep.TimeoutLimit = &tl
+		}
+	}
+
+	return &order, nil
+}
+func GetEnvInt(key string, fallback int) int {
+	if val, ok := syscall.Getenv(key); ok {
+		if n, err := strconv.Atoi(val); err == nil {
+			return n
+		}
+	}
+	return fallback
+}
+
+func GetEnv(key, fallback string) string {
+	if value, ok := syscall.Getenv(key); ok {
+		return value
+	}
+	return fallback
 }
 
 func (r *OrderTransactionRepository) FindIsAutoBid(orderID, mitraID string) (*models.OrderOffer, error) {

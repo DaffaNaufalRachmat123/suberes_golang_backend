@@ -72,6 +72,12 @@ func (r *MitraRepository) UpdateMitra(tx *gorm.DB, mitra *models.User) error {
 	return tx.Save(mitra).Error
 }
 
+func (r *MitraRepository) IncrementRejectionCount(tx *gorm.DB, mitraID string) error {
+	return tx.Table("users").
+		Where("id = ? AND user_type = ?", mitraID, "mitra").
+		UpdateColumn("rejection_count", gorm.Expr("rejection_count + 1")).Error
+}
+
 func (r *MitraRepository) CreateMitra(tx *gorm.DB, mitra *models.User) error {
 	return tx.Create(mitra).Error
 }
