@@ -12,14 +12,6 @@ import (
 func DisbursementRoutes(r *gin.RouterGroup, controller *controllers.DisbursementController, db *gorm.DB) {
 	disbursement := r.Group("/disbursement")
 
-	// Xendit webhook endpoints (callback token required)
-	xenditWebhook := disbursement.Group("")
-	xenditWebhook.Use(middleware.XenditCallbackTokenMiddleware())
-	{
-		xenditWebhook.POST("/topup/callback", controller.TopupCallback)
-		xenditWebhook.POST("/callback", controller.DisbursementCallback)
-	}
-
 	// Public endpoint: topup payment status page (no auth)
 	disbursement.GET("/topup_payment_status/:topup_id", controller.GetTopupPaymentStatus)
 

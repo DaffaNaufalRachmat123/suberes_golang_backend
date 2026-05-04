@@ -318,6 +318,10 @@ func main() {
 	routes.OrderOfferRoutes(api, OrderOfferController, config.DB)
 	routes.OrderEwalletRoutes(api, OrderEwalletController, config.DB)
 	routes.OrderVARoutes(api, OrderVAController, config.DB)
+
+	webhookService := services.NewWebhookService(config.DB)
+	webhookController := controllers.NewWebhookController(webhookService)
+	routes.WebhookRoutes(api, webhookController)
 	routes.OrderHistoryRoutes(api, orderHistoryController, config.DB)
 	routes.PinRoutes(api, pinController, config.DB)
 	routes.RatingRoutes(api, ratingController, config.DB)

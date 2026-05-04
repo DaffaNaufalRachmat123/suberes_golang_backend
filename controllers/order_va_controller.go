@@ -17,38 +17,6 @@ func NewOrderVAController(orderVAService *services.OrderVAService) *OrderVAContr
 	return &OrderVAController{OrderVAService: orderVAService}
 }
 
-// CallbackCreate handles the Xendit VA creation webhook (PROCESSING_PAYMENT → WAITING_PAYMENT).
-// POST /order_va/notification/create
-func (c *OrderVAController) CallbackCreate(ctx *gin.Context) {
-	var body map[string]interface{}
-	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
-	code, err := c.OrderVAService.CallbackCreate(body)
-	if err != nil {
-		helpers.APIErrorResponse(ctx, err.Error(), code)
-		return
-	}
-	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
-}
-
-// CallbackPaidPayment handles the Xendit VA paid webhook (WAITING_PAYMENT → FINDING_MITRA).
-// POST /order_va/notification/paid
-func (c *OrderVAController) CallbackPaidPayment(ctx *gin.Context) {
-	var body map[string]interface{}
-	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
-	code, err := c.OrderVAService.CallbackPaidPayment(body)
-	if err != nil {
-		helpers.APIErrorResponse(ctx, err.Error(), code)
-		return
-	}
-	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
-}
-
 // CreateOrderVA creates a new virtual account order for a customer.
 // POST /order_va/create/:customer_id
 func (c *OrderVAController) CreateOrderVA(ctx *gin.Context) {

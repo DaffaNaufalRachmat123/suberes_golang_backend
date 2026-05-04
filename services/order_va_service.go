@@ -20,7 +20,6 @@ import (
 	"suberes_golang/service"
 
 	"github.com/google/uuid"
-	"github.com/hibiken/asynq"
 	"gorm.io/gorm"
 )
 
@@ -48,274 +47,6 @@ func NewOrderVAService(db *gorm.DB) *OrderVAService {
 		OrderTransactionRepo:       &repositories.OrderTransactionRepository{DB: db},
 		OrderTransactionRepeatRepo: &repositories.OrderTransactionRepeatsRepository{DB: db},
 	}
-}
-
-// CallbackCreate handles the Xendit VA creation webhook (order status: PROCESSING_PAYMENT → WAITING_PAYMENT).
-func (s *OrderVAService) CallbackCreate(body map[string]interface{}) (int, error) {
-	tx := s.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	externalID, _ := body["id"].(string)
-	name, _ := body["name"].(string)
-
-	// Skip TOPUP callbacks in this handler
-	if strings.HasPrefix(externalID, "TOPUP") {
-		return http.StatusOK, nil
-	}
-
-	var orderData models.OrderTransaction
-	if err := s.DB.
-		Where("external_id = ? AND name = ?", externalID, name).
-		First(&orderData).Error; err != nil {
-		tx.Rollback()
-		return http.StatusNotFound, errors.New("order data not found")
-	}
-
-	var customerData models.User
-	if err := s.DB.
-		Where("id = ? AND user_type = ?", orderData.CustomerID, "customer").
-		First(&customerData).Error; err != nil {
-		tx.Rollback()
-		return http.StatusNotFound, errors.New("customer not found")
-	}
-
-	if err := tx.Model(&models.OrderTransaction{}).
-		Where("va_id = ? AND external_id = ? AND name = ?", externalID, externalID, name).
-		Updates(map[string]interface{}{
-			"xendit_status": body["status"],
-			"order_status":  "WAITING_PAYMENT",
-			"order_time":    orderData.OrderTimeTemp,
-		}).Error; err != nil {
-		tx.Rollback()
-		return http.StatusInternalServerError, err
-	}
-
-	// Notify customer
-	if customerData.FirebaseToken != nil && *customerData.FirebaseToken != "" {
-		payload := map[string]interface{}{
-			"data": map[string]string{
-				"notification_type": "PAYMENT_PROCEED",
-				"title":             "Pembayaran telah diproses",
-				"message":           "Kamu bisa melakukan pembayaran sekarang",
-				"order_id":          orderData.ID,
-				"customer_id":       orderData.CustomerID,
-				"notif_type":        "order",
-			},
-			"tokens": []string{*customerData.FirebaseToken},
-		}
-		service.SendMulticast(s.DB, "customer", payload)
-	}
-
-	tx.Create(&models.Notification{
-		ID:                  uuid.New().String(),
-		CustomerID:          orderData.CustomerID,
-		OrderID:             orderData.ID,
-		NotificationType:    "PAYMENT_PROCEED",
-		NotificationTitle:   "Pembayaran telah diproses",
-		NotificationMessage: "Kamu bisa melakukan pembayaran sekarang",
-	})
-
-	if err := tx.Commit().Error; err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	return http.StatusOK, nil
-}
-
-// CallbackPaidPayment handles the Xendit VA paid webhook.
-func (s *OrderVAService) CallbackPaidPayment(body map[string]interface{}) (int, error) {
-	tx := s.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	now := time.Now()
-	logTime := now.Format("2006-01-02 15:04:05")
-
-	externalID, _ := body["id"].(string)
-
-	// Handle TOPUP VA payment
-	if strings.HasPrefix(externalID, "TOPUP") {
-		if err := s.handleVATopupPaid(tx, body, externalID); err != nil {
-			tx.Rollback()
-			return http.StatusInternalServerError, err
-		}
-	} else {
-		// Order VA payment
-		var orderData models.OrderTransaction
-		if err := s.DB.
-			Where("external_id = ? AND xendit_status = ?", externalID, "ACTIVE").
-			First(&orderData).Error; err != nil {
-			tx.Rollback()
-			return http.StatusNotFound, errors.New("order data not found")
-		}
-
-		var customerData models.User
-		if err := s.DB.Where("id = ?", orderData.CustomerID).First(&customerData).Error; err != nil {
-			tx.Rollback()
-			return http.StatusNotFound, errors.New("customer not found")
-		}
-
-		if err := tx.Model(&models.OrderTransaction{}).
-			Where("external_id = ? AND order_status = ?", externalID, "WAITING_PAYMENT").
-			Updates(map[string]interface{}{
-				"order_status":     "FINDING_MITRA",
-				"is_paid_customer": "1",
-				"xendit_status":    "INACTIVE",
-			}).Error; err != nil {
-			tx.Rollback()
-			return http.StatusInternalServerError, err
-		}
-
-		switch orderData.OrderType {
-		case "repeat":
-			tx.Model(&models.OrderTransactionRepeat{}).
-				Where("order_id = ?", orderData.ID).
-				Update("order_status", "WAIT_SCHEDULE")
-
-			var repeats []models.OrderTransactionRepeat
-			s.DB.Where("order_id = ?", orderData.ID).Find(&repeats)
-			for _, rep := range repeats {
-				runAt := rep.OrderTime
-				warningAt := runAt.Add(3 * time.Minute)
-				rp, _ := queue.NewOrderComingSoonRunTask(orderData.ID)
-				queue.ScheduleOnceAt(queue.TypeOrderComingSoonRun, rp, runAt)
-				wp, _ := queue.NewOrderComingSoonWarningTask(orderData.ID)
-				queue.ScheduleOnceAt(queue.TypeOrderComingSoonWarning, wp, warningAt)
-			}
-
-			if customerData.FirebaseToken != nil && *customerData.FirebaseToken != "" {
-				service.SendMulticast(s.DB, "customer", map[string]interface{}{
-					"data": map[string]string{
-						"notification_type": "REPEAT_VIRTUAL_ACCOUNT_ORDER_PAID_NOTIFICATION",
-						"title":             "Pembayaran Order Berulang Berhasil",
-						"message":           fmt.Sprintf("Pembayaran order berulang dengan ID Transaksi %s berhasil", orderData.IDTransaction),
-						"order_id":          orderData.ID,
-						"sub_order_id":      "-1",
-						"customer_id":       orderData.CustomerID,
-						"notif_type":        "order",
-					},
-					"tokens": []string{*customerData.FirebaseToken},
-				})
-			}
-
-		case "coming soon":
-			scheduleAt := orderData.OrderTime
-			warningAt := scheduleAt.Add(3 * time.Minute)
-			rp, _ := queue.NewOrderComingSoonRunTask(orderData.ID)
-			queue.ScheduleOnceAt(queue.TypeOrderComingSoonRun, rp, scheduleAt)
-			wp, _ := queue.NewOrderComingSoonWarningTask(orderData.ID)
-			queue.ScheduleOnceAt(queue.TypeOrderComingSoonWarning, wp, warningAt)
-
-			if customerData.FirebaseToken != nil && *customerData.FirebaseToken != "" {
-				service.SendMulticast(s.DB, "customer", map[string]interface{}{
-					"data": map[string]string{
-						"notification_type": "COMING_SOON_VIRTUAL_ACCOUNT_ORDER_PAID_NOTIFICATION",
-						"title":             "Pembayaran Order Terjadwal Berhasil",
-						"message":           fmt.Sprintf("Pembayaran order terjadwal dengan ID Transaksi : %s berhasil", orderData.IDTransaction),
-						"order_id":          orderData.ID,
-						"sub_order_id":      "-1",
-						"customer_id":       customerData.ID,
-						"notif_type":        "order",
-					},
-					"tokens": []string{*customerData.FirebaseToken},
-				})
-			}
-
-		case "now":
-			if customerData.FirebaseToken != nil && *customerData.FirebaseToken != "" {
-				service.SendMulticast(s.DB, "customer", map[string]interface{}{
-					"data": map[string]string{
-						"notification_type": "NOW_VIRTUAL_ACCOUNT_ORDER_PAID_NOTIFICATION",
-						"title":             "Pembayaran Order Berhasil",
-						"message":           fmt.Sprintf("Pembayaran order dengan ID Transaksi : %s berhasil dan kami sedang mencarikan mitra untukmu", orderData.IDTransaction),
-						"order_id":          orderData.ID,
-						"sub_order_id":      "-1",
-						"customer_id":       orderData.CustomerID,
-						"notif_type":        "order",
-					},
-					"tokens": []string{*customerData.FirebaseToken},
-				})
-			}
-		}
-
-		// Enqueue VA search
-		taskPayload, _ := queue.NewOrderQueueVATask(orderData.ID)
-		queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
-	}
-
-	// Create log
-	s.DB.Create(&models.SuberesLogs{
-		LogName: "Notification Paid VA Order",
-		LogType: "Paid VA Order",
-		LogURL:  fmt.Sprintf("%+v", body),
-		LogTime: logTime,
-	})
-
-	if err := tx.Commit().Error; err != nil {
-		return http.StatusInternalServerError, err
-	}
-	return http.StatusOK, nil
-}
-
-func (s *OrderVAService) handleVATopupPaid(tx *gorm.DB, body map[string]interface{}, externalID string) error {
-	var txData models.Transaction
-	if err := s.DB.Where("external_id = ?", externalID).First(&txData).Error; err != nil {
-		return errors.New("transaction not found")
-	}
-
-	var mitraData models.User
-	if err := s.DB.
-		Where("id = ? AND user_type = ?", helpers.DerefStr(txData.MitraID), "mitra").
-		First(&mitraData).Error; err != nil {
-		return errors.New("mitra not found")
-	}
-
-	amount, _ := body["amount"].(float64)
-	if int64(amount) != txData.TransactionAmount {
-		return errors.New("transaction amount not same")
-	}
-
-	topupAmount := txData.TransactionAmount - txData.TransactionFee
-
-	if err := tx.Model(&models.Transaction{}).
-		Where("external_id = ? AND transaction_status = ?", externalID, "pending").
-		Updates(map[string]interface{}{
-			"transaction_amount": gorm.Expr("transaction_amount - transaction_fee"),
-			"last_amount":        gorm.Expr("last_amount + ?", topupAmount),
-			"transaction_status": "success",
-		}).Error; err != nil {
-		return err
-	}
-
-	if err := tx.Model(&models.User{}).
-		Where("id = ? AND user_type = ?", mitraData.ID, "mitra").
-		Update("account_balance", gorm.Expr("account_balance + ?", topupAmount)).
-		Error; err != nil {
-		return err
-	}
-
-	if mitraData.FirebaseToken != nil && *mitraData.FirebaseToken != "" {
-		service.SendMulticast(s.DB, "mitra", map[string]interface{}{
-			"data": map[string]string{
-				"notification_type":  "TOPUP_NOTIFICATION",
-				"topup_status":       "TOPUP_SUCCESSFUL",
-				"title":              "Status Top Up",
-				"id":                 txData.ID,
-				"transaction_status": "success",
-				"notif_type":         "topup",
-				"mitra_id":           mitraData.ID,
-			},
-			"tokens": []string{*mitraData.FirebaseToken},
-		})
-	}
-	return nil
 }
 
 // CreateOrderVA creates a new VA (virtual account) order.
@@ -415,6 +146,28 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 		orderTimeCreate = t.UTC()
 	}
 
+	// Compute order_timestamp server-side for non-coming-soon orders (matches Node.js createOrderVa behavior)
+	orderTimestampNowDate := strings.Split(createdAtString, " ")[0]
+	dateParts := strings.Split(orderTimestampNowDate, "-")
+	tsDay := dateParts[2]
+	tsMonthRaw := dateParts[1]
+	tsYear := dateParts[0]
+	var tsMonthName string
+	if strings.HasPrefix(tsMonthRaw, "0") {
+		tsMonthName = helpers.ConvertNumberToMonthString(strings.TrimPrefix(tsMonthRaw, "0"))
+	} else {
+		tsMonthName = helpers.ConvertNumberToMonthString(tsMonthRaw)
+	}
+	tsTimePart := strings.Split(createdAtString, " ")[1]
+	tsTimeSplit := strings.Split(tsTimePart, ":")
+	orderTimestampNow := fmt.Sprintf("%s %s %s %s:%s", tsDay, tsMonthName, tsYear, tsTimeSplit[0], tsTimeSplit[1])
+	var orderTimestamp string
+	if dto.OrderType == "coming soon" {
+		orderTimestamp = dto.OrderTimestamp
+	} else {
+		orderTimestamp = orderTimestampNow
+	}
+
 	// Mock VA response (actual Xendit VA creation is commented out in JS source)
 	vaID := uuid.New().String()
 	vaAccountNumber := "700701573202138234"
@@ -442,7 +195,7 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 		MitraGender:           strings.ToLower(dto.MitraGender),
 		OrderTime:             orderTimeCreate,
 		OrderTimeTemp:         orderTimeCreate,
-		OrderTimestamp:        dto.OrderTimestamp,
+		OrderTimestamp:        orderTimestamp,
 		Address:               dto.Address,
 		OrderNote:             dto.OrderNote,
 		PaymentID:             subPayment.PaymentID,

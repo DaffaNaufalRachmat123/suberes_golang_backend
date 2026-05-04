@@ -10,15 +10,7 @@ import (
 )
 
 func OrderVARoutes(r *gin.RouterGroup, controller *controllers.OrderVAController, db *gorm.DB) {
-	va := r.Group("/order_va")
-
-	// ── Xendit webhook endpoints (callback token required) ───────────────────────────
-	xenditWebhook := va.Group("")
-	xenditWebhook.Use(middleware.XenditCallbackTokenMiddleware())
-	{
-		xenditWebhook.POST("/notification/create", controller.CallbackCreate)
-		xenditWebhook.POST("/notification/paid", controller.CallbackPaidPayment)
-	}
+	va := r.Group("/va_order")
 
 	// ── Protected routes ───────────────────────────────────────────────────────────
 	protected := va.Group("")

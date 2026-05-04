@@ -17,33 +17,6 @@ func NewOrderEwalletController(orderEwalletService *services.OrderEwalletService
 	return &OrderEwalletController{OrderEwalletService: orderEwalletService}
 }
 
-// CallbackPaidPayment handles the Xendit ewallet.capture / ewallet.void webhook.
-// POST /order_ewallet/callback
-func (c *OrderEwalletController) CallbackPaidPayment(ctx *gin.Context) {
-	var payload dtos.XenditCallbackPayload
-	if err := ctx.ShouldBindJSON(&payload); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
-	code, err := c.OrderEwalletService.CallbackPaidPayment(payload)
-	if err != nil {
-		helpers.APIErrorResponse(ctx, err.Error(), code)
-		return
-	}
-	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
-}
-
-// CallbackNotification is a no-op acknowledgement endpoint for Xendit ewallet notifications.
-// POST /order_ewallet/notification/create
-func (c *OrderEwalletController) CallbackNotification(ctx *gin.Context) {
-	code, err := c.OrderEwalletService.CallbackNotification()
-	if err != nil {
-		helpers.APIErrorResponse(ctx, err.Error(), code)
-		return
-	}
-	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
-}
-
 // CreateOrderEwallet creates a new ewallet order for a customer.
 // POST /order_ewallet/create/:customer_id
 func (c *OrderEwalletController) CreateOrderEwallet(ctx *gin.Context) {

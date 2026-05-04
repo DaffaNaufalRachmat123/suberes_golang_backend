@@ -22,46 +22,6 @@ func NewDisbursementController(disbursementService *services.DisbursementService
 	}
 }
 
-// TopupCallback handles the Xendit VA topup webhook.
-func (c *DisbursementController) TopupCallback(ctx *gin.Context) {
-	var payload dtos.TopupCallbackPayload
-	if err := ctx.ShouldBindJSON(&payload); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "invalid payload", "status": "failure"})
-		return
-	}
-
-	if err := c.DisbursementService.HandleTopupCallback(&payload); err != nil {
-		if err.Error() == "transaction amount not same" {
-			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": err.Error(), "status": "failure"})
-			return
-		}
-		if errors.Is(err, gorm.ErrRecordNotFound) || errors.As(err, &gorm.ErrRecordNotFound) {
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": err.Error(), "status": "failure"})
-			return
-		}
-		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "topup callback succeed", "status": "success"})
-}
-
-// DisbursementCallback handles the Xendit disbursement webhook.
-func (c *DisbursementController) DisbursementCallback(ctx *gin.Context) {
-	var payload dtos.DisbursementCallbackPayload
-	if err := ctx.ShouldBindJSON(&payload); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "invalid payload", "status": "failure"})
-		return
-	}
-
-	if err := c.DisbursementService.HandleDisbursementCallback(&payload); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "disbursement callback processed", "status": "success"})
-}
-
 // GetTopupPaymentStatus returns the topup transaction status (for the payment status page).
 func (c *DisbursementController) GetTopupPaymentStatus(ctx *gin.Context) {
 	topupID := ctx.Param("topup_id")
