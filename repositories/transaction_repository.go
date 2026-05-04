@@ -73,8 +73,8 @@ func (r *TransactionRepository) FindAllWithPagination(page, limit int, search, t
 func (r *TransactionRepository) GetTransactionTypesByMitraIDAndDate(mitraID string, startDate, endDate string) ([]map[string]interface{}, error) {
 	var result []map[string]interface{}
 	err := r.DB.Model(&models.Transaction{}).
-		Select("transaction_for, CASE transaction_for WHEN 'order' THEN 'Order' WHEN 'cicilan' THEN 'Cicilan' WHEN 'Other' THEN 'Lainnya' ELSE '-' END as transaction_for_show").
-		Where("mitra_id = ? AND created_at BETWEEN ? AND ?", mitraID, startDate, endDate).
+		Select("transaction_for, CASE transaction_for WHEN 'order' THEN 'Order' WHEN 'cicilan' THEN 'Cicilan' WHEN 'Other' THEN 'Lainnya' END as transaction_for_show").
+		Where("mitra_id = ? AND created_at BETWEEN ? AND ? AND transaction_for IN ?", mitraID, startDate, endDate, []string{"order", "cicilan", "Other"}).
 		Group("transaction_for").
 		Find(&result).Error
 

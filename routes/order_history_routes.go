@@ -126,7 +126,7 @@ func OrderHistoryRoutes(r *gin.RouterGroup, c *controllers.OrderHistoryControlle
 		{
 			Method:  "GET",
 			Path:    "/list/customer/:customer_id",
-			Handler: c.GetPendingByCustomer,
+			Handler: c.GetRunningForCustomer,
 			Roles:   []string{helpers.CustomerRole},
 		},
 	})
