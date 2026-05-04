@@ -19,7 +19,7 @@ type SubServiceCreateRequest struct {
 }
 
 type SubServiceUpdateRequest struct {
-	ID                    int     `json:"id" binding:"required"`
+	ID                    int     `json:"id"`
 	ServiceID             int     `json:"service_id" binding:"required"`
 	SubPriceServiceTitle  string  `json:"sub_price_service_title" binding:"required"`
 	SubPriceService       int64   `json:"sub_price_service" binding:"required"`

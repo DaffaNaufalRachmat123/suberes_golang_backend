@@ -130,13 +130,16 @@ func HandleOrderOnProgressToFinishTask(ctx context.Context, t *asynq.Task) error
 
 	// 5. Create notification records
 	notifID := uuid.New().String()
+	serviceID := p.ServiceID
+	subServiceID := p.SubServiceID
+	mitraID := p.MitraID
 	notification := models.Notification{
 		ID:                  notifID,
 		CustomerID:          p.CustomerID,
-		MitraID:             p.MitraID,
+		MitraID:             &mitraID,
 		OrderID:             p.ID,
-		ServiceID:           p.ServiceID,
-		SubServiceID:        p.SubServiceID,
+		ServiceID:           &serviceID,
+		SubServiceID:        &subServiceID,
 		UserType:            "customer",
 		NotificationType:    "ORDER_FINISH",
 		NotificationTitle:   "Pesanan Selesai",

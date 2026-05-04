@@ -73,32 +73,42 @@ func (s *WebhookService) HandleVACreate(body map[string]interface{}) (int, error
 		}
 	}()
 
+	log.Printf("[HandleVACreate] incoming body: %+v", body)
+	log.Printf("[HandleVACreate] externalID=%s name=%s", externalID, name)
+
 	var orderData models.OrderTransaction
 	if err := s.DB.
 		Where("external_id = ? AND name = ?", externalID, name).
 		First(&orderData).Error; err != nil {
+		log.Printf("[HandleVACreate] order not found for external_id=%s name=%s: %v", externalID, name, err)
 		tx.Rollback()
 		return http.StatusNotFound, errors.New("order data not found")
 	}
+	log.Printf("[HandleVACreate] found order id=%s status=%s va_id=%s", orderData.ID, orderData.OrderStatus, orderData.VAID)
 
 	var customerData models.User
 	if err := s.DB.
 		Where("id = ? AND user_type = ?", orderData.CustomerID, "customer").
 		First(&customerData).Error; err != nil {
+		log.Printf("[HandleVACreate] customer not found id=%s: %v", orderData.CustomerID, err)
 		tx.Rollback()
 		return http.StatusNotFound, errors.New("customer not found")
 	}
+	log.Printf("[HandleVACreate] found customer id=%s", customerData.ID)
 
-	if err := tx.Model(&models.OrderTransaction{}).
-		Where("va_id = ? AND external_id = ? AND name = ?", externalID, externalID, name).
+	updateResult := tx.Model(&models.OrderTransaction{}).
+		Where("id = ?", orderData.ID).
 		Updates(map[string]interface{}{
 			"xendit_status": body["status"],
 			"order_status":  "WAITING_PAYMENT",
 			"order_time":    orderData.OrderTimeTemp,
-		}).Error; err != nil {
+		})
+	if updateResult.Error != nil {
+		log.Printf("[HandleVACreate] update order failed: %v", updateResult.Error)
 		tx.Rollback()
-		return http.StatusInternalServerError, err
+		return http.StatusInternalServerError, updateResult.Error
 	}
+	log.Printf("[HandleVACreate] update order rows affected=%d", updateResult.RowsAffected)
 
 	if customerData.FirebaseToken != nil && *customerData.FirebaseToken != "" {
 		service.SendMulticast(s.DB, "customer", map[string]interface{}{
@@ -121,11 +131,18 @@ func (s *WebhookService) HandleVACreate(body map[string]interface{}) (int, error
 		NotificationType:    "PAYMENT_PROCEED",
 		NotificationTitle:   "Pembayaran telah diproses",
 		NotificationMessage: "Kamu bisa melakukan pembayaran sekarang",
+		IsRead:              "0",
+		UserType:            "customer",
+		ServiceID:           &orderData.ServiceID,
+		SubServiceID:        &orderData.SubServiceID,
+		NotifType:           "order",
 	})
 
 	if err := tx.Commit().Error; err != nil {
+		log.Printf("[HandleVACreate] commit failed: %v", err)
 		return http.StatusInternalServerError, err
 	}
+	log.Printf("[HandleVACreate] order %s updated to WAITING_PAYMENT successfully", orderData.ID)
 	return http.StatusOK, nil
 }
 

@@ -3,14 +3,15 @@ package queue
 import "encoding/json"
 
 const (
-	TypeOrderQueueCash            = "order:cash"
-	TypeOrderQueueVA              = "order:va"
-	TypeOrderOfferExpired         = "order:offer_expired"
-	TypeOrderSelectedExpired      = "order:selected_expired"
-	TypeOrderOnProgressToFinish   = "order:on_progress_to_finish"
-	TypeOrderEwalletNotifyExpired = "order:ewallet_notify_expired"
-	TypeOrderComingSoonRun        = "order:coming_soon_run"
-	TypeOrderComingSoonWarning    = "order:coming_soon_warning"
+	TypeOrderQueueCash              = "order:cash"
+	TypeOrderQueueVA                = "order:va"
+	TypeOrderOfferExpired           = "order:offer_expired"
+	TypeOrderSelectedExpired        = "order:selected_expired"
+	TypeOrderOnProgressToFinish     = "order:on_progress_to_finish"
+	TypeOrderEwalletNotifyExpired   = "order:ewallet_notify_expired"
+	TypeOrderVAEwalletNotifyExpired = "order:va_ewallet_notify_expired"
+	TypeOrderComingSoonRun          = "order:coming_soon_run"
+	TypeOrderComingSoonWarning      = "order:coming_soon_warning"
 )
 
 type OrderEwalletNotifyExpiredPayload struct {

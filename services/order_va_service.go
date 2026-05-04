@@ -1,12 +1,15 @@
 package services
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"math/big"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +23,7 @@ import (
 	"suberes_golang/service"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"gorm.io/gorm"
 )
 
@@ -51,23 +55,29 @@ func NewOrderVAService(db *gorm.DB) *OrderVAService {
 
 // CreateOrderVA creates a new VA (virtual account) order.
 func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDTO) (string, int, string, string, int, error) {
+	log.Printf("[CreateOrderVA] START customer_id=%s order_type=%s sub_payment_id=%d gross_amount=%d", customerID, dto.OrderType, dto.SubPaymentID, dto.GrossAmount)
+
 	serviceData, err := s.ServiceRepo.FindByID(dto.ServiceID)
 	if err != nil || serviceData == nil {
+		log.Printf("[CreateOrderVA] ERROR service not found service_id=%d err=%v", dto.ServiceID, err)
 		return "", 0, "", "", http.StatusNotFound, errors.New("service not found")
 	}
 
 	subService, err := s.SubServiceRepo.FindByID(dto.SubServiceID)
 	if err != nil || subService == nil {
+		log.Printf("[CreateOrderVA] ERROR sub service not found sub_service_id=%d err=%v", dto.SubServiceID, err)
 		return "", 0, "", "", http.StatusNotFound, errors.New("sub service not found")
 	}
 
 	customerData, err := s.UserRepo.FindCustomerById(customerID)
 	if err != nil || customerData == nil {
+		log.Printf("[CreateOrderVA] ERROR customer not found customer_id=%s err=%v", customerID, err)
 		return "", 0, "", "", http.StatusNotFound, errors.New("customer not found")
 	}
 
 	subPayment, err := s.SubPaymentRepo.FindById(dto.SubPaymentID)
 	if err != nil || subPayment == nil {
+		log.Printf("[CreateOrderVA] ERROR sub payment not found sub_payment_id=%d err=%v", dto.SubPaymentID, err)
 		return "", 0, "", "", http.StatusNotFound, errors.New("sub payment not found")
 	}
 
@@ -78,6 +88,7 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 	// Time validation
 	loc, err := time.LoadLocation(dto.TimezoneCode)
 	if err != nil {
+		log.Printf("[CreateOrderVA] ERROR invalid timezone_code=%s err=%v", dto.TimezoneCode, err)
 		return "", 0, "", "", http.StatusInternalServerError, err
 	}
 
@@ -87,11 +98,13 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 	if dto.OrderType == "coming soon" {
 		orderDateTime, err := time.ParseInLocation(layout, helpers.NormalizeDateTimeString(dto.OrderTime), loc)
 		if err != nil {
+			log.Printf("[CreateOrderVA] ERROR parse order_time=%s err=%v", dto.OrderTime, err)
 			return "", 0, "", "", http.StatusBadRequest, err
 		}
 		if orderDateTime.Day() >= nowDateTime.Day() && orderDateTime.Hour() >= 7 {
 			orderDateTime = orderDateTime.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
 			if orderDateTime.Hour() >= 23 && orderDateTime.Minute() > 0 {
+				log.Printf("[CreateOrderVA] ERROR order_time exceeds max working hours order_time=%s", dto.OrderTime)
 				return "", 0, "", "", http.StatusBadRequest, errors.New("Batas maksimal jam order di jam 11 malam")
 			}
 		}
@@ -99,31 +112,33 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 		for _, rep := range dto.OrderRepeatList {
 			orderDateTime, err := time.ParseInLocation(layout, helpers.NormalizeDateTimeString(rep.OrderTime), loc)
 			if err != nil {
+				log.Printf("[CreateOrderVA] ERROR parse repeat order_time=%s err=%v", rep.OrderTime, err)
 				return "", 0, "", "", http.StatusBadRequest, err
 			}
 			if orderDateTime.Day() >= nowDateTime.Day() && orderDateTime.Hour() >= 7 {
 				orderDateTime = orderDateTime.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
 				if orderDateTime.Hour() >= 23 && orderDateTime.Minute() > 0 {
+					log.Printf("[CreateOrderVA] ERROR repeat order_time exceeds max working hours order_time=%s", rep.OrderTime)
 					return "", 0, "", "", http.StatusBadRequest, errors.New("Batas maksimal jam order di jam 11 malam")
 				}
 			}
 		}
 	} else if dto.OrderType == "now" {
-		nowHours := nowDateTime.Hour()
-		nowMinutes := nowDateTime.Minute()
+		// nowHours := nowDateTime.Hour()
+		// nowMinutes := nowDateTime.Minute()
 
-		if serviceData.ServiceType == "Durasi" {
-			dateAdd := nowDateTime.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
-			if nowHours >= 23 && nowMinutes >= 0 {
-				return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
-			}
-			if dateAdd.Hour() >= 23 && dateAdd.Minute() >= 0 {
-				return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
-			}
-		}
-		if nowHours >= 20 && nowMinutes >= 0 {
-			return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam order sampai jam 8 malam")
-		}
+		// if serviceData.ServiceType == "Durasi" {
+		// 	dateAdd := nowDateTime.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
+		// 	if nowHours >= 23 && nowMinutes >= 0 {
+		// 		return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
+		// 	}
+		// 	if dateAdd.Hour() >= 23 && dateAdd.Minute() >= 0 {
+		// 		return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam operasional sampai jam 11 malam untuk layanan ini")
+		// 	}
+		// }
+		// if nowHours >= 20 && nowMinutes >= 0 {
+		// 	return "", 0, "", "", http.StatusForbidden, errors.New("Batas maksimal jam order sampai jam 8 malam")
+		// }
 	}
 
 	var idTransaction string
@@ -168,13 +183,66 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 		orderTimestamp = orderTimestampNow
 	}
 
-	// Mock VA response (actual Xendit VA creation is commented out in JS source)
-	vaID := uuid.New().String()
-	vaAccountNumber := "700701573202138234"
-	vaBankCode := dto.BankCode
-	if vaBankCode == "" {
-		vaBankCode = "BCA"
+	timeoutMinutesStr := os.Getenv("TIMEOUT_COMING_SOON_VA_PAYMENT")
+	timeoutMinutes, _ := strconv.Atoi(timeoutMinutesStr)
+	if timeoutMinutes == 0 {
+		timeoutMinutes = 30
 	}
+
+	// Call Xendit VA creation API
+	// Payload mirrors JS: { external_id, bank_code, name, expected_amount, is_single_use }
+	vaRequestPayload := map[string]interface{}{
+		"external_id":     fmt.Sprintf("VA_REQUEST_%s", idTransaction),
+		"bank_code":       dto.BankCode,
+		"name":            customerData.CompleteName,
+		"expected_amount": grossAmount,
+		"is_single_use":   false,
+		"is_closed":       true,
+	}
+	paymentClient := helpers.NewClient()
+	log.Printf("[CreateOrderVA] Xendit VA request payload: %+v", vaRequestPayload)
+	vaRespBytes, err := paymentClient.CreateVirtualAccount(context.Background(), vaRequestPayload)
+	if err != nil {
+		log.Printf("[CreateOrderVA] ERROR xendit VA creation failed id_transaction=%s err=%v", idTransaction, err)
+		return "", 0, "", "", http.StatusInternalServerError, fmt.Errorf("xendit VA creation failed: %w", err)
+	}
+	log.Printf("[CreateOrderVA] Xendit VA raw response: %s", string(vaRespBytes))
+	var vaResp map[string]interface{}
+	if err := json.Unmarshal(vaRespBytes, &vaResp); err != nil {
+		log.Printf("[CreateOrderVA] ERROR parse xendit VA response id_transaction=%s err=%v", idTransaction, err)
+		return "", 0, "", "", http.StatusInternalServerError, fmt.Errorf("failed to parse xendit VA response: %w", err)
+	}
+	log.Printf("[CreateOrderVA] Xendit VA parsed: va_id=%v external_id=%v account_number=%v bank_code=%v expiration_date=%v status=%v",
+		vaResp["id"], vaResp["external_id"], vaResp["account_number"], vaResp["bank_code"], vaResp["expiration_date"], vaResp["status"])
+	// Map Xendit response fields — mirrors JS payloadVaResponse
+	vaID := fmt.Sprintf("%v", vaResp["id"])
+	vaOwnerID := fmt.Sprintf("%v", vaResp["owner_id"])
+	vaExternalID := fmt.Sprintf("%v", vaResp["external_id"])
+	vaAccountNumber := fmt.Sprintf("%v", vaResp["account_number"])
+	vaBankCode := fmt.Sprintf("%v", vaResp["bank_code"])
+	vaMerchantCode := fmt.Sprintf("%v", vaResp["merchant_code"])
+	vaName := fmt.Sprintf("%v", vaResp["name"])
+	vaExpirationDate := fmt.Sprintf("%v", vaResp["expiration_date"])
+	if vaExpirationDate == "" || vaExpirationDate == "<nil>" || vaExpirationDate == "%!v(MISSING)" {
+		vaExpirationDate = time.Now().UTC().Add(time.Duration(timeoutMinutes) * time.Minute).Format(time.RFC3339)
+	}
+	vaExpectedAmount := int(grossAmount)
+	if v, ok := vaResp["expected_amount"]; ok {
+		switch val := v.(type) {
+		case float64:
+			vaExpectedAmount = int(val)
+		}
+	}
+	vaIsClosed := "0"
+	if v, ok := vaResp["is_closed"]; ok && v == true {
+		vaIsClosed = "1"
+	}
+	vaIsSingleUse := "0"
+	if v, ok := vaResp["is_single_use"]; ok && v == true {
+		vaIsSingleUse = "1"
+	}
+	vaCurrency := fmt.Sprintf("%v", vaResp["currency"])
+	vaXenditStatus := fmt.Sprintf("%v", vaResp["status"])
 
 	tx := s.DB.Begin()
 	defer func() {
@@ -216,15 +284,18 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 		OfferExpiredJobID:     uuid.New().String(),
 		OfferSelectedJobID:    uuid.New().String(),
 		VAID:                  vaID,
-		ExternalID:            idTransaction,
+		OwnerID:               vaOwnerID,
+		ExternalID:            vaExternalID,
 		AccountNumber:         vaAccountNumber,
 		BankCode:              vaBankCode,
-		Name:                  fmt.Sprintf("Order ID : %s", idTransaction),
-		IsClosed:              "1",
-		ExpectedAmount:        int(grossAmount),
-		IsSingleUse:           "1",
-		XenditStatus:          "PENDING",
-		Currency:              "IDR",
+		MerchantCode:          vaMerchantCode,
+		Name:                  vaName,
+		IsClosed:              vaIsClosed,
+		ExpectedAmount:        vaExpectedAmount,
+		ExpirationDate:        vaExpirationDate,
+		IsSingleUse:           vaIsSingleUse,
+		Currency:              vaCurrency,
+		XenditStatus:          vaXenditStatus,
 		IsRated:               "0",
 		IsRatedCustomer:       "0",
 		IsMitraOnline:         "0",
@@ -240,9 +311,11 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 
 	order, err := s.OrderTransactionRepo.CreateOrderData(tx, *orderData)
 	if err != nil {
+		log.Printf("[CreateOrderVA] ERROR create order id_transaction=%s err=%v", idTransaction, err)
 		tx.Rollback()
 		return "", 0, "", "", http.StatusInternalServerError, err
 	}
+	log.Printf("[CreateOrderVA] Order created order_id=%s id_transaction=%s customer_id=%s", order.ID, idTransaction, customerID)
 
 	// Sub service added
 	if len(dto.OrderAdditionalList) > 0 {
@@ -302,9 +375,20 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 	}
 
 	if err := tx.Commit().Error; err != nil {
+		log.Printf("[CreateOrderVA] ERROR commit tx order_id=%s err=%v", order.ID, err)
 		return "", 0, "", "", http.StatusInternalServerError, err
 	}
 
+	// Enqueue payment expiry job: cancel order to CANCELED_LATE_PAYMENT if not paid in time
+	notifyPayload, _ := queue.NewOrderEwalletNotifyExpiredTask(order.ID, customerID)
+	notifyTask := asynq.NewTask(queue.TypeOrderVAEwalletNotifyExpired, notifyPayload)
+	if _, enqErr := queue.AsynqClient.Enqueue(notifyTask, asynq.ProcessIn(time.Duration(timeoutMinutes)*time.Minute)); enqErr != nil {
+		log.Printf("[CreateOrderVA] ERROR enqueue payment expiry job order_id=%s err=%v", order.ID, enqErr)
+	} else {
+		log.Printf("[CreateOrderVA] Payment expiry job enqueued order_id=%s timeout=%d minutes", order.ID, timeoutMinutes)
+	}
+
+	log.Printf("[CreateOrderVA] SUCCESS order_id=%s id_transaction=%s customer_id=%s mitra_id=%s", order.ID, idTransaction, order.CustomerID, helpers.DerefStr(order.MitraID))
 	return order.ID, -1, order.CustomerID, helpers.DerefStr(order.MitraID), http.StatusOK, nil
 }
 

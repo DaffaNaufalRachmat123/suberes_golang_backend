@@ -59,6 +59,7 @@ func StartWorker() {
 	mux.HandleFunc(TypeOrderSelectedExpired, HandleOrderSelectedExpiredTask)
 	mux.HandleFunc(TypeOrderOnProgressToFinish, HandleOrderOnProgressToFinishTask)
 	mux.HandleFunc(TypeOrderEwalletNotifyExpired, HandleOrderEwalletNotifyExpiredTask)
+	mux.HandleFunc(TypeOrderVAEwalletNotifyExpired, HandleOrderEwalletNotifyExpiredTask)
 	mux.HandleFunc(TypeOrderComingSoonRun, HandleOrderComingSoonRunTask)
 	mux.HandleFunc(TypeOrderComingSoonWarning, HandleOrderComingSoonWarningTask)
 

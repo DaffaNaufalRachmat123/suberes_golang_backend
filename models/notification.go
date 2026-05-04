@@ -3,12 +3,12 @@ package models
 type Notification struct {
 	ID                  string  `gorm:"type:varchar(36);primaryKey" json:"id"`
 	CustomerID          string  `gorm:"type:varchar(36)" json:"customer_id"`
-	AdminID             int     `gorm:"type:integer" json:"admin_id"`
-	MitraID             string  `gorm:"type:varchar(36)" json:"mitra_id"`
+	AdminID             *string `gorm:"type:varchar(36);default:null" json:"admin_id"`
+	MitraID             *string `gorm:"type:varchar(36);default:null" json:"mitra_id"`
 	OrderID             string  `gorm:"type:varchar(36)" json:"order_id"`
 	SubOrderID          *int    `gorm:"type:integer;default:null" json:"sub_order_id"`
-	ServiceID           int     `gorm:"type:integer" json:"service_id"`
-	SubServiceID        int     `gorm:"type:integer" json:"sub_service_id"`
+	ServiceID           *int    `gorm:"type:integer;default:null" json:"service_id"`
+	SubServiceID        *int    `gorm:"type:integer;default:null" json:"sub_service_id"`
 	TransactionID       *string `gorm:"type:varchar(36);default:null" json:"transaction_id"`
 	UserType            string  `gorm:"type:varchar(10);check:user_type IN ('customer','mitra','admin')" json:"user_type"`
 	NotificationType    string  `gorm:"type:varchar(255)" json:"notification_type"`
