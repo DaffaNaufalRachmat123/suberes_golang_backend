@@ -99,7 +99,20 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 		tempID := uuid.New().String()
 		var orderOffersPayload []models.OrderOffer
 		var registrationTokenList []string
-		for _, mitra := range result.PayloadMitra {
+
+		log.Printf("[OrderQueueCash] ════════════════════════════════════════")
+		log.Printf("[OrderQueueCash] ORDER BROADCAST")
+		log.Printf("[OrderQueueCash] order_id      : %s", orderData.ID)
+		log.Printf("[OrderQueueCash] customer_id   : %s", orderData.CustomerID)
+		log.Printf("[OrderQueueCash] customer_name : %s", customerData.CompleteName)
+		log.Printf("[OrderQueueCash] order_type    : %s", orderData.OrderType)
+		log.Printf("[OrderQueueCash] payment_type  : %s", orderData.PaymentType)
+		log.Printf("[OrderQueueCash] service       : %s > %s", serviceData.ServiceName, subServiceData.SubPriceServiceTitle)
+		log.Printf("[OrderQueueCash] mitra_count   : %d", len(result.PayloadMitra))
+		log.Printf("[OrderQueueCash] is_auto_bid   : %v (mitra_id: %s)", result.IsAutoBid, result.AutoBidMitraID)
+		log.Printf("[OrderQueueCash] ────────────────────────────────────────")
+		for i, mitra := range result.PayloadMitra {
+			log.Printf("[OrderQueueCash] mitra[%d] id=%s balance=%d auto_bid=%s", i+1, mitra.ID, mitra.AccountBalance, mitra.IsAutoBid)
 			orderOffersPayload = append(orderOffersPayload, models.OrderOffer{
 				TempID:     tempID,
 				OrderID:    orderData.ID,
@@ -110,6 +123,7 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 				registrationTokenList = append(registrationTokenList, *mitra.FirebaseToken)
 			}
 		}
+		log.Printf("[OrderQueueCash] ════════════════════════════════════════")
 
 		tx := config.DB.Begin()
 		if err := tx.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Update("temp_id", tempID).Error; err != nil {
@@ -125,9 +139,12 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 			return fmt.Errorf("failed to commit order offers transaction: %v", err)
 		}
 
-		log.Printf("Sending push notifications to tokens: %v", registrationTokenList)
+		log.Printf("[OrderQueueCash] Sending FCM to %d mitra tokens", len(registrationTokenList))
 
 		// --- Kirim push notification ke mitra ---
+		timeoutCanTakeOrder := envMinutes("TIMEOUT_CAN_TAKE_ORDER", 1)
+		timeoutFindingOrder := envMinutes("TIMEOUT_FINDING_ORDER", 2)
+
 		if len(registrationTokenList) > 0 {
 			notifType := constants.ORDER_BROADCAST
 			titleOrder := "Orderan Masuk"
@@ -137,16 +154,18 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 				messageOrder = "Orderan Otomatis Masuk Ke Akun Mu"
 			}
 			msgData := map[string]interface{}{
-				"temp_id":           tempID,
-				"notification_type": notifType,
-				"title":             titleOrder,
-				"message":           messageOrder,
-				"order_id":          orderData.ID,
-				"order_type":        orderData.OrderType,
-				"payment_type":      orderData.PaymentType,
-				"customer_id":       orderData.CustomerID,
-				"notification_id":   strconv.Itoa(orderData.NotificationID),
-				"notif_type":        "order",
+				"temp_id":                   tempID,
+				"notification_type":         notifType,
+				"title":                     titleOrder,
+				"message":                   messageOrder,
+				"order_id":                  orderData.ID,
+				"order_type":                orderData.OrderType,
+				"payment_type":              orderData.PaymentType,
+				"customer_id":               orderData.CustomerID,
+				"notification_id":           strconv.Itoa(orderData.NotificationID),
+				"notif_type":                "order",
+				"order_time_created":        time.Now().UTC().Format("2006-01-02 15:04:05"),
+				"order_time_expired_period": strconv.Itoa(int(timeoutCanTakeOrder.Seconds())),
 			}
 			if result.IsAutoBid {
 				msgData["mitra_id"] = result.AutoBidMitraID
@@ -164,10 +183,11 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 			log.Printf("No tokens to send push notification to")
 		}
 
-		// ---
+		// Mark blast_time_complete — countdown starts from NOW for mitra
+		now := time.Now()
+		config.DB.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Update("blast_time_complete", now)
 
-		timeoutCanTakeOrder := envMinutes("TIMEOUT_CAN_TAKE_ORDER", 1)
-		timeoutFindingOrder := envMinutes("TIMEOUT_FINDING_ORDER", 2)
+		// ---
 
 		offerExpiredTaskPayload, err := NewOrderOfferExpiredTask(orderData.ID, tempID, orderData.CustomerID, orderData.NotificationID, timeoutFindingOrder.String())
 		if err != nil {
@@ -176,7 +196,15 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 		if _, err = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferExpired, offerExpiredTaskPayload), asynq.ProcessIn(timeoutCanTakeOrder)); err != nil {
 			return fmt.Errorf("could not enqueue offer expired task: %v", err)
 		}
+		// Enqueue per-mitra expiry cleanup
+		for _, offer := range orderOffersPayload {
+			perMitraPayload, perMitraErr := NewOrderOfferMitraExpiredTask(orderData.ID, offer.MitraID, tempID)
+			if perMitraErr == nil {
+				_, _ = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferMitraExpired, perMitraPayload), asynq.ProcessIn(timeoutCanTakeOrder))
+			}
+		}
 	} else {
+		log.Printf("[OrderQueueCash] ⚠️  NO MITRA FOUND for order_id=%s customer_id=%s — transitioning to WAITING_FOR_SELECTED_MITRA", orderData.ID, orderData.CustomerID)
 		if err := config.DB.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Update("order_status", "WAITING_FOR_SELECTED_MITRA").Error; err != nil {
 			return fmt.Errorf("failed to update order status: %v", err)
 		}
@@ -206,6 +234,12 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 	var orderData models.OrderTransaction
 	if err := config.DB.Where("id = ?", p.OrderID).First(&orderData).Error; err != nil {
 		return fmt.Errorf("failed to find order transaction with id %s: %v", p.OrderID, err)
+	}
+
+	// Guard: only proceed if order is in FINDING_MITRA status
+	if orderData.OrderStatus != "FINDING_MITRA" {
+		log.Printf("Order %s is not in FINDING_MITRA status (current: %s), skipping mitra search", p.OrderID, orderData.OrderStatus)
+		return nil
 	}
 
 	// Fetch customer, service, sub_service, repeats in parallel.
@@ -273,7 +307,19 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 
 	if len(result.PayloadMitra) > 0 {
 		// 3. Ada mitra ditemukan
-		for _, mitra := range result.PayloadMitra {
+		log.Printf("[OrderQueueVA] ════════════════════════════════════════")
+		log.Printf("[OrderQueueVA] ORDER BROADCAST")
+		log.Printf("[OrderQueueVA] order_id      : %s", orderData.ID)
+		log.Printf("[OrderQueueVA] customer_id   : %s", orderData.CustomerID)
+		log.Printf("[OrderQueueVA] customer_name : %s", customerData.CompleteName)
+		log.Printf("[OrderQueueVA] order_type    : %s", orderData.OrderType)
+		log.Printf("[OrderQueueVA] payment_type  : %s", orderData.PaymentType)
+		log.Printf("[OrderQueueVA] service       : %s > %s", serviceData.ServiceName, subServiceData.SubPriceServiceTitle)
+		log.Printf("[OrderQueueVA] mitra_count   : %d", len(result.PayloadMitra))
+		log.Printf("[OrderQueueVA] is_auto_bid   : %v (mitra_id: %s)", result.IsAutoBid, result.AutoBidMitraID)
+		log.Printf("[OrderQueueVA] ────────────────────────────────────────")
+		for i, mitra := range result.PayloadMitra {
+			log.Printf("[OrderQueueVA] mitra[%d] id=%s balance=%d auto_bid=%s", i+1, mitra.ID, mitra.AccountBalance, mitra.IsAutoBid)
 			orderOffersPayload = append(orderOffersPayload, models.OrderOffer{
 				TempID:     tempID,
 				OrderID:    orderData.ID,
@@ -284,6 +330,7 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 				registrationTokenList = append(registrationTokenList, *mitra.FirebaseToken)
 			}
 		}
+		log.Printf("[OrderQueueVA] ════════════════════════════════════════")
 
 		tx := config.DB.Begin()
 		if err := tx.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Updates(map[string]interface{}{
@@ -303,6 +350,10 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 		}
 
 		// Push notification ke mitra
+		log.Printf("[OrderQueueVA] Sending FCM to %d mitra tokens", len(registrationTokenList))
+		timeoutCanTakeOrder := envMinutes("TIMEOUT_CAN_TAKE_ORDER", 1)
+		timeoutFindingOrder := envMinutes("TIMEOUT_FINDING_ORDER", 2)
+
 		if len(registrationTokenList) > 0 {
 			notifType := constants.ORDER_BROADCAST
 			titleOrder := "Orderan Masuk"
@@ -312,16 +363,18 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 				messageOrder = "Orderan Otomatis Masuk Ke Akun Mu"
 			}
 			msgData := map[string]interface{}{
-				"temp_id":           tempID,
-				"notification_type": notifType,
-				"title":             titleOrder,
-				"message":           messageOrder,
-				"order_id":          orderData.ID,
-				"order_type":        orderData.OrderType,
-				"payment_type":      orderData.PaymentType,
-				"customer_id":       orderData.CustomerID,
-				"notification_id":   strconv.Itoa(orderData.NotificationID),
-				"notif_type":        "order",
+				"temp_id":                   tempID,
+				"notification_type":         notifType,
+				"title":                     titleOrder,
+				"message":                   messageOrder,
+				"order_id":                  orderData.ID,
+				"order_type":                orderData.OrderType,
+				"payment_type":              orderData.PaymentType,
+				"customer_id":               orderData.CustomerID,
+				"notification_id":           strconv.Itoa(orderData.NotificationID),
+				"notif_type":                "order",
+				"order_time_created":        time.Now().UTC().Format("2006-01-02 15:04:05"),
+				"order_time_expired_period": strconv.Itoa(int(timeoutCanTakeOrder.Seconds())),
 			}
 			if result.IsAutoBid {
 				msgData["mitra_id"] = result.AutoBidMitraID
@@ -335,10 +388,11 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 			}
 		}
 
-		// Delay untuk offer expired dan selected expired
-		timeoutCanTakeOrder := envMinutes("TIMEOUT_CAN_TAKE_ORDER", 1)
-		timeoutFindingOrder := envMinutes("TIMEOUT_FINDING_ORDER", 2)
+		// Mark blast_time_complete — countdown starts from NOW for mitra
+		now := time.Now()
+		config.DB.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Update("blast_time_complete", now)
 
+		// Delay untuk offer expired dan selected expired
 		offerExpiredTaskPayload, err := NewOrderOfferExpiredTask(orderData.ID, tempID, orderData.CustomerID, orderData.NotificationID, timeoutFindingOrder.String())
 		if err != nil {
 			return fmt.Errorf("failed to create offer expired task payload: %v", err)
@@ -346,8 +400,16 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 		if _, err = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferExpired, offerExpiredTaskPayload), asynq.ProcessIn(timeoutCanTakeOrder)); err != nil {
 			return fmt.Errorf("could not enqueue offer expired task: %v", err)
 		}
+		// Enqueue per-mitra expiry cleanup
+		for _, offer := range orderOffersPayload {
+			perMitraPayload, perMitraErr := NewOrderOfferMitraExpiredTask(orderData.ID, offer.MitraID, tempID)
+			if perMitraErr == nil {
+				_, _ = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferMitraExpired, perMitraPayload), asynq.ProcessIn(timeoutCanTakeOrder))
+			}
+		}
 	} else {
 		// 4. Tidak ada mitra ditemukan
+		log.Printf("[OrderQueueVA] ⚠️  NO MITRA FOUND for order_id=%s customer_id=%s — transitioning to WAITING_FOR_SELECTED_MITRA", orderData.ID, orderData.CustomerID)
 		if err := config.DB.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Updates(map[string]interface{}{
 			"order_time":   time.Now(),
 			"temp_id":      tempID,
@@ -369,6 +431,29 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 		}
 	}
 
+	return nil
+}
+
+func HandleOrderOfferMitraExpiredTask(ctx context.Context, t *asynq.Task) error {
+	var p OrderOfferMitraExpiredPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
+	}
+
+	log.Printf("[OrderOfferMitraExpired] checking order_id=%s mitra_id=%s temp_id=%s", p.OrderID, p.MitraID, p.TempID)
+
+	// Delete only this mitra's offer if it still exists (temp_id ensures it's the right round)
+	result := config.DB.Where("order_id = ? AND mitra_id = ? AND temp_id = ?", p.OrderID, p.MitraID, p.TempID).
+		Delete(&models.OrderOffer{})
+	if result.Error != nil {
+		log.Printf("[OrderOfferMitraExpired] ERROR deleting offer: %v", result.Error)
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		log.Printf("[OrderOfferMitraExpired] ✓ deleted expired offer for mitra_id=%s order_id=%s", p.MitraID, p.OrderID)
+	} else {
+		log.Printf("[OrderOfferMitraExpired] offer already handled (rows=0) mitra_id=%s order_id=%s", p.MitraID, p.OrderID)
+	}
 	return nil
 }
 

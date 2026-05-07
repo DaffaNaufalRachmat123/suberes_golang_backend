@@ -414,17 +414,8 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	case float64:
 		paymentID = int(v)
 	}
-	payment, err := s.PaymentRepo.FindById(paymentID)
-	if err != nil {
-		fmt.Printf("[AcceptOrder] ERROR FindById Payment: %v\n", err)
-		return 500, nil, err
-	}
-	if payment == nil {
-		fmt.Printf("[AcceptOrder] ERROR payment nil\n")
-		return 404, nil, errors.New("payment not found")
-	}
 
-	// 3. Extract customer_id and fetch customer data.
+	// 3. Extract customer_id.
 	var customerID string
 	switch v := orderData["customer_id"].(type) {
 	case string:
@@ -436,25 +427,52 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		return 500, nil, fmt.Errorf("customer_id tipe tidak dikenali")
 	}
 
-	customer, err := s.UserRepo.FindCustomerById(customerID)
-	if err != nil {
-		fmt.Printf("[AcceptOrder] ERROR FindCustomerById: %v\n", err)
-		return 500, nil, err
+	// Parallel fetch: payment, customer, mitra
+	type parallelResult struct {
+		payment  *models.Payment
+		customer *models.User
+		mitra    *models.User
 	}
-	if customer == nil {
-		fmt.Printf("[AcceptOrder] ERROR customer nil\n")
+	var pr parallelResult
+	var pErr, cErr, mErr error
+	done := make(chan struct{})
+	go func() {
+		pr.payment, pErr = s.PaymentRepo.FindById(paymentID)
+		done <- struct{}{}
+	}()
+	go func() {
+		pr.customer, cErr = s.UserRepo.FindCustomerById(customerID)
+		done <- struct{}{}
+	}()
+	go func() {
+		pr.mitra, mErr = s.UserRepo.FindMitraById(data.MitraID)
+		done <- struct{}{}
+	}()
+	<-done
+	<-done
+	<-done
+
+	if pErr != nil {
+		return 500, nil, pErr
+	}
+	if pr.payment == nil {
+		return 404, nil, errors.New("payment not found")
+	}
+	if cErr != nil {
+		return 500, nil, cErr
+	}
+	if pr.customer == nil {
 		return 404, nil, errors.New("customer not found")
 	}
-
-	mitra, err := s.UserRepo.FindMitraById(data.MitraID)
-	if err != nil {
-		fmt.Printf("[AcceptOrder] ERROR FindMitraById: %v\n", err)
-		return 500, nil, err
+	if mErr != nil {
+		return 500, nil, mErr
 	}
-	if mitra == nil {
-		fmt.Printf("[AcceptOrder] ERROR mitra nil\n")
+	if pr.mitra == nil {
 		return 404, nil, errors.New("mitra not found")
 	}
+	payment := pr.payment
+	customer := pr.customer
+	mitra := pr.mitra
 
 	// 4. Check Redis for booking state.
 	playerMitraIDs, err := helpers.GetValue(data.TempID)
@@ -492,53 +510,10 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		}
 	}()
 
-	// 5. Notify other mitras in the broadcast group that they lost the order.
+	// 5. Collect other mitra IDs for later LOST_BROADCAST (non-blocking).
 	var playerMitraIDArray []string
 	if playerMitraIDs != "" {
 		playerMitraIDArray = strings.Split(playerMitraIDs, ",")
-	}
-
-	if len(playerMitraIDArray) >= 1 {
-		var filteredIDs []string
-		for _, id := range playerMitraIDArray {
-			if id != mitra.ID {
-				filteredIDs = append(filteredIDs, id)
-			}
-		}
-
-		var firebaseTokenArray []string
-		if len(filteredIDs) > 0 {
-			var users []models.User
-			if err := tx.Select("firebase_token").Where("id IN ?", filteredIDs).
-				Find(&users).Error; err != nil {
-				tx.Rollback()
-				fmt.Printf("[AcceptOrder] ERROR Find users for LOST_BROADCAST: %v\n", err)
-				return 500, nil, err
-			}
-			for _, u := range users {
-				if u.FirebaseToken != nil && *u.FirebaseToken != "" && *u.FirebaseToken != "null" {
-					firebaseTokenArray = append(firebaseTokenArray, *u.FirebaseToken)
-				}
-			}
-		}
-
-		if len(firebaseTokenArray) > 0 {
-			payloadMessage := map[string]interface{}{
-				"data": map[string]string{
-					"notification_type": "LOST_BROADCAST",
-					"title":             "Yah...kamu kehilangan order",
-					"message":           fmt.Sprintf("Tawaran order dari customer %s telah diambil mitra lain", customer.CompleteName),
-					"order_id":          data.OrderID,
-					"notification_id":   fmt.Sprintf("%v", orderData["notification_id"]),
-					"customer_id":       data.CustomerID,
-					"notif_type":        "order",
-				},
-				"tokens": firebaseTokenArray,
-			}
-			if _, err = service.SendMulticast(s.DB, "mitra", payloadMessage); err != nil {
-				log.Printf("[AcceptOrder] WARNING SendMulticast LOST_BROADCAST: %v", err)
-			}
-		}
 	}
 
 	// 6. Generate RSA and Diffie-Hellman keys.
@@ -660,90 +635,102 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		return 500, nil, err
 	}
 
-	// 12. Schedule coming-soon run and warning tasks via asynq.
-	if orderType == "coming soon" {
-		var orderTime time.Time
-		switch v := orderData["order_time"].(type) {
-		case time.Time:
-			orderTime = v
-		case []byte:
-			orderTime, _ = time.Parse("2006-01-02 15:04:05", string(v))
-		case string:
-			orderTime, _ = time.Parse("2006-01-02 15:04:05", v)
-		}
-		if !orderTime.IsZero() {
-			runPayload, _ := queue.NewOrderComingSoonRunTask(data.OrderID)
-			runTask := asynq.NewTask(queue.TypeOrderComingSoonRun, runPayload)
-			if _, err := queue.AsynqClient.Enqueue(runTask, asynq.ProcessAt(orderTime)); err != nil {
-				log.Printf("[AcceptOrder] WARNING enqueue ComingSoonRun: %v", err)
+	// Post-commit async: FCM, queue scheduling, Redis cleanup, admin socket
+	go func() {
+		// Notify other mitras (LOST_BROADCAST)
+		if len(playerMitraIDArray) >= 1 {
+			var filteredIDs []string
+			for _, id := range playerMitraIDArray {
+				if id != mitra.ID {
+					filteredIDs = append(filteredIDs, id)
+				}
 			}
-			warningPayload, _ := queue.NewOrderComingSoonWarningTask(data.OrderID)
-			warningTask := asynq.NewTask(queue.TypeOrderComingSoonWarning, warningPayload)
-			if _, err := queue.AsynqClient.Enqueue(warningTask, asynq.ProcessAt(orderTime.Add(3*time.Minute))); err != nil {
-				log.Printf("[AcceptOrder] WARNING enqueue ComingSoonWarning: %v", err)
+			if len(filteredIDs) > 0 {
+				var users []models.User
+				s.DB.Select("firebase_token").Where("id IN ?", filteredIDs).Find(&users)
+				var firebaseTokenArray []string
+				for _, u := range users {
+					if u.FirebaseToken != nil && *u.FirebaseToken != "" && *u.FirebaseToken != "null" {
+						firebaseTokenArray = append(firebaseTokenArray, *u.FirebaseToken)
+					}
+				}
+				if len(firebaseTokenArray) > 0 {
+					service.SendMulticast(s.DB, "mitra", map[string]interface{}{
+						"data": map[string]string{
+							"notification_type": "LOST_BROADCAST",
+							"title":             "Yah...kamu kehilangan order",
+							"message":           fmt.Sprintf("Tawaran order dari customer %s telah diambil mitra lain", customer.CompleteName),
+							"order_id":          data.OrderID,
+							"notification_id":   fmt.Sprintf("%v", orderData["notification_id"]),
+							"customer_id":       data.CustomerID,
+							"notif_type":        "order",
+						},
+						"tokens": firebaseTokenArray,
+					})
+				}
 			}
 		}
-	}
 
-	// 13. Remove the offer-expired and offer-selected queue jobs.
-	if expiredJobId != "" {
-		if err := queue.Inspector.DeleteTask(queue.TypeOrderOfferExpired, expiredJobId); err != nil {
-			log.Printf("[AcceptOrder] WARNING DeleteTask OfferExpired: %v", err)
+		// Schedule coming-soon tasks
+		if orderType == "coming soon" {
+			var orderTime time.Time
+			switch v := orderData["order_time"].(type) {
+			case time.Time:
+				orderTime = v
+			case []byte:
+				orderTime, _ = time.Parse("2006-01-02 15:04:05", string(v))
+			case string:
+				orderTime, _ = time.Parse("2006-01-02 15:04:05", v)
+			}
+			if !orderTime.IsZero() {
+				runPayload, _ := queue.NewOrderComingSoonRunTask(data.OrderID)
+				queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderComingSoonRun, runPayload), asynq.ProcessAt(orderTime))
+				warningPayload, _ := queue.NewOrderComingSoonWarningTask(data.OrderID)
+				queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderComingSoonWarning, warningPayload), asynq.ProcessAt(orderTime.Add(3*time.Minute)))
+			}
 		}
-	}
-	if offerSelectedJobId != "" {
-		if err := queue.Inspector.DeleteTask(queue.TypeOrderSelectedExpired, offerSelectedJobId); err != nil {
-			log.Printf("[AcceptOrder] WARNING DeleteTask OfferSelectedExpired: %v", err)
-		}
-	}
 
-	// 14. Notify customer that a mitra has been found.
-	if customer.FirebaseToken != nil && *customer.FirebaseToken != "" {
-		payloadCustomer := map[string]interface{}{
-			"data": map[string]interface{}{
-				"notification_type": "GOT_ORDER",
-				"title":             "Kamu dapat mitra",
-				"message":           "Halo, kamu sudah dapat mitra untuk order mu",
-				"order_id":          data.OrderID,
-				"mitra_id":          data.MitraID,
-				"customer_id":       data.CustomerID,
-				"notif_type":        "order",
-			},
-			"tokens": []string{*customer.FirebaseToken},
+		// Remove expired queue jobs
+		if expiredJobId != "" {
+			queue.Inspector.DeleteTask(queue.TypeOrderOfferExpired, expiredJobId)
 		}
-		if _, err = service.SendMulticast(s.DB, "customer", payloadCustomer); err != nil {
-			log.Printf("[AcceptOrder] WARNING SendMulticast Customer: %v", err)
+		if offerSelectedJobId != "" {
+			queue.Inspector.DeleteTask(queue.TypeOrderSelectedExpired, offerSelectedJobId)
 		}
-	}
 
-	// 15. Clean up Redis broadcast keys.
-	if err := helpers.DeleteValue(data.TempID); err != nil {
-		log.Printf("[AcceptOrder] WARNING DeleteValue TempID: %v", err)
-	}
-	if err := helpers.DeleteValue(fmt.Sprintf("SELECT_MITRA_%s", data.OrderID)); err != nil {
-		log.Printf("[AcceptOrder] WARNING DeleteValue SELECT_MITRA: %v", err)
-	}
+		// FCM to customer
+		if customer.FirebaseToken != nil && *customer.FirebaseToken != "" {
+			service.SendMulticast(s.DB, "customer", map[string]interface{}{
+				"data": map[string]interface{}{
+					"notification_type": "GOT_ORDER",
+					"title":             "Kamu dapat mitra",
+					"message":           "Halo, kamu sudah dapat mitra untuk order mu",
+					"order_id":          data.OrderID,
+					"mitra_id":          data.MitraID,
+					"customer_id":       data.CustomerID,
+					"notif_type":        "order",
+				},
+				"tokens": []string{*customer.FirebaseToken},
+			})
+		}
 
-	// 16. Broadcast live order counts to all online admin sockets.
-	onlineAdminList, err := s.UserRepo.FindOnlineAdmins()
-	if err != nil {
-		log.Printf("[AcceptOrder] WARNING FindOnlineAdmins: %v", err)
-	}
-	runningCount, _ := s.OrderTransactionRepo.CountRunningOrders()
-	waitingCount, _ := s.OrderTransactionRepo.CountWaitingOrders()
-	for _, socketID := range onlineAdminList {
-		realtime.Server.BroadcastToRoom(
-			"/",
-			socketID,
-			constants.MESSAGE_SOCKET_ADMIN,
-			map[string]interface{}{
+		// Redis cleanup
+		helpers.DeleteValue(data.TempID)
+		helpers.DeleteValue(fmt.Sprintf("SELECT_MITRA_%s", data.OrderID))
+
+		// Admin socket broadcast
+		onlineAdminList, _ := s.UserRepo.FindOnlineAdmins()
+		runningCount, _ := s.OrderTransactionRepo.CountRunningOrders()
+		waitingCount, _ := s.OrderTransactionRepo.CountWaitingOrders()
+		for _, socketID := range onlineAdminList {
+			realtime.Server.BroadcastToRoom("/", socketID, constants.MESSAGE_SOCKET_ADMIN, map[string]interface{}{
 				"notification_type":   constants.NOTIFICATION_ORDER_RUNNING,
 				"order_id":            data.OrderID,
 				"order_running_count": runningCount,
 				"order_waiting_count": waitingCount,
-			},
-		)
-	}
+			})
+		}
+	}()
 
 	payloadResponse := map[string]interface{}{
 		"order_id":       data.OrderID,

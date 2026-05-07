@@ -598,7 +598,7 @@ func (s *CustomerService) UpdateUserProfile(
 }
 
 func (s *CustomerService) Logout(ID string) (map[string]interface{}, int, error) {
-	user, err := s.UserRepo.FindCustomerByEmail(ID)
+	user, err := s.UserRepo.FindCustomerById(ID)
 	if err != nil {
 		return nil, 500, err
 	}

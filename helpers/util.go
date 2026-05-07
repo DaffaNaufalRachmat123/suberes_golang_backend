@@ -802,6 +802,23 @@ func CopyFields(data map[string]interface{}, target map[string]interface{}) {
 
 	for _, f := range fields {
 		if val, ok := data[f]; ok {
+			// sub_order_id = "-1" or -1 means "no sub order" — skip to keep it NULL
+			if f == "sub_order_id" {
+				switch v := val.(type) {
+				case string:
+					if v == "-1" || v == "" {
+						continue
+					}
+				case int:
+					if v == -1 {
+						continue
+					}
+				case float64:
+					if v == -1 {
+						continue
+					}
+				}
+			}
 			switch f {
 			case "title":
 				target["notification_title"] = val

@@ -402,18 +402,32 @@ func (s *OrderEwalletService) AcceptOrderEwallet(dto dtos.AcceptOrderDTO) (int, 
 		return http.StatusNotFound, nil, errors.New("order not found")
 	}
 
-	payment, err := s.PaymentRepo.FindById(int(orderData["payment_id"].(int64)))
-	if err != nil || payment == nil {
+	// Parallel fetch: payment, customer, mitra
+	var payment *models.Payment
+	var customer *models.User
+	var mitra *models.User
+	var pErr, cErr, mErr error
+	done := make(chan struct{})
+	go func() {
+		payment, pErr = s.PaymentRepo.FindById(int(orderData["payment_id"].(int64)))
+		done <- struct{}{}
+	}()
+	go func() {
+		customer, cErr = s.UserRepo.FindCustomerById(fmt.Sprintf("%v", orderData["customer_id"]))
+		done <- struct{}{}
+	}()
+	go func() { mitra, mErr = s.UserRepo.FindMitraById(dto.MitraID); done <- struct{}{} }()
+	<-done
+	<-done
+	<-done
+
+	if pErr != nil || payment == nil {
 		return http.StatusNotFound, nil, errors.New("payment not found")
 	}
-
-	customer, err := s.UserRepo.FindCustomerById(fmt.Sprintf("%v", orderData["customer_id"]))
-	if err != nil || customer == nil {
+	if cErr != nil || customer == nil {
 		return http.StatusNotFound, nil, errors.New("customer not found")
 	}
-
-	mitra, err := s.UserRepo.FindMitraById(dto.MitraID)
-	if err != nil || mitra == nil {
+	if mErr != nil || mitra == nil {
 		return http.StatusNotFound, nil, errors.New("mitra not found")
 	}
 
@@ -423,38 +437,6 @@ func (s *OrderEwalletService) AcceptOrderEwallet(dto dtos.AcceptOrderDTO) (int, 
 
 	if playerMitraIDs != "" {
 		return http.StatusConflict, nil, errors.New("this order was taken by another mitra")
-	}
-
-	// Notify other mitras that they lost the order
-	ids := strings.Split(playerMitraIDs, ",")
-	var filteredIDs []string
-	for _, id := range ids {
-		if id != mitra.ID {
-			filteredIDs = append(filteredIDs, id)
-		}
-	}
-	if len(filteredIDs) > 0 {
-		var users []models.User
-		s.DB.Select("firebase_token").Where("id IN ?", filteredIDs).Find(&users)
-		var tokens []string
-		for _, u := range users {
-			if u.FirebaseToken != nil && *u.FirebaseToken != "" {
-				tokens = append(tokens, *u.FirebaseToken)
-			}
-		}
-		if len(tokens) > 0 {
-			service.SendMulticast(s.DB, "mitra", map[string]interface{}{
-				"data": map[string]string{
-					"notification_type": "LOST_BROADCAST",
-					"title":             "Yah...kamu kehilangan order",
-					"message":           fmt.Sprintf("Tawaran order dari customer %s telah diambil mitra lain", customer.CompleteName),
-					"order_id":          dto.OrderID,
-					"customer_id":       dto.CustomerID,
-					"notif_type":        "order",
-				},
-				"tokens": tokens,
-			})
-		}
 	}
 
 	publicKey, privateKey, err := helpers.GenerateRsaKey()
@@ -554,32 +536,67 @@ func (s *OrderEwalletService) AcceptOrderEwallet(dto dtos.AcceptOrderDTO) (int, 
 		return http.StatusInternalServerError, nil, err
 	}
 
-	// Delete asynq offer jobs
-	if expiredJobID != "" && expiredJobID != "<nil>" {
-		queue.Inspector.DeleteTask("default", expiredJobID)
-	}
-	if selectedJobID != "" && selectedJobID != "<nil>" {
-		queue.Inspector.DeleteTask("default", selectedJobID)
-	}
+	// Post-commit async: FCM, queue cleanup, socket
+	go func() {
+		// Delete asynq offer jobs
+		if expiredJobID != "" && expiredJobID != "<nil>" {
+			queue.Inspector.DeleteTask("default", expiredJobID)
+		}
+		if selectedJobID != "" && selectedJobID != "<nil>" {
+			queue.Inspector.DeleteTask("default", selectedJobID)
+		}
 
-	// FCM to customer
-	if customer.FirebaseToken != nil && *customer.FirebaseToken != "" {
-		service.SendMulticast(s.DB, "customer", map[string]interface{}{
-			"data": map[string]string{
-				"notification_type": "GOT_ORDER",
-				"title":             "Kamu dapat mitra",
-				"message":           "Halo, kamu sudah dapat mitra untuk order mu",
-				"order_id":          dto.OrderID,
-				"mitra_id":          dto.MitraID,
-				"customer_id":       dto.CustomerID,
-				"notif_type":        "order",
-			},
-			"tokens": []string{*customer.FirebaseToken},
-		})
-	}
+		// Notify other mitras (LOST_BROADCAST)
+		ids := strings.Split(playerMitraIDs, ",")
+		var filteredIDs []string
+		for _, id := range ids {
+			if id != mitra.ID && id != "" {
+				filteredIDs = append(filteredIDs, id)
+			}
+		}
+		if len(filteredIDs) > 0 {
+			var users []models.User
+			s.DB.Select("firebase_token").Where("id IN ?", filteredIDs).Find(&users)
+			var tokens []string
+			for _, u := range users {
+				if u.FirebaseToken != nil && *u.FirebaseToken != "" {
+					tokens = append(tokens, *u.FirebaseToken)
+				}
+			}
+			if len(tokens) > 0 {
+				service.SendMulticast(s.DB, "mitra", map[string]interface{}{
+					"data": map[string]string{
+						"notification_type": "LOST_BROADCAST",
+						"title":             "Yah...kamu kehilangan order",
+						"message":           fmt.Sprintf("Tawaran order dari customer %s telah diambil mitra lain", customer.CompleteName),
+						"order_id":          dto.OrderID,
+						"customer_id":       dto.CustomerID,
+						"notif_type":        "order",
+					},
+					"tokens": tokens,
+				})
+			}
+		}
 
-	// Socket.io to admins
-	emitAdminOrderCount(s.DB)
+		// FCM to customer
+		if customer.FirebaseToken != nil && *customer.FirebaseToken != "" {
+			service.SendMulticast(s.DB, "customer", map[string]interface{}{
+				"data": map[string]string{
+					"notification_type": "GOT_ORDER",
+					"title":             "Kamu dapat mitra",
+					"message":           "Halo, kamu sudah dapat mitra untuk order mu",
+					"order_id":          dto.OrderID,
+					"mitra_id":          dto.MitraID,
+					"customer_id":       dto.CustomerID,
+					"notif_type":        "order",
+				},
+				"tokens": []string{*customer.FirebaseToken},
+			})
+		}
+
+		// Socket.io to admins
+		emitAdminOrderCount(s.DB)
+	}()
 
 	response := map[string]interface{}{
 		"order_id":     dto.OrderID,

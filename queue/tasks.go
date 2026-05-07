@@ -6,6 +6,7 @@ const (
 	TypeOrderQueueCash              = "order:cash"
 	TypeOrderQueueVA                = "order:va"
 	TypeOrderOfferExpired           = "order:offer_expired"
+	TypeOrderOfferMitraExpired      = "order:offer_mitra_expired"
 	TypeOrderSelectedExpired        = "order:selected_expired"
 	TypeOrderOnProgressToFinish     = "order:on_progress_to_finish"
 	TypeOrderEwalletNotifyExpired   = "order:ewallet_notify_expired"
@@ -113,4 +114,18 @@ func NewOrderSelectedExpiredTask(orderID string) ([]byte, error) {
 		OrderID: orderID,
 	}
 	return json.Marshal(payload)
+}
+
+type OrderOfferMitraExpiredPayload struct {
+	OrderID string `json:"order_id"`
+	MitraID string `json:"mitra_id"`
+	TempID  string `json:"temp_id"`
+}
+
+func NewOrderOfferMitraExpiredTask(orderID, mitraID, tempID string) ([]byte, error) {
+	return json.Marshal(OrderOfferMitraExpiredPayload{
+		OrderID: orderID,
+		MitraID: mitraID,
+		TempID:  tempID,
+	})
 }

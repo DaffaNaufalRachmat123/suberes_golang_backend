@@ -238,10 +238,10 @@ func buildNearestMitraQuery(p nearestMitraQueryParams) (string, []interface{}) {
 	AND u.account_balance >= %s`, grossRef, grossRef)
 	}
 
-	// Only cash+withTime returns multiple mitras (offers sent to a pool).
-	// All other variants return the single best match.
+	// Send offers to multiple mitras for all payment types when service is time-based.
+	// Non-time-based services still use limit 1 (auto-bid single best match).
 	limit := 1
-	if p.IsCash && p.IsWithTime {
+	if p.IsWithTime {
 		if p.Limit > 1 {
 			limit = p.Limit
 		} else {
