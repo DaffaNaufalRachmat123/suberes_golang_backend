@@ -15,6 +15,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"image"
+	"io"
 	"math"
 	"math/big"
 	"mime/multipart"
@@ -34,9 +35,17 @@ import (
 
 var ctx = context.Background()
 
+func getRedisAddr() string {
+	addr := os.Getenv("REDIS_HOST")
+	if addr == "" {
+		addr = "localhost:6379"
+	}
+	return addr
+}
+
 var RedisClient = redis.NewClient(&redis.Options{
-	Addr:     "localhost:6379",
-	Password: "",
+	Addr:     getRedisAddr(),
+	Password: os.Getenv("REDIS_PASSWORD"),
 	DB:       0,
 })
 
@@ -137,10 +146,15 @@ func Clean(number string) string {
 
 func EncryptAES256(password string, data string) (string, error) {
 	key := sha256.Sum256([]byte(password))
-	iv := bytes.Repeat([]byte("0"), aes.BlockSize)
 
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
+		return "", err
+	}
+
+	// Generate random IV
+	iv := make([]byte, aes.BlockSize)
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return "", err
 	}
 
@@ -153,17 +167,26 @@ func EncryptAES256(password string, data string) (string, error) {
 	mode := cipher.NewCBCEncrypter(block, iv)
 	mode.CryptBlocks(ciphertext, plaintext)
 
-	return base64.StdEncoding.EncodeToString(ciphertext), nil
+	// Prepend IV to ciphertext so it can be extracted during decryption
+	result := append(iv, ciphertext...)
+	return base64.StdEncoding.EncodeToString(result), nil
 }
 
 func DecryptAES256(password string, encrypted string) (string, error) {
 	key := sha256.Sum256([]byte(password))
-	iv := bytes.Repeat([]byte("0"), aes.BlockSize)
 
 	cipherData, err := base64.StdEncoding.DecodeString(encrypted)
 	if err != nil {
 		return "", err
 	}
+
+	if len(cipherData) < aes.BlockSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+
+	// Extract IV from first 16 bytes
+	iv := cipherData[:aes.BlockSize]
+	cipherData = cipherData[aes.BlockSize:]
 
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
@@ -174,6 +197,9 @@ func DecryptAES256(password string, encrypted string) (string, error) {
 	mode.CryptBlocks(cipherData, cipherData)
 
 	padding := int(cipherData[len(cipherData)-1])
+	if padding > aes.BlockSize || padding == 0 {
+		return "", fmt.Errorf("invalid padding")
+	}
 	plaintext := cipherData[:len(cipherData)-padding]
 
 	return string(plaintext), nil
@@ -209,9 +235,17 @@ func DecryptRSA(privateKeyPEM string, encrypted string) ([]byte, error) {
 //
 //	key = sha512(SECRET_KEY).hex[:32], iv = sha512(SECRET_IV_KEY).hex[:16]
 //	output = base64( hex( aes_cbc_encrypt(plaintext) ) )
+//
+// NOTE: Uses deterministic IV derived from SECRET_IV_KEY for compare-by-ciphertext.
+// Consider migrating to bcrypt/argon2 for PIN hashing in the future.
 func EncryptPinCbc(plaintext string) (string, error) {
-	key := pinDeriveBytes(os.Getenv("SECRET_KEY"), 32)
-	iv := pinDeriveBytes(os.Getenv("SECRET_IV_KEY"), 16)
+	secretKey := os.Getenv("SECRET_KEY")
+	secretIV := os.Getenv("SECRET_IV_KEY")
+	if secretKey == "" || secretIV == "" {
+		return "", fmt.Errorf("SECRET_KEY and SECRET_IV_KEY must be configured")
+	}
+	key := pinDeriveBytes(secretKey, 32)
+	iv := pinDeriveBytes(secretIV, 16)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -608,7 +642,6 @@ func GetOtpDuration() time.Duration {
 	}
 
 	unit := parts[1]
-	fmt.Println("Duration", number)
 	switch {
 	case strings.Contains(unit, "minute"): // handle "minute"
 		return time.Duration(number) * time.Minute
@@ -840,15 +873,52 @@ const (
 
 var AllRole = []string{CustomerRole, MitraRole, AdminRole, SuperAdminRole}
 
-// GenerateMitraPassword generates a 10-char random password from the mitra wishlist charset.
-// Uses crypto/rand for cryptographic randomness (matches Node.js crypto.randomFillSync).
+// GenerateMitraPassword generates a random password that always satisfies the password policy:
+// min 8 chars, at least 1 uppercase, 1 lowercase, 1 digit, 1 special character.
+// Uses crypto/rand for cryptographic randomness.
 func GenerateMitraPassword() string {
-	const wishlist = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~!@-_+=#$"
-	const length = 10
-	b := make([]byte, length)
-	for i := range b {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(wishlist))))
-		b[i] = wishlist[n.Int64()]
+	return GenerateSecurePassword(12)
+}
+
+// GenerateSecurePassword generates a password of the given length (min 8) that
+// guarantees at least 1 uppercase, 1 lowercase, 1 digit, and 1 special character.
+func GenerateSecurePassword(length int) string {
+	if length < 8 {
+		length = 8
 	}
-	return string(b)
+
+	const (
+		upperChars   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		lowerChars   = "abcdefghijklmnopqrstuvwxyz"
+		digitChars   = "0123456789"
+		specialChars = "~!@-_+=#$"
+		allChars     = upperChars + lowerChars + digitChars + specialChars
+	)
+
+	password := make([]byte, length)
+
+	// Guarantee at least one from each category
+	password[0] = pickRandom(upperChars)
+	password[1] = pickRandom(lowerChars)
+	password[2] = pickRandom(digitChars)
+	password[3] = pickRandom(specialChars)
+
+	// Fill the rest randomly from all chars
+	for i := 4; i < length; i++ {
+		password[i] = pickRandom(allChars)
+	}
+
+	// Shuffle to avoid predictable positions
+	for i := length - 1; i > 0; i-- {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		j := n.Int64()
+		password[i], password[j] = password[j], password[i]
+	}
+
+	return string(password)
+}
+
+func pickRandom(charset string) byte {
+	n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+	return charset[n.Int64()]
 }

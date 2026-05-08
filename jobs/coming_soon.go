@@ -3,7 +3,6 @@ package jobs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/hibiken/asynq"
 )
@@ -31,7 +30,6 @@ func HandleComingSoon(ctx context.Context, t *asynq.Task) error {
 		return err
 	}
 
-	fmt.Printf("Processing order %d\n", p.OrderID)
 
 	return nil
 }

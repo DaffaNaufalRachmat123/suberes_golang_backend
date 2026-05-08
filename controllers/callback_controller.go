@@ -3,7 +3,6 @@ package controllers
 import (
 	"bytes"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"suberes_golang/config"
 	"suberes_golang/dtos"
@@ -36,7 +35,6 @@ func (ctrl *XenditController) EwalletCallback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse JSON"})
 		return
 	}
-	log.Printf("Xendit Callback Received: Event: %s", payload.Event)
 
 	var serviceErr error
 	switch payload.Event {
@@ -63,6 +61,5 @@ func (ctrl *XenditController) CallbackNotification(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
 		return
 	}
-	log.Printf("Generic Callback Received: %+v", body)
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }

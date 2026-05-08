@@ -67,5 +67,4 @@ func AutoMigrate() {
 		log.Fatal("Migration failed:", err)
 	}
 
-	log.Println("Database migrated successfully")
 }

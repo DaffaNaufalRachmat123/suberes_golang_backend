@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"suberes_golang/models"
 
@@ -20,7 +19,6 @@ func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 
 		user := userCtx.(models.User) // Type assertion ke struct User
 
-		fmt.Printf("User Type : %s\n", user.UserType)
 
 		isFound := false
 		for _, role := range allowedRoles {

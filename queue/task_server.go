@@ -41,7 +41,6 @@ func NewTaskServer() *asynq.Server {
 // RunTaskServer menjalankan server dengan mux handler
 func RunTaskServer(mux *asynq.ServeMux) {
 	srv := NewTaskServer()
-	log.Println("Task server started")
 	if err := srv.Run(mux); err != nil {
 		log.Fatalf("could not run task server: %v", err)
 	}

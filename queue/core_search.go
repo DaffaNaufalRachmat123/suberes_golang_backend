@@ -2,7 +2,6 @@ package queue
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"suberes_golang/config"
 	"suberes_golang/models"
@@ -84,7 +83,6 @@ func GetNearestMitraProduction(params GetNearestMitraProductionParams) (*MitraRe
 
 	var resultQuery []models.User
 	if err := config.DB.Raw(queryStr, queryArgs...).Scan(&resultQuery).Error; err != nil {
-		log.Printf("[core_search] query error for order subPaymentID=%s: %v", params.SubPaymentID, err)
 		return nil, fmt.Errorf("error executing query: %w", err)
 	}
 

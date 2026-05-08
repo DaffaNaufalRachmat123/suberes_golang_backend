@@ -91,7 +91,6 @@ func (c *AdminController) CreateAdmin(ctx *gin.Context) {
 	dbFilePath := os.Getenv("ADMIN_IMAGE_PATH") + filePath
 
 	admin, err := c.AdminService.CreateAdmin(&req, dbFilePath)
-	fmt.Printf("%+v\n", admin)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"server_message": err.Error(),
@@ -181,14 +180,41 @@ func (c *AdminController) Login(ctx *gin.Context) {
 		return
 	}
 
+	// Check account lockout
+	if helpers.IsAccountLocked("admin", req.Email) {
+		ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked due to too many failed attempts", "failure_type": "ACCOUNT_LOCKED"})
+		return
+	}
+
 	token, refreshToken, user, err := c.AdminService.Login(&req)
 	if err != nil {
+		helpers.WriteAuditLog(helpers.AuditLog{
+			Event:     helpers.AuditLoginFailed,
+			IP:        ctx.ClientIP(),
+			UserAgent: ctx.GetHeader("User-Agent"),
+			UserType:  "admin",
+			Resource:  "/admin/login",
+			Details:   "invalid credentials",
+			Success:   false,
+		})
+		helpers.RecordFailedLogin("admin", req.Email)
 		ctx.JSON(http.StatusUnauthorized, gin.H{
 			"server_message": err.Error(),
 			"status":         "failure",
 		})
 		return
 	}
+
+	helpers.ClearFailedLogin("admin", req.Email)
+	helpers.WriteAuditLog(helpers.AuditLog{
+		Event:     helpers.AuditLogin,
+		UserID:    user.ID,
+		IP:        ctx.ClientIP(),
+		UserAgent: ctx.GetHeader("User-Agent"),
+		UserType:  "admin",
+		Resource:  "/admin/login",
+		Success:   true,
+	})
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "Berhasil masuk. Selamat datang kembali",

@@ -34,27 +34,24 @@ func BuildDSN() string {
 		port = "5432"
 	}
 
-	// Debug print
-	fmt.Println("ENV:", env)
-	fmt.Println("HOST:", host)
-	fmt.Println("USER:", user)
-	fmt.Println("DB:", dbname)
-	fmt.Println("PORT:", port)
+	sslmode := "disable"
+	if env == "PROD" || env == "STAG" {
+		sslmode = "require"
+	}
 
 	return fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		user,
 		pass,
 		host,
 		port,
 		dbname,
+		sslmode,
 	)
 }
 
 func ConnectDB() {
 	dsn := BuildDSN()
-
-	fmt.Println("DSN FULL:", dsn) // penting buat debug
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {

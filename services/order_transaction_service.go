@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -113,7 +112,7 @@ func (s *OrderTransactionService) GetTimezoneCode(lat, lng string) (*TimezoneRes
 
 // ---------- 4. SelectMitra ----------
 type SelectMitraRequest struct {
-	MitraIDs          []string `json:"mitra_ids" binding:"required"`
+	MitraIDs          []string `json:"mitra_ids" binding:"required,min=1"`
 	NotificationTitle string   `json:"notification_title"`
 	NotificationBody  string   `json:"notification_body"`
 }
@@ -127,6 +126,46 @@ func (s *OrderTransactionService) SelectMitra(orderID string, req SelectMitraReq
 		return fmt.Errorf("order is not in WAITING_FOR_SELECTED_MITRA status")
 	}
 
+	// Timeout for mitra to take the order
+	timeoutCanTakeMinutes, _ := strconv.Atoi(os.Getenv("TIMEOUT_CAN_TAKE_ORDER"))
+	if timeoutCanTakeMinutes == 0 {
+		timeoutCanTakeMinutes = 1
+	}
+	timeoutCanTakeOrder := time.Duration(timeoutCanTakeMinutes) * time.Minute
+
+	// Check remaining customer wait time from the OrderSelectedExpired task.
+	// If customer's remaining time < mitra timeout, extend it.
+	timeoutFindingMinutes, _ := strconv.Atoi(os.Getenv("TIMEOUT_FINDING_ORDER"))
+	if timeoutFindingMinutes == 0 {
+		timeoutFindingMinutes = 2
+	}
+
+	// Calculate remaining seconds for customer wait based on search_time_complete or order_time
+	var referenceTime time.Time
+	if order.SearchTimeComplete != nil {
+		referenceTime = *order.SearchTimeComplete
+	} else {
+		referenceTime = order.OrderTime
+	}
+	elapsed := time.Since(referenceTime)
+	totalCustomerWait := time.Duration(timeoutFindingMinutes) * time.Minute
+	remainingCustomerWait := totalCustomerWait - elapsed
+
+	// If remaining customer wait < mitra timeout, we need to extend
+	if remainingCustomerWait < timeoutCanTakeOrder {
+		deficit := timeoutCanTakeOrder - remainingCustomerWait
+		totalCustomerWait = totalCustomerWait + deficit
+		// Re-enqueue OrderSelectedExpired with extended time
+		orderSelectedExpiredPayload, taskErr := queue.NewOrderSelectedExpiredTask(orderID)
+		if taskErr == nil {
+			_, _ = queue.AsynqClient.Enqueue(
+				asynq.NewTask(queue.TypeOrderSelectedExpired, orderSelectedExpiredPayload),
+				asynq.ProcessIn(remainingCustomerWait+deficit),
+			)
+		}
+	}
+
+	now := time.Now()
 	tempID := uuid.New().String()
 	tx := s.DB.Begin()
 	if tx.Error != nil {
@@ -135,8 +174,9 @@ func (s *OrderTransactionService) SelectMitra(orderID string, req SelectMitraReq
 
 	if err := tx.Model(&models.OrderTransaction{}).Where("id = ?", orderID).
 		Updates(map[string]interface{}{
-			"order_status": "FINDING_MITRA",
-			"temp_id":      tempID,
+			"order_status":         "FINDING_MITRA",
+			"temp_id":              tempID,
+			"search_time_complete": now,
 		}).Error; err != nil {
 		tx.Rollback()
 		return err
@@ -183,20 +223,53 @@ func (s *OrderTransactionService) SelectMitra(orderID string, req SelectMitraReq
 		return err
 	}
 
-	// TODO: Send FCM notification to selected mitras
-	log.Printf("SelectMitra: sending notifications to tokens: %v, title: %s", firebaseTokens, req.NotificationTitle)
+	// Enqueue per-mitra expiry cleanup
+	for _, offer := range offers {
+		perMitraPayload, perMitraErr := queue.NewOrderOfferMitraExpiredTask(orderID, offer.MitraID, tempID)
+		if perMitraErr == nil {
+			_, _ = queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderOfferMitraExpired, perMitraPayload), asynq.ProcessIn(timeoutCanTakeOrder))
+		}
+	}
+
+	// Send FCM notification to selected mitras
+	if len(firebaseTokens) > 0 {
+		msgData := map[string]interface{}{
+			"temp_id":           tempID,
+			"notification_type": "ORDER_BROADCAST",
+			"title":             "Orderan Masuk",
+			"message":           "Ada orderan masuk dari admin",
+			"order_id":          orderID,
+			"order_type":        order.OrderType,
+			"payment_type":      order.PaymentType,
+			"customer_id":       order.CustomerID,
+			"notification_id":   strconv.Itoa(order.NotificationID),
+			"notif_type":        "order",
+			"push_time":         now.UTC().Format("2006-01-02 15:04:05"),
+			"push_time_expired": strconv.Itoa(int(timeoutCanTakeOrder.Seconds())),
+		}
+		msg := map[string]interface{}{
+			"data":   msgData,
+			"tokens": firebaseTokens,
+		}
+		if _, err := service.SendMulticast(s.DB, "mitra", msg); err != nil {
+		}
+	}
 
 	return nil
 }
 
 // ---------- 5. GetSelectedMitra ----------
-func (s *OrderTransactionService) GetSelectedMitra(orderID string, page, limit int) ([]repositories.SelectedMitraResult, int64, error) {
+func (s *OrderTransactionService) GetSelectedMitra(orderID string, page, limit int, search string) ([]repositories.SelectedMitraResult, int64, error) {
 	order, err := s.OrderTransactionRepo.FindById(orderID)
 	if err != nil {
 		return nil, 0, fmt.Errorf("order not found: %v", err)
 	}
+	maxRange, _ := strconv.ParseFloat(os.Getenv("MAX_RANGE_CUSTOMER_BY_SYSTEM"), 64)
+	if maxRange == 0 {
+		maxRange = 7
+	}
 	offset := (page - 1) * limit
-	return s.OrderTransactionRepo.FindSelectedMitraPaginated(orderID, order.CustomerLatitude, order.CustomerLongitude, limit, offset)
+	return s.OrderTransactionRepo.FindSelectedMitraPaginated(orderID, order.CustomerLatitude, order.CustomerLongitude, order.MitraGender, maxRange, search, limit, offset)
 }
 
 // ---------- 6. GetAdminOrderDetail ----------
@@ -320,7 +393,6 @@ func (s *OrderTransactionService) UpdateToOnProgress(id, customerID, mitraID str
 			asynq.ProcessIn(delay),
 		)
 		if enqErr != nil {
-			log.Printf("could not enqueue on_progress_to_finish task: %v", enqErr)
 		} else {
 			// Save job ID to order
 			tx.Model(&models.OrderTransaction{}).Where("id = ?", id).
@@ -362,7 +434,6 @@ func (s *OrderTransactionService) UpdateToOnProgress(id, customerID, mitraID str
 		})
 	}
 	if order.Customer != nil {
-		log.Printf("UpdateToOnProgress: notify customer %s order %s is now ON_PROGRESS", customerID, id)
 
 		// Kirim push notification ke customer jika ada firebase_token
 		if order.Customer.FirebaseToken != nil && *order.Customer.FirebaseToken != "" {
@@ -377,12 +448,7 @@ func (s *OrderTransactionService) UpdateToOnProgress(id, customerID, mitraID str
 					"notif_type":        "order",
 				},
 			}
-			responseFCM, err := service.SendToDevice(s.DB, "customer", *order.Customer.FirebaseToken, msgPayload)
-			if err != nil {
-				log.Printf("SendToDevice error: %v", err)
-			} else {
-				log.Printf("SendToDevice response: %v", responseFCM)
-			}
+			_, _ = service.SendToDevice(s.DB, "customer", *order.Customer.FirebaseToken, msgPayload)
 		}
 	}
 
@@ -427,7 +493,6 @@ func (s *OrderTransactionService) UpdateToOnProgressRepeat(id string, subID int,
 	}
 
 	// TODO: FCM notify customer
-	log.Printf("UpdateToOnProgressRepeat: order %s sub %d is now ON_PROGRESS", id, subID)
 	return nil
 }
 
@@ -604,7 +669,7 @@ func (s *OrderTransactionService) UpdateToFinish(id, customerID, mitraID string)
 			TransactionTypeFor:     "Potongan Suberes",
 			TransactionFor:         "order",
 			TransactionStatus:      "success",
-			TransactionDescription: "Potongan karena pembayaran tunai",
+			TransactionDescription: "Potongan karena pembayaran customer tunai",
 			TimezoneCode:           order.TimezoneCode,
 			CreatedAt:              t3,
 			UpdatedAt:              t3,
@@ -636,24 +701,30 @@ func (s *OrderTransactionService) UpdateToFinish(id, customerID, mitraID string)
 			UpdatedAt:              now,
 		})
 
-		newCustomerBalance := currentCustomerBalance - order.GrossAmount
-
 		if err := tx.Model(&models.User{}).
-			Where("id = ?", customerID).
-			Update("account_balance", newCustomerBalance).Error; err != nil {
+			Where("id = ? AND account_balance >= ?", customerID, order.GrossAmount).
+			Update("account_balance", gorm.Expr("account_balance - ?", order.GrossAmount)).Error; err != nil {
 			tx.Rollback()
 			return err
 		}
 	}
 
 	// =========================
-	// 🔴 UPDATE SALDO MITRA (FINAL)
+	// 🔴 UPDATE SALDO MITRA (FINAL - ATOMIC)
 	// =========================
-	if err := tx.Model(&models.User{}).
-		Where("id = ?", mitraID).
-		Update("account_balance", currentMitraBalance).Error; err != nil {
+	var mitraBalanceExpr *gorm.DB
+	if payment.Type == "tunai" {
+		mitraBalanceExpr = tx.Model(&models.User{}).
+			Where("id = ?", mitraID).
+			Update("account_balance", gorm.Expr("account_balance + ? - ?", order.GrossAmountMitra, order.GrossAmountCompany))
+	} else {
+		mitraBalanceExpr = tx.Model(&models.User{}).
+			Where("id = ?", mitraID).
+			Update("account_balance", gorm.Expr("account_balance + ?", order.GrossAmountMitra))
+	}
+	if mitraBalanceExpr.Error != nil {
 		tx.Rollback()
-		return err
+		return mitraBalanceExpr.Error
 	}
 
 	// =========================
@@ -691,15 +762,9 @@ func (s *OrderTransactionService) UpdateToFinish(id, customerID, mitraID string)
 				"notif_type":        "order",
 			},
 		}
-		responseFCM, err := service.SendToDevice(s.DB, "customer", *order.Customer.FirebaseToken, msgPayload)
-		if err != nil {
-			log.Printf("SendToDevice error: %v", err)
-		} else {
-			log.Printf("SendToDevice response: %v", responseFCM)
-		}
+		_, _ = service.SendToDevice(s.DB, "customer", *order.Customer.FirebaseToken, msgPayload)
 	}
 
-	log.Printf("Order %s finished (final clean version)", id)
 	return nil
 }
 
@@ -803,7 +868,6 @@ func (s *OrderTransactionService) UpdateToFinish(id, customerID, mitraID string)
 // 	// Delete the on_progress job if it exists
 // 	if order.OnProgressJobID != "" {
 // 		if err := queue.Inspector.DeleteTask("default", order.OnProgressJobID); err != nil {
-// 			log.Printf("could not delete on_progress_job %s: %v", order.OnProgressJobID, err)
 // 		}
 // 	}
 
@@ -830,7 +894,6 @@ func (s *OrderTransactionService) UpdateToFinish(id, customerID, mitraID string)
 
 // 	// TODO: FCM notify customer
 // 	// TODO: Socket.io emit admin
-// 	log.Printf("UpdateToFinish: order %s is now FINISH", id)
 // 	return nil
 // }
 
@@ -933,7 +996,6 @@ func (s *OrderTransactionService) UpdateToFinishRepeat(id string, subID int, cus
 	}
 
 	// TODO: FCM notify customer
-	log.Printf("UpdateToFinishRepeat: order %s sub %d is now FINISH", id, subID)
 	return nil
 }
 
@@ -985,17 +1047,14 @@ func (s *OrderTransactionService) CancelBlast(ctx *gin.Context, orderID string) 
 
 	now := time.Now()
 	orderStatus := "CANCELED"
-	orderAction := "DESTROYED"
 	voidStatus := ""
 
 	if payment.Type == "ewallet" || payment.Type == "virtual account" {
 		orderStatus = "CANCELED_VOID"
-		orderAction = "ENTERING_TRASH"
 		// TODO: Call Xendit void API here and set voidStatus accordingly
 		paymentClient := helpers.NewClient()
 		resultVoid, _ := paymentClient.CreateVoidChargeXendit(ctx, order.PaymentIDPay)
-		payloadBytes, _ := json.MarshalIndent(resultVoid, "", "  ")
-		fmt.Println("[XENDIT VOID RESPONSE]", string(payloadBytes))
+		_ = resultVoid
 		voidStatus = "VOID_SUCCEEDED" // Placeholder, should be set from API response
 		if err := tx.Model(&models.OrderTransaction{}).Where("id = ?", order.ID).
 			Updates(map[string]interface{}{
@@ -1091,7 +1150,6 @@ func (s *OrderTransactionService) CancelBlast(ctx *gin.Context, orderID string) 
 			}
 			_, err := service.SendMulticast(s.DB, "mitra", msg)
 			if err != nil {
-				log.Printf("Failed to send multicast to mitra: %v", err)
 			}
 		}
 	}
@@ -1135,7 +1193,6 @@ func (s *OrderTransactionService) CancelBlast(ctx *gin.Context, orderID string) 
 		})
 	}
 
-	log.Printf("CancelBlast: order %s canceled, action: %s, notifying mitras: %v", orderID, orderAction, playerMitraIDs)
 	return nil
 }
 
@@ -1246,7 +1303,6 @@ func (s *OrderTransactionService) AdminCancelOrder(id string, canceledReason str
 
 	// TODO: Send FCM to customer and mitra
 	// TODO: Socket.io emit to admin rooms
-	log.Printf("AdminCancelOrder: order %s canceled by admin", id)
 	return nil
 }
 
@@ -1312,7 +1368,6 @@ func (s *OrderTransactionService) CancelOrder(id, customerID, mitraID, canceledU
 	}
 
 	// TODO: FCM - if canceled by customer, notify mitra; if by mitra, notify customer
-	log.Printf("CancelOrder: order %s canceled by %s", id, canceledUser)
 	// TODO: Socket.io emit to admin rooms
 	return nil
 }
@@ -1356,7 +1411,6 @@ func (s *OrderTransactionService) CancelRepeatOrder(id string, subID int, custom
 	}
 
 	// TODO: FCM conditional notification
-	log.Printf("CancelRepeatOrder: order %s sub %d canceled by %s", id, subID, canceledUser)
 	return nil
 }
 
@@ -1400,7 +1454,6 @@ func (s *OrderTransactionService) StartRepeatRunOrder(orderID string, subID int,
 	}
 
 	// TODO: FCM notify customer
-	log.Printf("StartRepeatRunOrder: order %s sub %d is now OTW", orderID, subID)
 	return nil
 }
 
@@ -1435,7 +1488,6 @@ func (s *OrderTransactionService) StartRunOrder(orderID, customerID, mitraID str
 	}
 
 	// TODO: FCM notify customer
-	log.Printf("StartRunOrder: order %s is now OTW", orderID)
 	return nil
 }
 

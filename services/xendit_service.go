@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"suberes_golang/dtos"
 	"suberes_golang/models"
@@ -79,7 +78,6 @@ func (s *XenditService) handleEwalletCaptureTopup(data *dtos.XenditEwalletData) 
 		}
 	}
 
-	log.Printf("Push notification placeholder for topup status %s to user %s", data.Status, user.ID)
 	return tx.Commit().Error
 }
 
@@ -113,7 +111,6 @@ func (s *XenditService) handleEwalletCaptureOrder(data *dtos.XenditEwalletData) 
 		}
 	}
 
-	log.Printf("Push notification placeholder for order payment status %s to customer %s", data.Status, orderData.CustomerID)
 	return tx.Commit().Error
 }
 
@@ -139,7 +136,6 @@ func (s *XenditService) handleSuccessfulPayment(tx *gorm.DB, orderData *models.O
 			return err
 		}
 	case "coming soon":
-		log.Printf("Scheduling reminder for 'coming soon' order %s", orderData.ID)
 		// Placeholder for Asynq ProcessAt
 	}
 	return nil
@@ -175,6 +171,5 @@ func (s *XenditService) HandleEwalletVoid(data *dtos.XenditEwalletData) error {
 		}
 	}
 
-	log.Printf("Push notification placeholder for ewallet void status %s to customer %s", data.VoidStatus, orderData.CustomerID)
 	return tx.Commit().Error
 }

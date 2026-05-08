@@ -33,3 +33,7 @@ func (s *TransactionService) FindAllByMitraIDWithPagination(mitraID, transaction
 func (s *TransactionService) FindDisbursementsByMitraID(mitraID string, page, limit int) ([]models.Transaction, int64, error) {
 	return s.TransactionRepo.FindDisbursementsByMitraID(mitraID, page, limit)
 }
+
+func (s *TransactionService) FindAdminDetail(id string) (*models.Transaction, error) {
+	return s.TransactionRepo.FindAdminDetailById(id)
+}

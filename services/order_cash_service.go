@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"os"
 	"strings"
@@ -125,8 +124,6 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 	// 		nowDateTime.Location(),
 	// 	)
 
-	// 	fmt.Printf("Now Time : %s\n", nowTime)
-
 	// 	if service.ServiceType == "Durasi" {
 
 	// 		dateAdd = dateAdd.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
@@ -214,15 +211,16 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 	}
 	if paymentData.Type == "balance" {
 		if customerData.AccountBalance >= grossAmount {
-			_, err := s.UserRepo.UpdateUserData(tx, map[string]interface{}{
-				"account_balance": customerData.AccountBalance - grossAmount,
-			}, map[string]interface{}{
-				"id":        customerId,
-				"user_type": "customer",
-			})
-			if err != nil {
+			result := tx.Model(&models.User{}).
+				Where("id = ? AND user_type = ? AND account_balance >= ?", customerId, "customer", grossAmount).
+				Update("account_balance", gorm.Expr("account_balance - ?", grossAmount))
+			if result.Error != nil {
 				tx.Rollback()
-				return "", 0, "", "", 500, err
+				return "", 0, "", "", 500, result.Error
+			}
+			if result.RowsAffected == 0 {
+				tx.Rollback()
+				return "", 0, "", "", 400, fmt.Errorf("insufficient balance")
 			}
 		}
 	}
@@ -396,11 +394,9 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		},
 	)
 	if err != nil {
-		fmt.Printf("[AcceptOrder] ERROR FindDynamicOrderTransactionMap: %v\n", err)
 		return 500, nil, err
 	}
 	if orderData == nil {
-		fmt.Printf("[AcceptOrder] ERROR orderData nil\n")
 		return 409, nil, errors.New("order not found")
 	}
 
@@ -423,7 +419,6 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	case []byte:
 		customerID = string(v)
 	default:
-		fmt.Printf("[AcceptOrder] ERROR customer_id tipe tidak dikenali\n")
 		return 500, nil, fmt.Errorf("customer_id tipe tidak dikenali")
 	}
 
@@ -477,20 +472,15 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	// 4. Check Redis for booking state.
 	playerMitraIDs, err := helpers.GetValue(data.TempID)
 	if err != nil && err != redis.Nil {
-		fmt.Printf("[AcceptOrder] ERROR GetValue TempID: %v\n", err)
 		return 500, nil, err
 	}
 
 	bookedOrderSign, err := helpers.GetValue(fmt.Sprintf("BOOKED_ORDER_%s", data.OrderID))
 	if err != nil && err != redis.Nil {
-		fmt.Printf("[AcceptOrder] ERROR GetValue BOOKED_ORDER: %v\n", err)
 		return 500, nil, err
 	}
 
-	log.Printf("PLAYER MITRA IDS : %s", playerMitraIDs)
-
 	if bookedOrderSign != "" {
-		fmt.Printf("[AcceptOrder] order was taken by another mitra\n")
 		return 409, nil, errors.New("this order was taken by another mitra")
 	}
 
@@ -499,7 +489,6 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		fmt.Sprintf("BOOKED_ORDER_%s", data.OrderID),
 		fmt.Sprintf("BOOKED_FOR_MITRA_%s", mitra.CompleteName),
 	); err != nil {
-		fmt.Printf("[AcceptOrder] ERROR SetValue BOOKED_ORDER: %v\n", err)
 		return 500, nil, err
 	}
 
@@ -520,7 +509,6 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	publicKey, privateKey, err := helpers.GenerateRsaKey()
 	if err != nil {
 		tx.Rollback()
-		fmt.Printf("[AcceptOrder] ERROR GenerateRsaKey: %v\n", err)
 		return 500, nil, err
 	}
 	publicKeyMitra := helpers.GeneratePublicKey(customer.SharedPrime, customer.SharedBase, customer.SharedSecret)
@@ -568,7 +556,6 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	}
 	if err := s.OrderTransactionRepo.UpdateWithConditions(tx, where, payloadOrderUpdate); err != nil {
 		tx.Rollback()
-		fmt.Printf("[AcceptOrder] ERROR UpdateWithConditions: %v\n", err)
 		return 500, nil, err
 	}
 
@@ -579,7 +566,6 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 			Where("order_id = ? AND order_status = ?", data.OrderID, "FINDING_MITRA").
 			Update("order_status", "WAIT_SCHEDULE").Error; err != nil {
 			tx.Rollback()
-			fmt.Printf("[AcceptOrder] ERROR update OrderTransactionRepeat: %v\n", err)
 			return 500, nil, err
 		}
 	}
@@ -601,7 +587,6 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 			},
 		); err != nil {
 			tx.Rollback()
-			fmt.Printf("[AcceptOrder] ERROR UpdateUserData Mitra: %v\n", err)
 			return 500, nil, err
 		}
 	}
@@ -611,7 +596,6 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		"order_id": data.OrderID,
 	}); err != nil {
 		tx.Rollback()
-		fmt.Printf("[AcceptOrder] ERROR DeleteByWhere OrderOffer: %v\n", err)
 		return 500, nil, err
 	}
 
@@ -626,12 +610,10 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 	}
 	if err := s.OrderChatRepo.Create(tx, payloadCreateChat); err != nil {
 		tx.Rollback()
-		fmt.Printf("[AcceptOrder] ERROR Create OrderChat: %v\n", err)
 		return 500, nil, err
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		fmt.Printf("[AcceptOrder] ERROR Commit: %v\n", err)
 		return 500, nil, err
 	}
 

@@ -38,7 +38,8 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		secretKey := os.Getenv("SECRET_KEY_REFRESH")
 		if secretKey == "" {
-			secretKey = "SuberesIndustries"
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"server_message": "Server configuration error", "status": "failure"})
+			return
 		}
 		// ✅ parse tanpa validasi expiry
 		parser := jwt.NewParser(jwt.WithoutClaimsValidation())
@@ -48,9 +49,6 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 			}
 			return []byte(secretKey), nil
 		})
-
-		fmt.Printf("Token : %s", token)
-		fmt.Println(err)
 
 		if err != nil || token == nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{

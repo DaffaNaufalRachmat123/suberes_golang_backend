@@ -4,18 +4,23 @@ import (
 	"suberes_golang/controllers"
 	"suberes_golang/helpers"
 	middleware "suberes_golang/middlewares"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
+var mitraLoginLimiter = middleware.NewRateLimiter(5, 1*time.Minute)
+var mitraRegisterLimiter = middleware.NewRateLimiter(3, 5*time.Minute)
+var mitraOtpLimiter = middleware.NewRateLimiter(3, 1*time.Minute)
+
 func MitraRoutes(router *gin.RouterGroup, controller *controllers.MitraController, db *gorm.DB) {
 	mitraRoutes := router.Group("/mitra")
-	mitraRoutes.POST("/login", controller.Login)
-	mitraRoutes.POST("/register", controller.Register)
+	mitraRoutes.POST("/login", middleware.RateLimitMiddleware(mitraLoginLimiter), controller.Login)
+	mitraRoutes.POST("/register", middleware.RateLimitMiddleware(mitraRegisterLimiter), controller.Register)
 	mitraRoutes.PUT("/change_forgot_password", controller.ChangeForgotPassword)
 	mitraRoutes.PUT("/request_forgot_password/:email", controller.RequestForgotPassword)
-	mitraRoutes.PUT("/otp_validator_forgot_password", controller.OTPValidatorForgotPassword)
+	mitraRoutes.PUT("/otp_validator_forgot_password", middleware.RateLimitMiddleware(mitraOtpLimiter), controller.OTPValidatorForgotPassword)
 	mitraRoutes.GET("/dashboard/count/:id", controller.DashboardCount)
 	mitraRoutes.POST("/refresh_token", middleware.RefreshTokenMiddleware(db), controller.RefreshToken)
 

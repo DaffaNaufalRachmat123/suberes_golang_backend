@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -34,7 +33,8 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		secretKey := os.Getenv("SECRET_KEY")
 		if secretKey == "" {
-			secretKey = "SuberesIndustries"
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"server_message": "Server configuration error", "status": "failure"})
+			return
 		}
 
 		token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
@@ -51,8 +51,6 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Invalid token claims", "status": "failure"})
 			return
 		}
-
-		fmt.Printf("JWT Verify ID : %s\n", claims.ID)
 
 		var user models.User
 

@@ -224,9 +224,26 @@ func (c *CustomerController) LoginByEmail(ctx *gin.Context) {
 		return
 	}
 
+	// Check account lockout
+	if helpers.IsAccountLocked("customer", req.Email) {
+		ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked due to too many failed attempts", "failure_type": "ACCOUNT_LOCKED"})
+		return
+	}
+
 	_, err := c.CustomerService.LoginByEmail(req.Email)
 
 	if err != nil {
+		helpers.WriteAuditLog(helpers.AuditLog{
+			Event:     helpers.AuditLoginFailed,
+			IP:        ctx.ClientIP(),
+			UserAgent: ctx.GetHeader("User-Agent"),
+			UserType:  "customer",
+			Resource:  "/customer/login/email",
+			Details:   err.Error(),
+			Success:   false,
+		})
+		helpers.RecordFailedLogin("customer", req.Email)
+
 		if err.Error() == "CUSTOMER_ALREADY_LOGGED_IN" {
 			ctx.JSON(409, gin.H{
 				"failure_type":   err.Error(),

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"suberes_golang/controllers"
 	"suberes_golang/database"
 	"suberes_golang/helpers"
+	middleware "suberes_golang/middlewares"
 	"suberes_golang/queue"
 	"suberes_golang/realtime"
 	"suberes_golang/repositories"
@@ -42,10 +44,23 @@ func main() {
 	r.GET("/socket.io/*any", gin.WrapH(realtime.Server))
 	r.POST("/socket.io/*any", gin.WrapH(realtime.Server))
 
+	r.Use(middleware.SecurityHeadersMiddleware())
+	r.Use(middleware.RequestSizeLimiter(2 << 20)) // 2MB default limit
+
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS") // comma-separated: "https://dashboard.suberes.com,https://app.suberes.com"
+	var origins []string
+	if allowedOrigins != "" {
+		for _, o := range strings.Split(allowedOrigins, ",") {
+			origins = append(origins, strings.TrimSpace(o))
+		}
+	} else {
+		origins = []string{"http://localhost:5173", "http://localhost:3000"}
+	}
+
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"}, // atau isi domain frontend kamu
+		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Request-ID"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
@@ -354,8 +369,6 @@ func main() {
 		port = "8080"
 	}
 
-	log.Println("Server running on port", port)
-
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: r,
@@ -370,7 +383,6 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -381,5 +393,4 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
-	log.Println("Server exiting")
 }

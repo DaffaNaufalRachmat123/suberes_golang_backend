@@ -144,7 +144,7 @@ func (s *NewsService) CreateNews(ctx *gin.Context) error {
 		now.Second(),
 		fileHeader.Filename,
 	)
-	if err := ctx.SaveUploadedFile(fileHeader, os.Getenv("NEWS_IMAGE_PATH")+mainFilename); err != nil {
+	if err := ctx.SaveUploadedFile(fileHeader, filepath.Join(newsPath, mainFilename)); err != nil {
 		return err
 	}
 	tx := s.DB.Begin()
@@ -308,7 +308,7 @@ func (s *NewsService) UpdateNews(ctx *gin.Context, id uint) error {
 	existNews.CreatorID = req.CreatorID
 	existNews.CreatorName = req.CreatorName
 	existNews.NewsTitle = req.NewsTitle
-	existNews.NewsBody = updatedBody 
+	existNews.NewsBody = updatedBody
 	existNews.NewsType = req.NewsType
 	existNews.IsBroadcast = req.IsBroadcast
 	existNews.UpdatedAt = time.Now()
@@ -323,7 +323,7 @@ func (s *NewsService) UpdateNews(ctx *gin.Context, id uint) error {
 	if err != nil {
 		tx.Rollback()
 		if isNewImage {
-			os.Remove(filepath.Join(os.Getenv("NEWS_IMAGE_PATH"), newFilename))
+			os.Remove(filepath.Join(newsPath, newFilename))
 		}
 		return err
 	}
@@ -346,6 +346,12 @@ func (s *NewsService) DeleteNews(id uint) error {
 	re := regexp.MustCompile(`<img[^>]+src="([^">]+)"`)
 	matches := re.FindAllStringSubmatch(news.NewsBody, -1)
 
+	newsBasePath := filepath.Join(
+		helpers.RootPath(),
+		os.Getenv("IMAGE_PATH_CONTROLLER"),
+		os.Getenv("NEWS_IMAGE_PATH"),
+	)
+
 	for _, match := range matches {
 		if len(match) > 1 {
 			url := match[1]
@@ -353,16 +359,14 @@ func (s *NewsService) DeleteNews(id uint) error {
 				parts := strings.Split(url, "/api/images/news/")
 				if len(parts) > 1 {
 					filename := parts[1]
-					filePath := filepath.Join(os.Getenv("NEWS_IMAGE_PATH"), filename)
-					os.Remove(filePath)
+					os.Remove(filepath.Join(newsBasePath, filename))
 				}
 			}
 		}
 	}
 	if news.NewsImage != "" {
 		filename := strings.TrimPrefix(news.NewsImage, "/news/")
-		mainImgPath := filepath.Join(os.Getenv("NEWS_IMAGE_PATH"), filename)
-		os.Remove(mainImgPath)
+		os.Remove(filepath.Join(newsBasePath, filename))
 	}
 	err = s.NewsRepo.Delete(tx, news)
 	if err != nil {

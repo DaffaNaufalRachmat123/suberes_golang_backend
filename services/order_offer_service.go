@@ -60,12 +60,12 @@ func (s *OrderOfferService) GetIncomingOrder(orderID, mitraID string) (*models.O
 	}
 
 	// Build the raw countdown expression (PostgreSQL syntax)
-	// Use blast_time_complete as the reference — it's set when FCM broadcast finishes,
+	// Use search_time_complete as the reference — it's set when search/broadcast finishes,
 	// so the countdown starts from when the mitra actually receives the notification.
 	var countdownSQL string
 
 	countdownSQL = fmt.Sprintf(
-		"GREATEST(0, EXTRACT(EPOCH FROM (COALESCE(order_transactions.blast_time_complete, order_transactions.order_blast_time, order_transactions.order_time) + INTERVAL '%d minutes' - (NOW() AT TIME ZONE 'UTC')))::bigint)",
+		"GREATEST(0, EXTRACT(EPOCH FROM (COALESCE(order_transactions.search_time_complete, order_transactions.order_blast_time, order_transactions.order_time) + INTERVAL '%d minutes' - (NOW() AT TIME ZONE 'UTC')))::bigint)",
 		timeoutMinutes,
 	)
 

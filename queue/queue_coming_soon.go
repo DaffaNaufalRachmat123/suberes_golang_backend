@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"suberes_golang/config"
@@ -24,14 +23,12 @@ func HandleOrderComingSoonRunTask(ctx context.Context, t *asynq.Task) error {
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 
-	log.Printf("HandleOrderComingSoonRun: order_id=%s", p.OrderID)
 
 	var orderData models.OrderTransaction
 	if err := config.DB.
 		Where("id = ? AND order_status = ?", p.OrderID, "WAIT_SCHEDULE").
 		First(&orderData).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			log.Printf("ComingSoonRun: order %s not in WAIT_SCHEDULE – skipping", p.OrderID)
 			return nil
 		}
 		return fmt.Errorf("failed to find order %s: %v", p.OrderID, err)
@@ -67,7 +64,6 @@ func HandleOrderComingSoonRunTask(ctx context.Context, t *asynq.Task) error {
 			"tokens": []string{*mitraData.FirebaseToken},
 		}
 		if _, err := service.SendMulticast(config.DB, "mitra", payloadMitra); err != nil {
-			log.Printf("ComingSoonRun: mitra push error: %v", err)
 		}
 	}
 
@@ -87,11 +83,9 @@ func HandleOrderComingSoonRunTask(ctx context.Context, t *asynq.Task) error {
 			"tokens": []string{*customerData.FirebaseToken},
 		}
 		if _, err := service.SendMulticast(config.DB, "customer", payloadCustomer); err != nil {
-			log.Printf("ComingSoonRun: customer push error: %v", err)
 		}
 	}
 
-	log.Printf("ComingSoonRun: notifications sent for order %s", p.OrderID)
 	return nil
 }
 
@@ -104,7 +98,6 @@ func HandleOrderComingSoonWarningTask(ctx context.Context, t *asynq.Task) error 
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 
-	log.Printf("HandleOrderComingSoonWarning: order_id=%s", p.OrderID)
 
 	var orderData models.OrderTransaction
 	if err := config.DB.
@@ -168,7 +161,6 @@ func HandleOrderComingSoonWarningTask(ctx context.Context, t *asynq.Task) error 
 				"tokens": []string{*mitraData.FirebaseToken},
 			}
 			if _, err := service.SendMulticast(config.DB, "mitra", payloadMitra); err != nil {
-				log.Printf("ComingSoonWarning: mitra push error: %v", err)
 			}
 		}
 
@@ -192,13 +184,10 @@ func HandleOrderComingSoonWarningTask(ctx context.Context, t *asynq.Task) error 
 				"tokens": []string{*customerData.FirebaseToken},
 			}
 			if _, err := service.SendMulticast(config.DB, "customer", payloadCustomer); err != nil {
-				log.Printf("ComingSoonWarning: customer push error: %v", err)
 			}
 		}
 
-		log.Printf("ComingSoonWarning: order %s auto-canceled", p.OrderID)
 	} else {
-		log.Printf("ComingSoonWarning: order %s already running or not in WAIT_SCHEDULE – no action", p.OrderID)
 	}
 
 	return nil

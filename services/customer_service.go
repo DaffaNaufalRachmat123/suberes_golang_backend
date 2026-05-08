@@ -280,8 +280,6 @@ func (s *CustomerService) Register(
 		return err
 	}
 
-	fmt.Println(otpCode)
-
 	// kirim OTP async
 	go helpers.SendOtpCodeMail(
 		os.Getenv("SUPPORT_EMAIL"),
@@ -424,7 +422,7 @@ func (s *CustomerService) OtpValidatorMail(email, otpCode string) (map[string]in
 		"user_rating":        user.UserRating,
 		"user_profile_image": user.UserProfileImage,
 		"user_status":        user.UserStatus,
-		"exp":                time.Now().Add(1 * time.Minute).Unix(),
+		"exp":                time.Now().Add(15 * time.Minute).Unix(),
 	})
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"id":                 user.ID,
@@ -486,12 +484,12 @@ func (s *CustomerService) OtpValidatorMail(email, otpCode string) (map[string]in
 func (s *CustomerService) RefreshToken(userID string, stored models.RefreshToken) (*dtos.UserLoginResponseDTO, error) {
 	secretKey := os.Getenv("SECRET_KEY_REFRESH")
 	if secretKey == "" {
-		secretKey = "SuberesIndustries"
+		return nil, errors.New("SECRET_KEY_REFRESH not configured")
 	}
 
 	secretKeyToken := os.Getenv("SECRET_KEY")
 	if secretKeyToken == "" {
-		secretKeyToken = "SuberesIndustries"
+		return nil, errors.New("SECRET_KEY not configured")
 	}
 
 	// ambil user
@@ -517,7 +515,7 @@ func (s *CustomerService) RefreshToken(userID string, stored models.RefreshToken
 		"email":       mitra.Email,
 		"user_type":   mitra.UserType,
 		"user_status": mitra.UserStatus,
-		"exp":         time.Now().Add(1 * time.Minute).Unix(),
+		"exp":         time.Now().Add(15 * time.Minute).Unix(),
 	})
 
 	accessString, err := newAccess.SignedString([]byte(secretKeyToken))

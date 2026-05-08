@@ -30,7 +30,7 @@ type OrderTransaction struct {
 	OrderTime                        time.Time  `gorm:"type:timestamp" json:"order_time"`
 	OrderProgressTime                time.Time  `gorm:"type:timestamp" json:"order_progress_time"`
 	OrderBlastTime                   time.Time  `gorm:"type:timestamp" json:"order_blast_time"`
-	BlastTimeComplete                *time.Time `gorm:"type:timestamp" json:"blast_time_complete"`
+	SearchTimeComplete               *time.Time `gorm:"type:timestamp" json:"search_time_complete"`
 	OrderTimeTemp                    time.Time  `gorm:"type:timestamp" json:"order_time_temp"`
 	OrderOriginSoonTime              string     `gorm:"type:varchar(255)" json:"order_origin_soon_time"`
 	OrderTimestamp                   string     `gorm:"type:varchar(255)" json:"order_timestamp"`

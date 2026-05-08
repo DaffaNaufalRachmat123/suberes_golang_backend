@@ -1,7 +1,6 @@
 package services
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -232,12 +231,12 @@ func (s *AdminService) RemoveAdmin(adminID string, superAdminID string, req *dto
 func (s *AdminService) RefreshToken(userID string, stored models.RefreshToken) (*dtos.UserLoginResponseDTO, error) {
 	secretKey := os.Getenv("SECRET_KEY_REFRESH")
 	if secretKey == "" {
-		secretKey = "SuberesIndustries"
+		return nil, errors.New("SECRET_KEY_REFRESH not configured")
 	}
 
 	secretKeyToken := os.Getenv("SECRET_KEY")
 	if secretKeyToken == "" {
-		secretKeyToken = "SuberesIndustries"
+		return nil, errors.New("SECRET_KEY not configured")
 	}
 
 	// ambil user
@@ -263,7 +262,7 @@ func (s *AdminService) RefreshToken(userID string, stored models.RefreshToken) (
 		"email":       mitra.Email,
 		"user_type":   mitra.UserType,
 		"user_status": mitra.UserStatus,
-		"exp":         time.Now().Add(1 * time.Minute).Unix(),
+		"exp":         time.Now().Add(15 * time.Minute).Unix(),
 	})
 
 	accessString, err := newAccess.SignedString([]byte(secretKeyToken))
@@ -438,16 +437,9 @@ func (s *AdminService) UpdateFirebaseToken(userID string, token string) error {
 }
 
 func generatePassword(length int) (string, error) {
-	const wishlist = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~!@-_+=#$"
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	for i, b := range bytes {
-		bytes[i] = wishlist[b%byte(len(wishlist))]
-	}
-	return string(bytes), nil
+	return helpers.GenerateSecurePassword(length), nil
 }
+
 func (s *AdminService) GetUserByID(id string) (*models.User, error) {
 	var user models.User
 	err := s.DB.First(&user, "id = ?", id).Error

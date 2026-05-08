@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"suberes_golang/config"
@@ -24,14 +23,12 @@ func HandleOrderOnProgressToFinishTask(ctx context.Context, t *asynq.Task) error
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 
-	log.Printf("HandleOrderOnProgressToFinish: order_id=%s", p.ID)
 
 	var orderData models.OrderTransaction
 	if err := config.DB.Where("id = ? AND order_status = ?", p.ID, "ON_PROGRESS").
 		Preload("SubService").
 		First(&orderData).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			log.Printf("Order %s not found or not ON_PROGRESS – already handled", p.ID)
 			return nil
 		}
 		return fmt.Errorf("failed to find order %s: %v", p.ID, err)
@@ -148,7 +145,6 @@ func HandleOrderOnProgressToFinishTask(ctx context.Context, t *asynq.Task) error
 		IsRead:              "0",
 	}
 	if err := tx.Create(&notification).Error; err != nil {
-		log.Printf("failed to create notification: %v", err)
 	}
 
 	if err := tx.Commit().Error; err != nil {
@@ -156,7 +152,6 @@ func HandleOrderOnProgressToFinishTask(ctx context.Context, t *asynq.Task) error
 		return fmt.Errorf("commit failed: %v", err)
 	}
 
-	log.Printf("Order %s auto-finished by on_progress_to_finish task", p.ID)
 	// TODO: Send FCM notification to customer using their firebase_token
 	// TODO: Emit socket.io event to admin rooms
 

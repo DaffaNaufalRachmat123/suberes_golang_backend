@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"suberes_golang/dtos"
@@ -60,10 +59,8 @@ func (s *DisbursementService) findBankByID(id int) (*models.BankList, error) {
 	var bank models.BankList
 	err := s.DB.Where("id = ?", id).First(&bank).Error
 	if err != nil {
-		log.Printf("[DisbursementService] findBankByID error: %v", err)
 		return nil, err
 	}
-	log.Printf("[DisbursementService] findBankByID response: %+v", bank)
 	return &bank, nil
 }
 
@@ -71,18 +68,15 @@ func (s *DisbursementService) findBankByID(id int) (*models.BankList, error) {
 func (s *DisbursementService) CreateMitraTopup(mitraID string, req *dtos.TopupRequest) (string, string, error) {
 	bank, err := s.findBankByID(req.BankID)
 	if err != nil {
-		log.Printf("[DisbursementService] CreateMitraTopup error: bank not found: %v", err)
 		return "", "", fmt.Errorf("bank not found")
 	}
 
 	mitra, err := s.UserRepo.FindMitraById(mitraID)
 	if err != nil {
-		log.Printf("[DisbursementService] CreateMitraTopup error: mitra not found: %v", err)
 		return "", "", fmt.Errorf("mitra not found")
 	}
 
 	if req.Amount < int64(bank.MinTopup) {
-		log.Printf("[DisbursementService] CreateMitraTopup error: min transactions for topup is %d", bank.MinTopup)
 		return "", "", fmt.Errorf("min transactions for topup is %d", bank.MinTopup)
 	}
 
@@ -93,7 +87,6 @@ func (s *DisbursementService) CreateMitraTopup(mitraID string, req *dtos.TopupRe
 		}
 	}()
 	if tx.Error != nil {
-		log.Printf("[DisbursementService] CreateMitraTopup error: tx begin: %v", tx.Error)
 		return "", "", tx.Error
 	}
 
@@ -143,17 +136,14 @@ func (s *DisbursementService) CreateMitraTopup(mitraID string, req *dtos.TopupRe
 		respBytes, err := client.CreateEwalletChargeXendit(context.Background(), payload)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("[DisbursementService] CreateMitraTopup error: xendit ewallet charge failed: %v", err)
 			return "", "", fmt.Errorf("xendit ewallet charge failed: %w", err)
 		}
 
 		var xenditResp dtos.XenditEwalletChargeAPIResponse
 		if err := json.Unmarshal(respBytes, &xenditResp); err != nil {
 			tx.Rollback()
-			log.Printf("[DisbursementService] CreateMitraTopup error: failed to parse xendit response: %v", err)
 			return "", "", fmt.Errorf("failed to parse xendit response: %w", err)
 		}
-		log.Printf("[DisbursementService] CreateMitraTopup Xendit ewallet response: %s", string(respBytes))
 		trx.ExternalID = xenditResp.ID
 		trx.TopupID = externalIDCreated
 		trx.MobileEwalletURL = xenditResp.Actions.MobileWebCheckoutURL
@@ -173,17 +163,14 @@ func (s *DisbursementService) CreateMitraTopup(mitraID string, req *dtos.TopupRe
 		respBytes, err := client.CreateVirtualAccount(context.Background(), vaPayload)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("[DisbursementService] CreateMitraTopup error: xendit VA creation failed: %v", err)
 			return "", "", fmt.Errorf("xendit VA creation failed: %w", err)
 		}
 
 		var vaResp dtos.XenditVAAPIResponse
 		if err := json.Unmarshal(respBytes, &vaResp); err != nil {
 			tx.Rollback()
-			log.Printf("[DisbursementService] CreateMitraTopup error: failed to parse xendit VA response: %v", err)
 			return "", "", fmt.Errorf("failed to parse xendit VA response: %w", err)
 		}
-		log.Printf("[DisbursementService] CreateMitraTopup Xendit VA response: %s", string(respBytes))
 		trx.ExternalID = vaResp.ExternalID
 		trx.TopupID = externalIDCreated
 		trx.AccountNumber = vaResp.AccountNumber
@@ -191,16 +178,13 @@ func (s *DisbursementService) CreateMitraTopup(mitraID string, req *dtos.TopupRe
 
 	if err := s.TransactionRepo.CreateTransaction(tx, trx); err != nil {
 		tx.Rollback()
-		log.Printf("[DisbursementService] CreateMitraTopup error: create transaction: %v", err)
 		return "", "", err
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("[DisbursementService] CreateMitraTopup error: commit: %v", err)
 		return "", "", err
 	}
 
-	log.Printf("[DisbursementService] CreateMitraTopup response: trxID=%s, idempotencyKey=%s", trx.ID, idempotencyKey)
 	return trx.ID, idempotencyKey, nil
 }
 
@@ -208,18 +192,15 @@ func (s *DisbursementService) CreateMitraTopup(mitraID string, req *dtos.TopupRe
 func (s *DisbursementService) CreateCustomerTopup(customerID string, req *dtos.TopupRequest) (string, string, error) {
 	bank, err := s.findBankByID(req.BankID)
 	if err != nil {
-		log.Printf("[DisbursementService] CreateCustomerTopup error: bank not found: %v", err)
 		return "", "", fmt.Errorf("bank not found")
 	}
 
 	customer, err := s.UserRepo.FindCustomerById(customerID)
 	if err != nil {
-		log.Printf("[DisbursementService] CreateCustomerTopup error: customer not found: %v", err)
 		return "", "", fmt.Errorf("customer not found")
 	}
 
 	if req.Amount < int64(bank.MinTopup) {
-		log.Printf("[DisbursementService] CreateCustomerTopup error: min transactions for topup is %d", bank.MinTopup)
 		return "", "", fmt.Errorf("min transactions for topup is %d", bank.MinTopup)
 	}
 
@@ -230,7 +211,6 @@ func (s *DisbursementService) CreateCustomerTopup(customerID string, req *dtos.T
 		}
 	}()
 	if tx.Error != nil {
-		log.Printf("[DisbursementService] CreateCustomerTopup error: tx begin: %v", tx.Error)
 		return "", "", tx.Error
 	}
 
@@ -281,17 +261,14 @@ func (s *DisbursementService) CreateCustomerTopup(customerID string, req *dtos.T
 		respBytes, err := client.CreateEwalletChargeXendit(context.Background(), payload)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("[DisbursementService] CreateCustomerTopup error: xendit ewallet charge failed: %v", err)
 			return "", "", fmt.Errorf("xendit ewallet charge failed: %w", err)
 		}
 
 		var xenditResp dtos.XenditEwalletChargeAPIResponse
 		if err := json.Unmarshal(respBytes, &xenditResp); err != nil {
 			tx.Rollback()
-			log.Printf("[DisbursementService] CreateCustomerTopup error: failed to parse xendit response: %v", err)
 			return "", "", fmt.Errorf("failed to parse xendit response: %w", err)
 		}
-		log.Printf("[DisbursementService] CreateCustomerTopup Xendit ewallet response: %s", string(respBytes))
 		trx.ExternalID = xenditResp.ID
 		trx.TopupID = externalIDCreated
 		trx.MobileEwalletURL = xenditResp.Actions.MobileWebCheckoutURL
@@ -310,17 +287,14 @@ func (s *DisbursementService) CreateCustomerTopup(customerID string, req *dtos.T
 		respBytes, err := client.CreateVirtualAccount(context.Background(), vaPayload)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("[DisbursementService] CreateCustomerTopup error: xendit VA creation failed: %v", err)
 			return "", "", fmt.Errorf("xendit VA creation failed: %w", err)
 		}
 
 		var vaResp dtos.XenditVAAPIResponse
 		if err := json.Unmarshal(respBytes, &vaResp); err != nil {
 			tx.Rollback()
-			log.Printf("[DisbursementService] CreateCustomerTopup error: failed to parse xendit VA response: %v", err)
 			return "", "", fmt.Errorf("failed to parse xendit VA response: %w", err)
 		}
-		log.Printf("[DisbursementService] CreateCustomerTopup Xendit VA response: %s", string(respBytes))
 		trx.ExternalID = vaResp.ID
 		trx.TopupID = externalIDCreated
 		trx.AccountNumber = vaResp.AccountNumber
@@ -328,16 +302,13 @@ func (s *DisbursementService) CreateCustomerTopup(customerID string, req *dtos.T
 
 	if err := s.TransactionRepo.CreateTransaction(tx, trx); err != nil {
 		tx.Rollback()
-		log.Printf("[DisbursementService] CreateCustomerTopup error: create transaction: %v", err)
 		return "", "", err
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("[DisbursementService] CreateCustomerTopup error: commit: %v", err)
 		return "", "", err
 	}
 
-	log.Printf("[DisbursementService] CreateCustomerTopup response: trxID=%s, idempotencyKey=%s", trx.ID, idempotencyKey)
 	return trx.ID, idempotencyKey, nil
 }
 
@@ -354,7 +325,6 @@ type TopupPaymentStatusResponse struct {
 func (s *DisbursementService) GetTopupPaymentStatus(topupID string) (*TopupPaymentStatusResponse, error) {
 	trx, err := s.TransactionRepo.FindByTopupID(topupID)
 	if err != nil {
-		log.Printf("[DisbursementService] GetTopupPaymentStatus error: %v", err)
 		return nil, err
 	}
 
@@ -386,7 +356,6 @@ func (s *DisbursementService) GetTopupPaymentStatus(topupID string) (*TopupPayme
 		Title:             title,
 		Description:       description,
 	}
-	log.Printf("[DisbursementService] GetTopupPaymentStatus response: %+v", resp)
 	return resp, nil
 }
 
@@ -394,9 +363,7 @@ func (s *DisbursementService) GetTopupPaymentStatus(topupID string) (*TopupPayme
 func (s *DisbursementService) GetMitraTransactions(mitraID string, page, limit int) ([]models.Transaction, int64, error) {
 	txs, total, err := s.TransactionRepo.FindMitraDisburseTransactionsPaginated(mitraID, page, limit)
 	if err != nil {
-		log.Printf("[DisbursementService] GetMitraTransactions error: %v", err)
 	}
-	log.Printf("[DisbursementService] GetMitraTransactions response: count=%d, total=%d", len(txs), total)
 	return txs, total, err
 }
 
@@ -404,9 +371,7 @@ func (s *DisbursementService) GetMitraTransactions(mitraID string, page, limit i
 func (s *DisbursementService) GetCustomerTransactions(customerID string, page, limit int) ([]models.Transaction, int64, error) {
 	txs, total, err := s.TransactionRepo.FindCustomerDisburseTransactionsPaginated(customerID, page, limit)
 	if err != nil {
-		log.Printf("[DisbursementService] GetCustomerTransactions error: %v", err)
 	}
-	log.Printf("[DisbursementService] GetCustomerTransactions response: count=%d, total=%d", len(txs), total)
 	return txs, total, err
 }
 
@@ -414,7 +379,6 @@ func (s *DisbursementService) GetCustomerTransactions(customerID string, page, l
 func (s *DisbursementService) GetMitraTransactionDetail(id, mitraID, idempotencyKey string) (*TransactionDetailResponse, error) {
 	trx, err := s.TransactionRepo.FindMitraTransactionDetail(id, mitraID, idempotencyKey)
 	if err != nil {
-		log.Printf("[DisbursementService] GetMitraTransactionDetail error: %v", err)
 		return nil, err
 	}
 
@@ -428,7 +392,6 @@ func (s *DisbursementService) GetMitraTransactionDetail(id, mitraID, idempotency
 		Bank:        bank,
 		FailureMsg:  resolveFailureMsg(trx.FailureCode),
 	}
-	log.Printf("[DisbursementService] GetMitraTransactionDetail response: %+v", resp)
 	return resp, nil
 }
 
@@ -436,7 +399,6 @@ func (s *DisbursementService) GetMitraTransactionDetail(id, mitraID, idempotency
 func (s *DisbursementService) GetCustomerTransactionDetail(id, customerID string) (*TransactionDetailResponse, error) {
 	trx, err := s.TransactionRepo.FindCustomerTransactionDetail(id, customerID)
 	if err != nil {
-		log.Printf("[DisbursementService] GetCustomerTransactionDetail error: %v", err)
 		return nil, err
 	}
 
@@ -450,7 +412,6 @@ func (s *DisbursementService) GetCustomerTransactionDetail(id, customerID string
 		Bank:        bank,
 		FailureMsg:  resolveFailureMsg(trx.FailureCode),
 	}
-	log.Printf("[DisbursementService] GetCustomerTransactionDetail response: %+v", resp)
 	return resp, nil
 }
 
@@ -496,7 +457,6 @@ func (s *DisbursementService) CreateMitraDisburse(mitraID string, req *dtos.Disb
 	if err := json.Unmarshal(respBytes, &xenditResp); err != nil {
 		return "", "", fmt.Errorf("failed to parse xendit response: %w", err)
 	}
-	log.Printf("[DisbursementService] CreateMitraDisburse Xendit disbursement response: %s", string(respBytes))
 
 	idempotencyKey := fmt.Sprintf("%d", rand.Int63n(1000000)+1)
 
@@ -606,7 +566,6 @@ func (s *DisbursementService) CreateCustomerDisburse(customerID string, req *dto
 	if err := json.Unmarshal(respBytes, &xenditResp); err != nil {
 		return "", "", "", fmt.Errorf("failed to parse xendit response: %w", err)
 	}
-	log.Printf("[DisbursementService] CreateCustomerDisburse Xendit disbursement response: %s", string(respBytes))
 
 	idempotencyKey := fmt.Sprintf("%d", rand.Int63n(1000000)+1)
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"suberes_golang/config"
@@ -23,7 +22,6 @@ func HandleOrderEwalletNotifyExpiredTask(ctx context.Context, t *asynq.Task) err
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 
-	log.Printf("HandleOrderEwalletNotifyExpired: order_id=%s customer_id=%s", p.OrderID, p.CustomerID)
 
 	var orderData models.OrderTransaction
 	if err := config.DB.
@@ -31,7 +29,6 @@ func HandleOrderEwalletNotifyExpiredTask(ctx context.Context, t *asynq.Task) err
 		First(&orderData).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// Already paid or canceled – nothing to do.
-			log.Printf("EwalletNotify: order %s not in WAITING_PAYMENT state – skipping", p.OrderID)
 			return nil
 		}
 		return fmt.Errorf("failed to find order %s: %v", p.OrderID, err)
@@ -80,11 +77,9 @@ func HandleOrderEwalletNotifyExpiredTask(ctx context.Context, t *asynq.Task) err
 				"tokens": []string{*customerData.FirebaseToken},
 			}
 			if _, err := service.SendMulticast(config.DB, "customer", payloadMsg); err != nil {
-				log.Printf("EwalletNotify: push notification error: %v", err)
 			}
 		}
 	}
 
-	log.Printf("EwalletNotify: order %s canceled due to late payment", p.OrderID)
 	return nil
 }

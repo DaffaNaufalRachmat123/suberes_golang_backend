@@ -54,7 +54,6 @@ func enqueueEmail(from, to, subject, body string) {
 		Body:    body,
 	})
 	if err != nil {
-		log.Println("Failed marshal email:", err)
 		return
 	}
 
@@ -68,7 +67,6 @@ func enqueueEmail(from, to, subject, body string) {
 	)
 
 	if err != nil {
-		log.Println("Failed enqueue email:", err)
 	}
 }
 
@@ -79,15 +77,12 @@ func handleEmailTask(ctx context.Context, t *asynq.Task) error {
 		return err
 	}
 
-	log.Printf("📨 Sending email to %s", p.To)
 
 	err := SendMail(p.From, p.To, p.Subject, p.Body)
 	if err != nil {
-		log.Printf("❌ Failed email to %s: %v", p.To, err)
 		return err // otomatis retry
 	}
 
-	log.Printf("✅ Email sent to %s", p.To)
 	return nil
 }
 
@@ -263,7 +258,6 @@ func SendInvitedMailMitra(from, to, subject, name, timeInvited, placeInvited str
 
 	htmlBody, err := parseTemplate("invited", htmlInvited, data)
 	if err != nil {
-		log.Println("Error parsing template:", err)
 		return
 	}
 
@@ -277,7 +271,6 @@ func SendAcceptedMailMitra(from, to, subject, email, password string) {
 
 	htmlBody, err := parseTemplate("acceptedMitra", htmlAcceptedMitra, data)
 	if err != nil {
-		log.Println("Error parsing template:", err)
 		return
 	}
 
@@ -291,7 +284,6 @@ func SendAcceptedAdminAccount(from, to, subject, email, password string) {
 
 	htmlBody, err := parseTemplate("acceptedAdmin", htmlAcceptedAdmin, data)
 	if err != nil {
-		log.Println("Error parsing template:", err)
 		return
 	}
 
@@ -309,7 +301,6 @@ func SendActiveAdminAccount(from, to, subject, completeName, userType, userTypeC
 
 	htmlBody, err := parseTemplate("activeAdmin", htmlActiveAdmin, data)
 	if err != nil {
-		log.Println("Error parsing template:", err)
 		return
 	}
 
@@ -326,7 +317,6 @@ func SendNonactiveAdminAccount(from, to, subject, completeName, userType, userTy
 
 	htmlBody, err := parseTemplate("nonactiveAdmin", htmlNonactiveAdmin, data)
 	if err != nil {
-		log.Println("Error parsing template:", err)
 		return
 	}
 
@@ -342,7 +332,6 @@ func SendRemoveAdminAccount(from, to, subject, completeName, userTypeCapital, em
 
 	htmlBody, err := parseTemplate("removeAdmin", htmlRemoveAdmin, data)
 	if err != nil {
-		log.Println("Error parsing template:", err)
 		return
 	}
 
@@ -355,7 +344,6 @@ func SendOtpCodeMail(from, to, subject, otpCode string) {
 
 	htmlBody, err := parseTemplate("otp", htmlOtp, data)
 	if err != nil {
-		log.Println("Error parsing template:", err)
 		return
 	}
 
@@ -376,7 +364,6 @@ func SendMitraStatus(from, to, subject, mitraStatus, email, text string) {
 
 	htmlBody, err := parseTemplate("mitraStatus", selectedTemplate, data)
 	if err != nil {
-		log.Println("Error parsing template:", err)
 		return
 	}
 

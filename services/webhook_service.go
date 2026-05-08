@@ -1,10 +1,8 @@
 package services
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -73,21 +71,15 @@ func (s *WebhookService) HandleVACreate(body map[string]interface{}) (int, error
 		}
 	}()
 
-	log.Printf("[HandleVACreate] incoming body: %+v", body)
-	log.Printf("[HandleVACreate] externalID=%s name=%s", externalID, name)
-
 	var orderData models.OrderTransaction
 	if err := s.DB.
 		Where("external_id = ? AND name = ?", externalID, name).
 		First(&orderData).Error; err != nil {
-		log.Printf("[HandleVACreate] order not found for external_id=%s name=%s: %v", externalID, name, err)
 		tx.Rollback()
 		return http.StatusNotFound, errors.New("order data not found")
 	}
-	log.Printf("[HandleVACreate] found order id=%s status=%s va_id=%s", orderData.ID, orderData.OrderStatus, orderData.VAID)
 
 	if orderData.OrderStatus == "WAITING_PAYMENT" {
-		log.Printf("[HandleVACreate] order %s already WAITING_PAYMENT, skip duplicate notification", orderData.ID)
 		tx.Rollback()
 		return http.StatusOK, nil
 	}
@@ -96,11 +88,9 @@ func (s *WebhookService) HandleVACreate(body map[string]interface{}) (int, error
 	if err := s.DB.
 		Where("id = ? AND user_type = ?", orderData.CustomerID, "customer").
 		First(&customerData).Error; err != nil {
-		log.Printf("[HandleVACreate] customer not found id=%s: %v", orderData.CustomerID, err)
 		tx.Rollback()
 		return http.StatusNotFound, errors.New("customer not found")
 	}
-	log.Printf("[HandleVACreate] found customer id=%s", customerData.ID)
 
 	updateResult := tx.Model(&models.OrderTransaction{}).
 		Where("id = ?", orderData.ID).
@@ -110,11 +100,9 @@ func (s *WebhookService) HandleVACreate(body map[string]interface{}) (int, error
 			"order_time":    orderData.OrderTimeTemp,
 		})
 	if updateResult.Error != nil {
-		log.Printf("[HandleVACreate] update order failed: %v", updateResult.Error)
 		tx.Rollback()
 		return http.StatusInternalServerError, updateResult.Error
 	}
-	log.Printf("[HandleVACreate] update order rows affected=%d", updateResult.RowsAffected)
 
 	if customerData.FirebaseToken != nil && *customerData.FirebaseToken != "" {
 		service.SendMulticast(s.DB, "customer", map[string]interface{}{
@@ -145,10 +133,8 @@ func (s *WebhookService) HandleVACreate(body map[string]interface{}) (int, error
 	})
 
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("[HandleVACreate] commit failed: %v", err)
 		return http.StatusInternalServerError, err
 	}
-	log.Printf("[HandleVACreate] order %s updated to WAITING_PAYMENT successfully", orderData.ID)
 	return http.StatusOK, nil
 }
 
@@ -329,7 +315,6 @@ func (s *WebhookService) handleVATopupPaid(body map[string]interface{}, external
 
 	trx, err := s.TransactionRepo.FindTopupTransactionByExternalIDForCallback(externalID)
 	if err != nil {
-		log.Printf("[WebhookService] handleVATopupPaid: transaction not found for externalID=%s: %v", externalID, err)
 		return http.StatusNotFound, fmt.Errorf("transaction not found: %w", err)
 	}
 
@@ -369,7 +354,6 @@ func (s *WebhookService) handleVATopupPaid(body map[string]interface{}, external
 	}
 	if err != nil {
 		tx.Rollback()
-		log.Printf("[WebhookService] handleVATopupPaid: user not found (type=%s): %v", trx.UserType, err)
 		return http.StatusNotFound, fmt.Errorf("%s not found: %w", trx.UserType, err)
 	}
 
@@ -421,11 +405,9 @@ func (s *WebhookService) handleVATopupPaid(body map[string]interface{}, external
 			}
 		}
 		if _, err := service.SendToDevice(s.DB, trx.UserType, *user.FirebaseToken, map[string]interface{}{"data": fcmData}); err != nil {
-			log.Printf("[FCM] TOPUP_NOTIFICATION error for %s %s: %v", trx.UserType, user.ID, err)
 		}
 	}
 
-	log.Printf("[WebhookService] handleVATopupPaid: success for trxID=%s", trx.ID)
 	return http.StatusOK, nil
 }
 
@@ -437,8 +419,6 @@ func (s *WebhookService) handleVATopupPaid(body map[string]interface{}, external
 //   - status "COMPLETED" → mark transaction success
 //   - status "FAILED"    → refund user balance, mark transaction failed, send FCM
 func (s *WebhookService) HandleDisbursement(payload *dtos.DisbursementCallbackPayload) error {
-	payloadBytes, _ := json.MarshalIndent(payload, "", "  ")
-	log.Printf("[WebhookService] HandleDisbursement PAYLOAD: %s", string(payloadBytes))
 	tx := s.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -446,14 +426,12 @@ func (s *WebhookService) HandleDisbursement(payload *dtos.DisbursementCallbackPa
 		}
 	}()
 	if tx.Error != nil {
-		log.Printf("[WebhookService] HandleDisbursement: tx begin error: %v", tx.Error)
 		return tx.Error
 	}
 
 	trx, err := s.TransactionRepo.FindPendingDisbursementByExternalID(payload.ID)
 	if err != nil {
 		tx.Rollback()
-		log.Printf("[WebhookService] HandleDisbursement: transaction not found for id=%s", payload.ID)
 		return nil // not found → return 200, Xendit will not retry
 	}
 
@@ -465,7 +443,6 @@ func (s *WebhookService) HandleDisbursement(payload *dtos.DisbursementCallbackPa
 	}
 	if err != nil {
 		tx.Rollback()
-		log.Printf("[WebhookService] HandleDisbursement: %s not found: %v", trx.UserType, err)
 		return fmt.Errorf("%s not found: %w", trx.UserType, err)
 	}
 
@@ -553,12 +530,10 @@ func (s *WebhookService) HandleDisbursement(payload *dtos.DisbursementCallbackPa
 		}
 		if fcmData != nil {
 			if _, err := service.SendToDevice(s.DB, trx.UserType, *user.FirebaseToken, map[string]interface{}{"data": fcmData}); err != nil {
-				log.Printf("[FCM] DISBURSEMENT_STATUS error for %s %s: %v", trx.UserType, user.ID, err)
 			}
 		}
 	}
 
-	log.Printf("[WebhookService] HandleDisbursement: success for trxID=%s", trx.ID)
 	return nil
 }
 
@@ -570,22 +545,13 @@ func (s *WebhookService) HandleDisbursement(payload *dtos.DisbursementCallbackPa
 //   - event "ewallet.capture" → order: WAITING_PAYMENT → FINDING_MITRA (or WAIT_SCHEDULE)
 //   - event "ewallet.void"    → order: → CANCELED_VOID, repeat orders updated, FCM sent
 func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int, error) {
-	log.Printf("[HandleEwallet] ══════════════════════════════════════════")
-	log.Printf("[HandleEwallet] START event=%s", payload.Event)
-	log.Printf("[HandleEwallet] data_id=%s status=%s", payload.Data.ID, payload.Data.Status)
-	log.Printf("[HandleEwallet] payload=%s", func() string {
-		b, _ := json.Marshal(payload.Data)
-		return string(b)
-	}())
 
 	tx := s.DB.Begin()
 	if tx.Error != nil {
-		log.Printf("[HandleEwallet] ERROR tx.Begin: %v", tx.Error)
 		return http.StatusInternalServerError, tx.Error
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[HandleEwallet] PANIC recovered: %v", r)
 			tx.Rollback()
 		}
 	}()
@@ -595,7 +561,6 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 
 	switch payload.Event {
 	case "ewallet.capture":
-		log.Printf("[HandleEwallet] processing ewallet.capture for payment_id_pay=%s", payload.Data.ID)
 
 		orderData, err := s.OrderTransactionRepo.FindDynamicOrderTransactionMap(
 			nil,
@@ -604,7 +569,6 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 			[]interface{}{payload.Data.ID},
 		)
 		if err != nil || orderData == nil {
-			log.Printf("[HandleEwallet] ERROR order not found for payment_id_pay=%s err=%v", payload.Data.ID, err)
 			tx.Rollback()
 			return http.StatusNotFound, errors.New("order not found")
 		}
@@ -613,10 +577,7 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 		customerID := fmt.Sprintf("%v", orderData["customer_id"])
 		orderType := fmt.Sprintf("%v", orderData["order_type"])
 
-		log.Printf("[HandleEwallet] found order_id=%s customer_id=%s order_type=%s", orderID, customerID, orderType)
-
 		if payload.Data.Status == "SUCCEEDED" {
-			log.Printf("[HandleEwallet] payment SUCCEEDED — processing order_type=%s", orderType)
 			updates := map[string]interface{}{"is_paid_customer": "1"}
 			var queueOrderID string
 
@@ -628,13 +589,10 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 					Where("payment_id_pay = ? AND order_status = ?", payload.Data.ID, "WAITING_PAYMENT").
 					Updates(updates)
 				if result.Error != nil {
-					log.Printf("[HandleEwallet] ERROR update order 'now': %v", result.Error)
 					tx.Rollback()
 					return http.StatusInternalServerError, result.Error
 				}
-				log.Printf("[HandleEwallet] ✓ order updated to FINDING_MITRA (rows=%d)", result.RowsAffected)
 				if result.RowsAffected == 0 {
-					log.Printf("[HandleEwallet] ⚠️  WARNING: 0 rows affected — order may not be in WAITING_PAYMENT status")
 				}
 				queueOrderID = orderID
 				s.webhookPushFCM("customer", customerID,
@@ -642,7 +600,6 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 					"Pembayaran Berhasil",
 					"Pembayaran order kamu berhasil dan mitra sedang dicarikan",
 					orderID, customerID)
-				log.Printf("[HandleEwallet] ✓ FCM sent to customer %s (NOW_EWALLET_ORDER_PAID)", customerID)
 
 			case "repeat":
 				updates["order_status"] = "FINDING_MITRA"
@@ -650,20 +607,16 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 					Where("payment_id_pay = ? AND order_status = ?", payload.Data.ID, "WAITING_PAYMENT").
 					Updates(updates)
 				if result.Error != nil {
-					log.Printf("[HandleEwallet] ERROR update order 'repeat': %v", result.Error)
 					tx.Rollback()
 					return http.StatusInternalServerError, result.Error
 				}
-				log.Printf("[HandleEwallet] ✓ order updated to FINDING_MITRA (rows=%d)", result.RowsAffected)
 
-				repeatResult := tx.Model(&models.OrderTransactionRepeat{}).
+				_ = tx.Model(&models.OrderTransactionRepeat{}).
 					Where("order_id = ? AND order_status = ?", orderID, "WAITING_PAYMENT").
 					Update("order_status", "WAIT_SCHEDULE")
-				log.Printf("[HandleEwallet] ✓ repeat orders updated to WAIT_SCHEDULE (rows=%d)", repeatResult.RowsAffected)
 
 				var repeats []models.OrderTransactionRepeat
 				s.DB.Where("order_id = ?", orderID).Find(&repeats)
-				log.Printf("[HandleEwallet] scheduling %d repeat coming_soon tasks", len(repeats))
 				for _, rep := range repeats {
 					runAt := rep.OrderTime
 					warningAt := runAt.Add(3 * time.Minute)
@@ -679,7 +632,6 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 					"Pembayaran Order Berulang Berhasil",
 					"Pembayaran order berulang berhasil",
 					orderID, customerID)
-				log.Printf("[HandleEwallet] ✓ FCM sent to customer %s (REPEAT_EWALLET_ORDER_PAID)", customerID)
 
 			case "coming soon":
 				updates["order_status"] = "FINDING_MITRA"
@@ -687,17 +639,14 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 					Where("payment_id_pay = ? AND order_status = ?", payload.Data.ID, "WAITING_PAYMENT").
 					Updates(updates)
 				if result.Error != nil {
-					log.Printf("[HandleEwallet] ERROR update order 'coming soon': %v", result.Error)
 					tx.Rollback()
 					return http.StatusInternalServerError, result.Error
 				}
-				log.Printf("[HandleEwallet] ✓ order updated to FINDING_MITRA (rows=%d)", result.RowsAffected)
 
 				var orderFull models.OrderTransaction
 				s.DB.Where("id = ?", orderID).First(&orderFull)
 				scheduleAt := orderFull.OrderTime
 				warningAt := scheduleAt.Add(3 * time.Minute)
-				log.Printf("[HandleEwallet] scheduling coming_soon run_at=%s warning_at=%s", scheduleAt, warningAt)
 				runPayload, _ := queue.NewOrderComingSoonRunTask(orderID)
 				queue.ScheduleOnceAt(queue.TypeOrderComingSoonRun, runPayload, scheduleAt)
 				warnPayload, _ := queue.NewOrderComingSoonWarningTask(orderID)
@@ -709,10 +658,8 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 					"Pembayaran Order Terjadwal Berhasil",
 					"Pembayaran order terjadwal berhasil",
 					orderID, customerID)
-				log.Printf("[HandleEwallet] ✓ FCM sent to customer %s (COMING_SOON_EWALLET_ORDER_PAID)", customerID)
 
 			default:
-				log.Printf("[HandleEwallet] ⚠️  unknown order_type=%s — no status change applied", orderType)
 			}
 
 			s.DB.Create(&models.SuberesLogs{
@@ -723,41 +670,32 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 			})
 
 			if err := tx.Commit().Error; err != nil {
-				log.Printf("[HandleEwallet] ERROR commit: %v", err)
 				return http.StatusInternalServerError, err
 			}
-			log.Printf("[HandleEwallet] ✓ transaction committed")
 
 			if queueOrderID != "" {
 				taskPayload, _ := queue.NewOrderQueueVATask(queueOrderID)
 				_, enqErr := queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
 				if enqErr != nil {
-					log.Printf("[HandleEwallet] ERROR enqueue mitra search: %v", enqErr)
 				} else {
-					log.Printf("[HandleEwallet] ✓ mitra search task enqueued for order_id=%s", queueOrderID)
 				}
 			}
-			log.Printf("[HandleEwallet] ══════════════════════════════════════════ DONE (SUCCESS)")
 			return http.StatusOK, nil
 
 		} else {
-			log.Printf("[HandleEwallet] payment FAILED/OTHER status=%s — canceling order", payload.Data.Status)
 			result := tx.Model(&models.OrderTransaction{}).
 				Where("payment_id_pay = ? AND order_status = ?", payload.Data.ID, "WAITING_PAYMENT").
 				Update("order_status", "CANCELED_FAILED_PAYMENT")
 			if result.Error != nil {
-				log.Printf("[HandleEwallet] ERROR cancel order: %v", result.Error)
 				tx.Rollback()
 				return http.StatusInternalServerError, result.Error
 			}
-			log.Printf("[HandleEwallet] ✓ order canceled (rows=%d)", result.RowsAffected)
 
 			s.webhookPushFCM("customer", customerID,
 				"EWALLET_PAYMENT_FAILED",
 				"Pembayaran Gagal",
 				"Pembayaran ewallet kamu gagal",
 				orderID, customerID)
-			log.Printf("[HandleEwallet] ✓ FCM sent to customer %s (EWALLET_PAYMENT_FAILED)", customerID)
 
 			s.DB.Create(&models.SuberesLogs{
 				LogName: "Notification Failed Ewallet Order",
@@ -768,7 +706,6 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 		}
 
 	case "ewallet.void":
-		log.Printf("[HandleEwallet] processing ewallet.void for payment_id_pay=%s", payload.Data.ID)
 
 		orderData, err := s.OrderTransactionRepo.FindDynamicOrderTransactionMap(
 			nil,
@@ -777,7 +714,6 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 			[]interface{}{payload.Data.ID},
 		)
 		if err != nil || orderData == nil {
-			log.Printf("[HandleEwallet] ERROR order not found for void payment_id_pay=%s err=%v", payload.Data.ID, err)
 			tx.Rollback()
 			return http.StatusNotFound, errors.New("order not found for void")
 		}
@@ -787,8 +723,6 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 		customerID := fmt.Sprintf("%v", orderData["customer_id"])
 		grossAmount := fmt.Sprintf("%v", orderData["gross_amount"])
 
-		log.Printf("[HandleEwallet] void order_id=%s order_type=%s customer_id=%s void_status=%s", orderID, orderType, customerID, payload.Data.VoidStatus)
-
 		voidStatus := fmt.Sprintf("VOID_%s", payload.Data.VoidStatus)
 		result := tx.Model(&models.OrderTransaction{}).
 			Where("id = ?", orderID).
@@ -797,17 +731,14 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 				"order_status": "CANCELED_VOID",
 			})
 		if result.Error != nil {
-			log.Printf("[HandleEwallet] ERROR void update: %v", result.Error)
 			tx.Rollback()
 			return http.StatusInternalServerError, result.Error
 		}
-		log.Printf("[HandleEwallet] ✓ order voided (rows=%d)", result.RowsAffected)
 
 		if orderType == "repeat" {
-			repeatResult := tx.Model(&models.OrderTransactionRepeat{}).
+			_ = tx.Model(&models.OrderTransactionRepeat{}).
 				Where("order_id = ?", orderID).
 				Update("order_status", "CANCELED_VOID")
-			log.Printf("[HandleEwallet] ✓ repeat orders voided (rows=%d)", repeatResult.RowsAffected)
 		}
 
 		var subPayment models.SubPayment
@@ -816,19 +747,15 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 
 		notifType, notifTitle, notifMsg := webhookVoidNotifMessage(payload.Data.VoidStatus, grossAmount, subPayment.TitlePayment)
 		s.webhookPushFCM("customer", customerID, notifType, notifTitle, notifMsg, orderID, customerID)
-		log.Printf("[HandleEwallet] ✓ FCM void notification sent to customer %s", customerID)
 
 	default:
-		log.Printf("[HandleEwallet] unknown event=%s — skipping", payload.Event)
 		tx.Rollback()
 		return http.StatusOK, nil
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("[HandleEwallet] ERROR final commit: %v", err)
 		return http.StatusInternalServerError, err
 	}
-	log.Printf("[HandleEwallet] ══════════════════════════════════════════ DONE")
 	return http.StatusOK, nil
 }
 
@@ -854,7 +781,6 @@ func (s *WebhookService) webhookPushFCM(userType, userID, notifType, title, mess
 		},
 		"tokens": []string{*user.FirebaseToken},
 	}); err != nil {
-		log.Printf("[WebhookService] webhookPushFCM error: %v", err)
 	}
 }
 

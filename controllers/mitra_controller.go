@@ -36,8 +36,24 @@ func (c *MitraController) Login(ctx *gin.Context) {
 		return
 	}
 
+	// Check account lockout
+	if helpers.IsAccountLocked("mitra", loginDTO.Email) {
+		ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked due to too many failed attempts", "failure_type": "ACCOUNT_LOCKED"})
+		return
+	}
+
 	response, err := c.MitraService.Login(loginDTO)
 	if err != nil {
+		helpers.WriteAuditLog(helpers.AuditLog{
+			Event:     helpers.AuditLoginFailed,
+			IP:        ctx.ClientIP(),
+			UserAgent: ctx.GetHeader("User-Agent"),
+			UserType:  "mitra",
+			Resource:  "/mitra/login",
+			Details:   err.Error(),
+			Success:   false,
+		})
+		helpers.RecordFailedLogin("mitra", loginDTO.Email)
 		switch err.Error() {
 		case "mitra not found":
 			ctx.JSON(http.StatusNotFound, gin.H{"error": err.Error(), "failure_type": "MITRA_NOT_FOUND"})
@@ -52,6 +68,16 @@ func (c *MitraController) Login(ctx *gin.Context) {
 		}
 		return
 	}
+
+	helpers.ClearFailedLogin("mitra", loginDTO.Email)
+	helpers.WriteAuditLog(helpers.AuditLog{
+		Event:     helpers.AuditLogin,
+		IP:        ctx.ClientIP(),
+		UserAgent: ctx.GetHeader("User-Agent"),
+		UserType:  "mitra",
+		Resource:  "/mitra/login",
+		Success:   true,
+	})
 
 	ctx.JSON(http.StatusOK, response)
 }
@@ -123,6 +149,13 @@ func (c *MitraController) Register(ctx *gin.Context) {
 
 			file := fileHeaders[0]
 
+			if err := helpers.ValidateUploadedFile(file); err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{
+					"error": err.Error(),
+				})
+				return
+			}
+
 			date := time.Now()
 			dateImage := fmt.Sprintf(
 				"%d-%d-%d_%d-%d-%d",
@@ -137,7 +170,7 @@ func (c *MitraController) Register(ctx *gin.Context) {
 			filename := fmt.Sprintf(
 				"MITRA_CANDIDATE_IMAGE%s_%s",
 				dateImage,
-				file.Filename,
+				helpers.SanitizeFilename(file.Filename),
 			)
 
 			path := filepath.Join("images/mitra_candidate", filename)
@@ -436,11 +469,15 @@ func (c *MitraController) UpdateMitraCandidate(ctx *gin.Context) {
 			return nil
 		}
 
+		if err := helpers.ValidateUploadedFile(fileHeader); err != nil {
+			return err
+		}
+
 		filename := fmt.Sprintf(
 			"MITRA_CANDIDATE_IMG_%d-%02d-%02d_%02d-%02d-%02d_%s",
 			now.Year(), now.Month(), now.Day(),
 			now.Hour(), now.Minute(), now.Second(),
-			fileHeader.Filename,
+			helpers.SanitizeFilename(fileHeader.Filename),
 		)
 
 		fullPath := filepath.Join(basePath, filename)

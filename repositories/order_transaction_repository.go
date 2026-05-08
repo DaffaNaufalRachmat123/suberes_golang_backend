@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"suberes_golang/dtos"
@@ -407,26 +408,51 @@ type SelectedMitraResult struct {
 	FirebaseToken *string `json:"firebase_token"`
 	UserStatus    string  `json:"user_status"`
 	IsBusy        string  `json:"is_busy"`
+	IsAutoBid     string  `json:"is_auto_bid"`
+	UserRating    float64 `json:"user_rating"`
+	OfferStatus   string  `json:"offer_status"`
 	Distance      float64 `json:"distance"`
 }
 
-func (r *OrderTransactionRepository) FindSelectedMitraPaginated(orderID string, customerLat, customerLng float64, limit, offset int) ([]SelectedMitraResult, int64, error) {
+func (r *OrderTransactionRepository) FindSelectedMitraPaginated(orderID string, customerLat, customerLng float64, mitraGender string, maxRangeKm float64, search string, limit, offset int) ([]SelectedMitraResult, int64, error) {
 	var results []SelectedMitraResult
 	var total int64
 
-	baseQuery := r.DB.Table("users u").
-		Select(`u.id, u.complete_name, u.user_gender, u.latitude, u.longitude, u.firebase_token, u.user_status, u.is_busy,
-			(6371 * acos(cos(radians(?)) * cos(radians(CAST(u.latitude AS DECIMAL(10,8))))
-			* cos(radians(CAST(u.longitude AS DECIMAL(10,8))) - radians(?))
-			+ sin(radians(?)) * sin(radians(CAST(u.latitude AS DECIMAL(10,8)))))) AS distance`,
-			customerLat, customerLng, customerLat).
-		Joins("INNER JOIN order_selected_mitras osm ON osm.mitra_id = u.id AND osm.order_id = ?", orderID).
-		Where("u.user_type = ?", "mitra")
+	maxRangeMeters := maxRangeKm * 1000
+	customerPoint := fmt.Sprintf("ST_SetSRID(ST_MakePoint(%f, %f), 4326)::geography", customerLng, customerLat)
 
-	r.DB.Table("users u").
-		Joins("INNER JOIN order_selected_mitras osm ON osm.mitra_id = u.id AND osm.order_id = ?", orderID).
+	selectFields := fmt.Sprintf(`u.id, u.complete_name, u.user_gender, u.latitude, u.longitude, u.firebase_token,
+		u.user_status, u.is_busy, u.is_auto_bid, COALESCE(u.user_rating, 0) AS user_rating,
+		COALESCE(osm.offer_status, '') AS offer_status,
+		ST_Distance(u.geom, %s) / 1000.0 AS distance`, customerPoint)
+
+	baseQuery := r.DB.Table("users u").
+		Select(selectFields).
+		Joins("LEFT JOIN order_selected_mitras osm ON osm.mitra_id = u.id AND osm.order_id = ?", orderID).
 		Where("u.user_type = ?", "mitra").
-		Count(&total)
+		Where("u.is_logged_in = ?", "1").
+		Where("u.is_active = ?", "yes").
+		Where("u.is_suspended = ?", "0").
+		Where("u.user_gender = ?", mitraGender).
+		Where(fmt.Sprintf("ST_DWithin(u.geom, %s, ?)", customerPoint), maxRangeMeters)
+
+	if search != "" {
+		baseQuery = baseQuery.Where("u.complete_name ILIKE ?", "%"+search+"%")
+	}
+
+	countQuery := r.DB.Table("users u").
+		Joins("LEFT JOIN order_selected_mitras osm ON osm.mitra_id = u.id AND osm.order_id = ?", orderID).
+		Where("u.user_type = ?", "mitra").
+		Where("u.is_logged_in = ?", "1").
+		Where("u.is_active = ?", "yes").
+		Where("u.is_suspended = ?", "0").
+		Where("u.user_gender = ?", mitraGender).
+		Where(fmt.Sprintf("ST_DWithin(u.geom, %s, ?)", customerPoint), maxRangeMeters)
+
+	if search != "" {
+		countQuery = countQuery.Where("u.complete_name ILIKE ?", "%"+search+"%")
+	}
+	countQuery.Count(&total)
 
 	err := baseQuery.Order("distance ASC").Limit(limit).Offset(offset).Scan(&results).Error
 	return results, total, err

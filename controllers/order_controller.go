@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"net/http"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
@@ -56,7 +55,6 @@ func (c *OrderController) AcceptOrderCash(ctx *gin.Context) {
 	}
 	code, response, err := c.OrderCashService.AcceptOrder(req)
 	if err != nil {
-		fmt.Println(err)
 		helpers.APIErrorResponse(ctx, err.Error(), code)
 		return
 	}

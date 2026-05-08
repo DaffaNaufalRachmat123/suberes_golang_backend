@@ -105,7 +105,7 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.UserLoginRespon
 		"user_rating":        mitra.UserRating,
 		"user_profile_image": mitra.UserProfileImage,
 		"user_status":        mitra.UserStatus,
-		"exp":                time.Now().Add(1 * time.Minute).Unix(),
+		"exp":                time.Now().Add(15 * time.Minute).Unix(),
 	})
 
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -211,7 +211,7 @@ func (s *MitraService) RefreshToken(userID string, stored models.RefreshToken) (
 		"email":       mitra.Email,
 		"user_type":   mitra.UserType,
 		"user_status": mitra.UserStatus,
-		"exp":         time.Now().Add(1 * time.Minute).Unix(),
+		"exp":         time.Now().Add(15 * time.Minute).Unix(),
 	})
 
 	accessString, err := newAccess.SignedString([]byte(secretKeyToken))
@@ -431,6 +431,10 @@ func (s *MitraService) ChangePassword(mitraID string, changePasswordDTO dtos.Cha
 		return helpers.NewAppError("password lama kamu salah", 401)
 	}
 
+	if err := helpers.ValidatePasswordStrengthOrError(changePasswordDTO.Password); err != nil {
+		return helpers.NewAppError(err.Error(), 400)
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(changePasswordDTO.Password), 12)
 	if err != nil {
 		return err
@@ -559,6 +563,10 @@ func (s *MitraService) ChangeForgotPassword(dto dtos.ForgotPasswordDTO) error {
 	// if err != nil {
 	// 	return errors.New("Unauthorized")
 	// }
+
+	if err := helpers.ValidatePasswordStrengthOrError(dto.Password); err != nil {
+		return err
+	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(dto.Password), 12)
 	if err != nil {
@@ -847,7 +855,6 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 			}
 			_, err = service.SendMulticast(s.DB, "mitra", msgCustomer)
 			if err != nil {
-				log.Println("error:", err)
 			}
 		}
 		userUpdate := map[string]interface{}{
@@ -892,7 +899,6 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 			}
 			_, err = service.SendMulticast(s.DB, "mitra", payloadMitra)
 			if err != nil {
-				log.Println("error:", err)
 			}
 		}
 		helpers.SendMitraStatus(os.Getenv("SUPPORT_EMAIL"), mitra.Email, "Status Akun Suberes Mitra", status, mitra.Email, "Dinonaktifkan")
@@ -977,7 +983,6 @@ func (s *MitraService) UpdateMitraActive(mitraID, isActive string) (int, error) 
 	}
 	_, err = service.SendMulticast(s.DB, "admin", payloadAdmin)
 	if err != nil {
-		log.Println("error:", err)
 	}
 	return 200, nil
 }
@@ -1074,7 +1079,6 @@ func (s *MitraService) GetMitraDetail(id string, status string, timezone string)
 
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, loc)
-	fmt.Println("Mitra ID : ", id)
 	user, err := s.UserRepository.FindGenderMitraExGoLife(id)
 	if err != nil {
 		return nil, 404, errors.New("Mitra data not found")
@@ -1650,7 +1654,6 @@ func (s *MitraService) UpdateRejectionOrderCount(orderID, mitraID string) (int, 
 	if orderData.OrderStatus == "WAITING_FOR_SELECTED_MITRA" {
 		adminSocketIDs, err := s.UserRepository.FindOnlineAdmins()
 		if err != nil {
-			log.Printf("[UpdateRejectionOrderCount] WARNING FindOnlineAdmins: %v", err)
 		}
 		for _, socketID := range adminSocketIDs {
 			realtime.Server.BroadcastToRoom("/", socketID, constants.MESSAGE_SOCKET_ADMIN, map[string]interface{}{

@@ -79,3 +79,13 @@ func (c *TransactionController) FindDisbursementsByMitra(ctx *gin.Context) {
 	response := helpers.GetPaginationData(ctx, transactions, len(transactions), page, limit, total)
 	ctx.JSON(http.StatusOK, response)
 }
+
+func (c *TransactionController) FindAdminDetail(ctx *gin.Context) {
+	id := ctx.Param("id")
+	transaction, err := c.TransactionService.FindAdminDetail(id)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, "Transaction not found", http.StatusNotFound)
+		return
+	}
+	ctx.JSON(http.StatusOK, transaction)
+}

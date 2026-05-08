@@ -95,7 +95,11 @@ func (s *ComplainService) Create(ctx *gin.Context) error {
 	if form != nil {
 		files := form.File["file"]
 		for _, fileHeader := range files {
-			filename := helpers.GenerateFilename(complainImgAlias, fileHeader.Filename)
+			if err := helpers.ValidateUploadedFile(fileHeader); err != nil {
+				tx.Rollback()
+				return err
+			}
+			filename := helpers.GenerateFilename(complainImgAlias, helpers.SanitizeFilename(fileHeader.Filename))
 			fullPath := filepath.Join(complainPath, filename)
 
 			if err := ctx.SaveUploadedFile(fileHeader, fullPath); err != nil {

@@ -360,7 +360,6 @@ func (s *OrderEwalletService) CreateOrderEwallet(ctx *gin.Context, customerID st
 
 	order, err := s.OrderTransactionRepo.CreateOrderData(tx, *orderData)
 	if err != nil {
-		fmt.Println("Error creating order data:", err.Error())
 		tx.Rollback()
 		return "", 0, "", "", http.StatusInternalServerError, err
 	}

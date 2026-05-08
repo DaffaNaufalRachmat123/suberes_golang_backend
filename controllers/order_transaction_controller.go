@@ -8,6 +8,7 @@ import (
 
 	"suberes_golang/constants"
 	"suberes_golang/helpers"
+	"suberes_golang/repositories"
 	"suberes_golang/services"
 
 	"github.com/gin-gonic/gin"
@@ -83,6 +84,7 @@ func (c *OrderTransactionController) GetSelectedMitra(ctx *gin.Context) {
 	orderID := ctx.Param("order_id")
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
+	search := ctx.DefaultQuery("search", "")
 	if page < 1 {
 		page = 1
 	}
@@ -90,10 +92,13 @@ func (c *OrderTransactionController) GetSelectedMitra(ctx *gin.Context) {
 		limit = 10
 	}
 
-	results, total, err := c.OrderTransactionService.GetSelectedMitra(orderID, page, limit)
+	results, total, err := c.OrderTransactionService.GetSelectedMitra(orderID, page, limit, search)
 	if err != nil {
 		helpers.APIErrorResponse(ctx, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if results == nil {
+		results = []repositories.SelectedMitraResult{}
 	}
 	pagination := helpers.GetPaginationData(ctx, results, len(results), page, limit, total)
 	helpers.APIResponse(ctx, "OK", http.StatusOK, pagination)

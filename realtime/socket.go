@@ -16,7 +16,6 @@ func InitSocket() {
 	}
 
 	Server.OnConnect("/", func(c socketio.Conn) error {
-		log.Println("connected:", c.ID())
 		return nil
 	})
 

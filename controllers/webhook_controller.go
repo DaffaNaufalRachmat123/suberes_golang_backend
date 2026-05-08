@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
@@ -32,6 +34,13 @@ func (c *WebhookController) VACreate(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
+
+	// Log incoming Xendit VA Create webhook payload
+	if payloadJSON, err := json.Marshal(body); err == nil {
+		log.Printf("[WEBHOOK][VA_CREATE] Received payload | external_id=%v | status=%v | body=%s",
+			body["external_id"], body["status"], string(payloadJSON))
+	}
+
 	code, err := c.WebhookService.HandleVACreate(body)
 	if err != nil {
 		helpers.APIErrorResponse(ctx, err.Error(), code)
@@ -52,6 +61,13 @@ func (c *WebhookController) VAPaid(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
+
+	// Log incoming Xendit VA Paid webhook payload
+	if payloadJSON, err := json.Marshal(body); err == nil {
+		log.Printf("[WEBHOOK][VA_PAID] Received payload | external_id=%v | amount=%v | bank_code=%v | body=%s",
+			body["external_id"], body["amount"], body["bank_code"], string(payloadJSON))
+	}
+
 	code, err := c.WebhookService.HandleVAPaid(body)
 	if err != nil {
 		helpers.APIErrorResponse(ctx, err.Error(), code)

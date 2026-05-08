@@ -1,22 +1,22 @@
 package helpers
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
-	"time"
+	"math/big"
 )
 
 func GenerateOTP() string {
-	rand.Seed(time.Now().UnixNano())
-	return fmt.Sprintf("%06d", rand.Intn(999999))
+	n, _ := rand.Int(rand.Reader, big.NewInt(999999))
+	return fmt.Sprintf("%06d", n.Int64())
 }
 
 func GenerateInvoice(prefix string) string {
 	charset := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, 4)
 	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[n.Int64()]
 	}
 	return fmt.Sprintf("%s-%s", prefix, string(b))
 }

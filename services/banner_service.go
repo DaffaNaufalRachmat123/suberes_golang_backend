@@ -100,6 +100,10 @@ func (s *BannerService) CreateBanner(ctx *gin.Context) error {
 			if i < len(contentFiles) {
 				cFile := contentFiles[i]
 
+				if err := helpers.ValidateUploadedFile(cFile); err != nil {
+					return err
+				}
+
 				// === FORMAT FILENAME ===
 				now := time.Now()
 				filename := fmt.Sprintf(
@@ -111,7 +115,7 @@ func (s *BannerService) CreateBanner(ctx *gin.Context) error {
 					now.Hour(),
 					now.Minute(),
 					now.Second(),
-					cFile.Filename,
+					helpers.SanitizeFilename(cFile.Filename),
 				)
 
 				fullPath := filepath.Join(bannerPath, filename)
@@ -146,9 +150,9 @@ func (s *BannerService) CreateBanner(ctx *gin.Context) error {
 		now.Hour(),
 		now.Minute(),
 		now.Second(),
-		fileHeader.Filename,
+		helpers.SanitizeFilename(fileHeader.Filename),
 	)
-	if err := ctx.SaveUploadedFile(fileHeader, os.Getenv("BANNER_IMAGE_PATH")+mainFilename); err != nil {
+	if err := ctx.SaveUploadedFile(fileHeader, filepath.Join(bannerPath, mainFilename)); err != nil {
 		return err
 	}
 	tx := s.DB.Begin()
@@ -164,7 +168,7 @@ func (s *BannerService) CreateBanner(ctx *gin.Context) error {
 		BannerBody:           req.BannerBody,
 		BannerType:           req.BannerType,
 		IsBroadcast:          req.IsBroadcast,
-		BannerImage:          "/banner/" + mainFilename,
+		BannerImage:          "/banners/" + mainFilename,
 		BannerImageSize:      strconv.FormatInt(fileHeader.Size, 10),
 		BannerImageDimension: fmt.Sprintf("%dpx and %dpx", width, height),
 	}
@@ -308,7 +312,9 @@ func (s *BannerService) UpdateBanner(ctx *gin.Context, id uint) error {
 		}
 
 		// === HAPUS IMAGE LAMA ===
-		oldFilename := strings.TrimPrefix(existBanner.BannerImage, "/banner/")
+		oldFilename := strings.TrimPrefix(existBanner.BannerImage, "/banners/")
+		// Also handle legacy /banner/ prefix
+		oldFilename = strings.TrimPrefix(oldFilename, "/banner/")
 		oldPath := filepath.Join(bannerPath, oldFilename)
 		_ = os.Remove(oldPath)
 
@@ -327,7 +333,7 @@ func (s *BannerService) UpdateBanner(ctx *gin.Context, id uint) error {
 
 	// Jika gambar diganti, update field gambar & flag revisi
 	if isNewImage {
-		existBanner.BannerImage = "/banner/" + newFilename
+		existBanner.BannerImage = "/banners/" + newFilename
 		existBanner.BannerImageSize = newSize
 		existBanner.BannerImageDimension = newDim
 		existBanner.IsRevision = "1"
@@ -336,7 +342,7 @@ func (s *BannerService) UpdateBanner(ctx *gin.Context, id uint) error {
 	if err != nil {
 		tx.Rollback()
 		if isNewImage {
-			os.Remove(filepath.Join(os.Getenv("BANNER_IMAGE_PATH"), newFilename))
+			os.Remove(filepath.Join(bannerPath, newFilename))
 		}
 		return err
 	}
@@ -359,28 +365,34 @@ func (s *BannerService) DeleteBanner(id uint) error {
 	re := regexp.MustCompile(`<img[^>]+src="([^">]+)"`)
 	matches := re.FindAllStringSubmatch(banner.BannerBody, -1)
 
+	basePath := filepath.Join(
+		helpers.RootPath(),
+		os.Getenv("IMAGE_PATH_CONTROLLER"),
+	)
+	bannerImgPath := filepath.Join(basePath, os.Getenv("BANNER_IMAGE_PATH"))
+
 	for _, match := range matches {
 		if len(match) > 1 {
-			// match[1] berisi URL, misal: http://localhost:8080/api/images/banner/BNR_IMG_...jpg
 			url := match[1]
-
-			// Kita harus ekstrak nama filenya saja
-			if strings.Contains(url, "/api/images/banner/") {
+			if strings.Contains(url, "/api/images/banners/") {
+				parts := strings.Split(url, "/api/images/banners/")
+				if len(parts) > 1 {
+					filename := parts[1]
+					os.Remove(filepath.Join(bannerImgPath, filename))
+				}
+			} else if strings.Contains(url, "/api/images/banner/") {
 				parts := strings.Split(url, "/api/images/banner/")
 				if len(parts) > 1 {
 					filename := parts[1]
-					filePath := filepath.Join(os.Getenv("BANNER_IMAGE_PATH"), filename)
-
-					// Hapus File
-					os.Remove(filePath)
+					os.Remove(filepath.Join(bannerImgPath, filename))
 				}
 			}
 		}
 	}
 	if banner.BannerImage != "" {
-		filename := strings.TrimPrefix(banner.BannerImage, "/banner/")
-		mainImgPath := filepath.Join(os.Getenv("BANNER_IMAGE_PATH"), filename)
-		os.Remove(mainImgPath)
+		filename := strings.TrimPrefix(banner.BannerImage, "/banners/")
+		filename = strings.TrimPrefix(filename, "/banner/")
+		os.Remove(filepath.Join(bannerImgPath, filename))
 	}
 	err = s.BannerRepo.Delete(tx, banner)
 	if err != nil {

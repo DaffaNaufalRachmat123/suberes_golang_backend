@@ -4,16 +4,21 @@ import (
 	"suberes_golang/controllers"
 	"suberes_golang/helpers"
 	middleware "suberes_golang/middlewares"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
+var customerLoginLimiter = middleware.NewRateLimiter(5, 1*time.Minute)
+var customerOtpLimiter = middleware.NewRateLimiter(3, 1*time.Minute)
+var customerRegisterLimiter = middleware.NewRateLimiter(3, 5*time.Minute)
+
 func CustomerRoutes(r *gin.RouterGroup, controller *controllers.CustomerController, db *gorm.DB) {
 	customer := r.Group("/customer")
-	customer.POST("/login/email", controller.LoginByEmail)
-	customer.POST("/otp_validator/mail", controller.OtpValidatorMail)
-	customer.POST("/register", controller.Register)
+	customer.POST("/login/email", middleware.RateLimitMiddleware(customerLoginLimiter), controller.LoginByEmail)
+	customer.POST("/otp_validator/mail", middleware.RateLimitMiddleware(customerOtpLimiter), controller.OtpValidatorMail)
+	customer.POST("/register", middleware.RateLimitMiddleware(customerRegisterLimiter), controller.Register)
 	customer.POST("/refresh_token", middleware.RefreshTokenMiddleware(db), controller.RefreshToken)
 	protected := customer.Group("/")
 	protected.Use(middleware.AuthMiddleware(db))

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net/http"
 	"os"
@@ -55,29 +54,24 @@ func NewOrderVAService(db *gorm.DB) *OrderVAService {
 
 // CreateOrderVA creates a new VA (virtual account) order.
 func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDTO) (string, int, string, string, int, error) {
-	log.Printf("[CreateOrderVA] START customer_id=%s order_type=%s sub_payment_id=%d gross_amount=%d", customerID, dto.OrderType, dto.SubPaymentID, dto.GrossAmount)
 
 	serviceData, err := s.ServiceRepo.FindByID(dto.ServiceID)
 	if err != nil || serviceData == nil {
-		log.Printf("[CreateOrderVA] ERROR service not found service_id=%d err=%v", dto.ServiceID, err)
 		return "", 0, "", "", http.StatusNotFound, errors.New("service not found")
 	}
 
 	subService, err := s.SubServiceRepo.FindByID(dto.SubServiceID)
 	if err != nil || subService == nil {
-		log.Printf("[CreateOrderVA] ERROR sub service not found sub_service_id=%d err=%v", dto.SubServiceID, err)
 		return "", 0, "", "", http.StatusNotFound, errors.New("sub service not found")
 	}
 
 	customerData, err := s.UserRepo.FindCustomerById(customerID)
 	if err != nil || customerData == nil {
-		log.Printf("[CreateOrderVA] ERROR customer not found customer_id=%s err=%v", customerID, err)
 		return "", 0, "", "", http.StatusNotFound, errors.New("customer not found")
 	}
 
 	subPayment, err := s.SubPaymentRepo.FindById(dto.SubPaymentID)
 	if err != nil || subPayment == nil {
-		log.Printf("[CreateOrderVA] ERROR sub payment not found sub_payment_id=%d err=%v", dto.SubPaymentID, err)
 		return "", 0, "", "", http.StatusNotFound, errors.New("sub payment not found")
 	}
 
@@ -88,7 +82,6 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 	// Time validation
 	loc, err := time.LoadLocation(dto.TimezoneCode)
 	if err != nil {
-		log.Printf("[CreateOrderVA] ERROR invalid timezone_code=%s err=%v", dto.TimezoneCode, err)
 		return "", 0, "", "", http.StatusInternalServerError, err
 	}
 
@@ -98,13 +91,11 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 	if dto.OrderType == "coming soon" {
 		orderDateTime, err := time.ParseInLocation(layout, helpers.NormalizeDateTimeString(dto.OrderTime), loc)
 		if err != nil {
-			log.Printf("[CreateOrderVA] ERROR parse order_time=%s err=%v", dto.OrderTime, err)
 			return "", 0, "", "", http.StatusBadRequest, err
 		}
 		if orderDateTime.Day() >= nowDateTime.Day() && orderDateTime.Hour() >= 7 {
 			orderDateTime = orderDateTime.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
 			if orderDateTime.Hour() >= 23 && orderDateTime.Minute() > 0 {
-				log.Printf("[CreateOrderVA] ERROR order_time exceeds max working hours order_time=%s", dto.OrderTime)
 				return "", 0, "", "", http.StatusBadRequest, errors.New("Batas maksimal jam order di jam 11 malam")
 			}
 		}
@@ -112,13 +103,11 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 		for _, rep := range dto.OrderRepeatList {
 			orderDateTime, err := time.ParseInLocation(layout, helpers.NormalizeDateTimeString(rep.OrderTime), loc)
 			if err != nil {
-				log.Printf("[CreateOrderVA] ERROR parse repeat order_time=%s err=%v", rep.OrderTime, err)
 				return "", 0, "", "", http.StatusBadRequest, err
 			}
 			if orderDateTime.Day() >= nowDateTime.Day() && orderDateTime.Hour() >= 7 {
 				orderDateTime = orderDateTime.Add(time.Duration(subService.MinutesSubServices) * time.Minute)
 				if orderDateTime.Hour() >= 23 && orderDateTime.Minute() > 0 {
-					log.Printf("[CreateOrderVA] ERROR repeat order_time exceeds max working hours order_time=%s", rep.OrderTime)
 					return "", 0, "", "", http.StatusBadRequest, errors.New("Batas maksimal jam order di jam 11 malam")
 				}
 			}
@@ -200,20 +189,14 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 		"is_closed":       true,
 	}
 	paymentClient := helpers.NewClient()
-	log.Printf("[CreateOrderVA] Xendit VA request payload: %+v", vaRequestPayload)
 	vaRespBytes, err := paymentClient.CreateVirtualAccount(context.Background(), vaRequestPayload)
 	if err != nil {
-		log.Printf("[CreateOrderVA] ERROR xendit VA creation failed id_transaction=%s err=%v", idTransaction, err)
 		return "", 0, "", "", http.StatusInternalServerError, fmt.Errorf("xendit VA creation failed: %w", err)
 	}
-	log.Printf("[CreateOrderVA] Xendit VA raw response: %s", string(vaRespBytes))
 	var vaResp map[string]interface{}
 	if err := json.Unmarshal(vaRespBytes, &vaResp); err != nil {
-		log.Printf("[CreateOrderVA] ERROR parse xendit VA response id_transaction=%s err=%v", idTransaction, err)
 		return "", 0, "", "", http.StatusInternalServerError, fmt.Errorf("failed to parse xendit VA response: %w", err)
 	}
-	log.Printf("[CreateOrderVA] Xendit VA parsed: va_id=%v external_id=%v account_number=%v bank_code=%v expiration_date=%v status=%v",
-		vaResp["id"], vaResp["external_id"], vaResp["account_number"], vaResp["bank_code"], vaResp["expiration_date"], vaResp["status"])
 	// Map Xendit response fields — mirrors JS payloadVaResponse
 	vaID := fmt.Sprintf("%v", vaResp["id"])
 	vaOwnerID := fmt.Sprintf("%v", vaResp["owner_id"])
@@ -311,11 +294,9 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 
 	order, err := s.OrderTransactionRepo.CreateOrderData(tx, *orderData)
 	if err != nil {
-		log.Printf("[CreateOrderVA] ERROR create order id_transaction=%s err=%v", idTransaction, err)
 		tx.Rollback()
 		return "", 0, "", "", http.StatusInternalServerError, err
 	}
-	log.Printf("[CreateOrderVA] Order created order_id=%s id_transaction=%s customer_id=%s", order.ID, idTransaction, customerID)
 
 	// Sub service added
 	if len(dto.OrderAdditionalList) > 0 {
@@ -375,7 +356,6 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		log.Printf("[CreateOrderVA] ERROR commit tx order_id=%s err=%v", order.ID, err)
 		return "", 0, "", "", http.StatusInternalServerError, err
 	}
 
@@ -383,12 +363,9 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 	notifyPayload, _ := queue.NewOrderEwalletNotifyExpiredTask(order.ID, customerID)
 	notifyTask := asynq.NewTask(queue.TypeOrderVAEwalletNotifyExpired, notifyPayload)
 	if _, enqErr := queue.AsynqClient.Enqueue(notifyTask, asynq.ProcessIn(time.Duration(timeoutMinutes)*time.Minute)); enqErr != nil {
-		log.Printf("[CreateOrderVA] ERROR enqueue payment expiry job order_id=%s err=%v", order.ID, enqErr)
 	} else {
-		log.Printf("[CreateOrderVA] Payment expiry job enqueued order_id=%s timeout=%d minutes", order.ID, timeoutMinutes)
 	}
 
-	log.Printf("[CreateOrderVA] SUCCESS order_id=%s id_transaction=%s customer_id=%s mitra_id=%s", order.ID, idTransaction, order.CustomerID, helpers.DerefStr(order.MitraID))
 	return order.ID, -1, order.CustomerID, helpers.DerefStr(order.MitraID), http.StatusOK, nil
 }
 
@@ -632,6 +609,5 @@ func getInt64(m map[string]interface{}, key string) int64 {
 			return int64(val)
 		}
 	}
-	log.Printf("getInt64: key %q not found or wrong type in map", key)
 	return 0
 }

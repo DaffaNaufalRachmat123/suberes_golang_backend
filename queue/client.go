@@ -64,7 +64,6 @@ func StartWorker() {
 	mux.HandleFunc(TypeOrderComingSoonRun, HandleOrderComingSoonRunTask)
 	mux.HandleFunc(TypeOrderComingSoonWarning, HandleOrderComingSoonWarningTask)
 
-	log.Println("Asynq worker started")
 
 	if err := AsynqServer.Run(mux); err != nil {
 		log.Fatalf("could not run task server: %v", err)

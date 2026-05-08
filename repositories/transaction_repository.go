@@ -15,6 +15,29 @@ func (r *TransactionRepository) FindById(id int) (*models.Transaction, error) {
 	err := r.DB.Where("id = ?", id).First(&transaction)
 	return &transaction, err.Error
 }
+
+func (r *TransactionRepository) FindAdminDetailById(id string) (*models.Transaction, error) {
+	var transaction models.Transaction
+	err := r.DB.
+		Select("transactions.*, transactions.bank_name as bank_name").
+		Preload("MitraTransactionData", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, complete_name, email, user_profile_image")
+		}).
+		Preload("CustomerTransactionData", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, complete_name, email, user_profile_image")
+		}).
+		Preload("BankList").
+		Preload("OrderTransaction", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, id_transaction, sub_payment_id")
+		}).
+		Preload("OrderTransaction.SubPayment").
+		Where("transactions.id = ?", id).
+		First(&transaction).Error
+	if err != nil {
+		return nil, err
+	}
+	return &transaction, nil
+}
 func (r *TransactionRepository) CreateTransaction(tx *gorm.DB, transaction *models.Transaction) error {
 	query := tx
 
@@ -62,7 +85,16 @@ func (r *TransactionRepository) FindAllWithPagination(page, limit int, search, t
 	}
 
 	offset := (page - 1) * limit
-	err = query.Preload("MitraTransactionData").Preload("CustomerTransactionData").Preload("OrderTransaction").Limit(limit).Offset(offset).Order("created_at DESC").Find(&transactions).Error
+	err = query.
+		Preload("MitraTransactionData").
+		Preload("CustomerTransactionData").
+		Preload("BankList").
+		Preload("OrderTransaction").
+		Preload("OrderTransaction.SubPayment").
+		Limit(limit).
+		Offset(offset).
+		Order("created_at DESC").
+		Find(&transactions).Error
 	if err != nil {
 		return nil, 0, err
 	}

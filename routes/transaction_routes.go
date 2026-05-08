@@ -22,6 +22,12 @@ func TransactionRoutes(r *gin.RouterGroup, controller *controllers.TransactionCo
 		},
 		{
 			Method:  "GET",
+			Path:    "/admin/detail/:id",
+			Handler: controller.FindAdminDetail,
+			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
+		},
+		{
+			Method:  "GET",
 			Path:    "/type/:mitra_id/:pendapatan_date",
 			Handler: controller.GetTransactionTypes,
 			Roles:   []string{helpers.MitraRole},

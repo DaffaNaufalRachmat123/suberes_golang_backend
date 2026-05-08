@@ -4,15 +4,17 @@ import (
 	"suberes_golang/controllers"
 	"suberes_golang/helpers"
 	middleware "suberes_golang/middlewares"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
+var adminLoginLimiter = middleware.NewRateLimiter(5, 1*time.Minute)
+
 func AdminRoutes(r *gin.RouterGroup, controller *controllers.AdminController, db *gorm.DB) {
 	admin := r.Group("/admin")
-	admin.POST("/login", controller.Login)
-	admin.POST("/create", controller.CreateAdmin)
+	admin.POST("/login", middleware.RateLimitMiddleware(adminLoginLimiter), controller.Login)
 	admin.POST("/refresh_token", middleware.RefreshTokenMiddleware(db), controller.RefreshToken)
 
 	protected := admin.Group("/")
@@ -23,7 +25,7 @@ func AdminRoutes(r *gin.RouterGroup, controller *controllers.AdminController, db
 			Method:  "GET",
 			Path:    "/dashboard",
 			Handler: controller.GetDashboard,
-			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole, helpers.SuperAdminRole},
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
 		},
 		{
 			Method:  "GET",
@@ -31,12 +33,12 @@ func AdminRoutes(r *gin.RouterGroup, controller *controllers.AdminController, db
 			Handler: controller.IndexAdmin,
 			Roles:   []string{helpers.SuperAdminRole},
 		},
-		// {
-		// 	Method:  "POST",
-		// 	Path:    "/create",
-		// 	Handler: controller.CreateAdmin,
-		// 	Roles:   []string{helpers.SuperAdminRole},
-		// },
+		{
+			Method:  "POST",
+			Path:    "/create",
+			Handler: controller.CreateAdmin,
+			Roles:   []string{helpers.SuperAdminRole},
+		},
 		{
 			Method:  "PUT",
 			Path:    "/update_admin_status/:admin_id",
