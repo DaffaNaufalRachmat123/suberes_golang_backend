@@ -67,4 +67,16 @@ func AutoMigrate() {
 		log.Fatal("Migration failed:", err)
 	}
 
+	// Re-apply check constraints that AutoMigrate won't update automatically
+	constraintFixes := []string{
+		`ALTER TABLE services DROP CONSTRAINT IF EXISTS chk_services_is_residental`,
+		`ALTER TABLE services ADD CONSTRAINT chk_services_is_residental CHECK (is_residental IN ('true','false'))`,
+		`ALTER TABLE services DROP CONSTRAINT IF EXISTS chk_services_service_status`,
+		`ALTER TABLE services ADD CONSTRAINT chk_services_service_status CHECK (service_status IN ('Regular','Premium','Pro Premium'))`,
+	}
+	for _, sql := range constraintFixes {
+		if err := config.DB.Exec(sql).Error; err != nil {
+			log.Printf("Warning: constraint fix failed: %v", err)
+		}
+	}
 }

@@ -9,12 +9,17 @@ import (
 	"gorm.io/gorm"
 )
 
-func SubServiceAdditionalRoutes(r *gin.RouterGroup, controller *controllers.SubServiceAdditionalController, db *gorm.DB) {
-	subServiceAdditional := r.Group("/sub_service_additional")
-	protected := subServiceAdditional.Group("/")
-	protected.Use(middleware.AuthMiddleware(db))
+func CategoryServiceRoutes(r *gin.RouterGroup, controller *controllers.CategoryServiceController, db *gorm.DB) {
+	categoryService := r.Group("/category_service")
+	categoryService.Use(middleware.AuthMiddleware(db))
 
 	routes := []helpers.ProtectedRoute{
+		{
+			Method:  "GET",
+			Path:    "/detail/:id",
+			Handler: controller.GetDetail,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole, helpers.CustomerRole},
+		},
 		{
 			Method:  "POST",
 			Path:    "/create",
@@ -35,5 +40,5 @@ func SubServiceAdditionalRoutes(r *gin.RouterGroup, controller *controllers.SubS
 		},
 	}
 
-	helpers.RegisterProtectedRoutes(protected, routes)
+	helpers.RegisterProtectedRoutes(categoryService, routes)
 }

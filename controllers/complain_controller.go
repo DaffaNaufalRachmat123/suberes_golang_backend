@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"suberes_golang/helpers"
+	"suberes_golang/models"
 	"suberes_golang/services"
 
 	"github.com/gin-gonic/gin"
@@ -92,7 +93,15 @@ func (c *ComplainController) Detail(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
 		return
 	}
-	ctx.JSON(http.StatusOK, data)
+
+	type ComplainDetailResponse struct {
+		*models.Complain
+		CreatedAt string `json:"created_at"`
+	}
+	ctx.JSON(http.StatusOK, ComplainDetailResponse{
+		Complain:  data,
+		CreatedAt: helpers.FormatDateByTimezone(data.CreatedAt, data.TimezoneCode),
+	})
 }
 
 // Create POST /api/complains/create  (multipart/form-data with optional file[] images)

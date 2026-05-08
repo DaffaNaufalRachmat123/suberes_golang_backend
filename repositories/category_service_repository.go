@@ -28,3 +28,23 @@ func (r *CategoryServiceRepository) FindAllByLayananIDPagination(layananID, page
 
 	return categoryServices, total, nil
 }
+
+func (r *CategoryServiceRepository) FindByID(id uint) (*models.CategoryService, error) {
+	var cs models.CategoryService
+	if err := r.DB.First(&cs, id).Error; err != nil {
+		return nil, err
+	}
+	return &cs, nil
+}
+
+func (r *CategoryServiceRepository) Create(tx *gorm.DB, cs *models.CategoryService) error {
+	return tx.Create(cs).Error
+}
+
+func (r *CategoryServiceRepository) Update(tx *gorm.DB, id uint, data map[string]interface{}) error {
+	return tx.Model(&models.CategoryService{}).Where("id = ?", id).Updates(data).Error
+}
+
+func (r *CategoryServiceRepository) Delete(tx *gorm.DB, id uint) error {
+	return tx.Delete(&models.CategoryService{}, id).Error
+}

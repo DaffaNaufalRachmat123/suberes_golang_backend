@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -42,7 +43,11 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Invalid or expired token", "status": "failure"})
+			if errors.Is(err, jwt.ErrTokenExpired) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Token expired", "status": "failure", "need_refresh": true})
+			} else {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Invalid or expired token", "status": "failure"})
+			}
 			return
 		}
 

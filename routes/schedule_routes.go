@@ -45,7 +45,7 @@ func ScheduleRoutes(router *gin.RouterGroup, controller *controllers.ScheduleCon
 		},
 		{
 			Method:  "DELETE",
-			Path:    "/remove/:id/:password",
+			Path:    "/remove/:id",
 			Handler: controller.Delete,
 			Roles:   []string{helpers.AdminRole, helpers.SuperAdminRole},
 		},

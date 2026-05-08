@@ -4,6 +4,11 @@ import (
 	"time"
 )
 
+// Marshal only id and complete_name for complain relation
+func (u *User) MarshalJSON() ([]byte, error) {
+	return []byte(`{"id":"` + u.ID + `","complete_name":"` + u.CompleteName + `"}`), nil
+}
+
 type User struct {
 	ID                          string     `gorm:"type:varchar(36);primaryKey;column:id" json:"id"`
 	CompleteName                string     `gorm:"type:varchar(255);not null" json:"complete_name"`

@@ -112,6 +112,12 @@ func main() {
 		DB:                  config.DB,
 	}
 
+	categoryServiceService := &services.CategoryServiceService{
+		CategoryServiceRepo: categoryServiceRepo,
+		UserRepo:            userRepo,
+		DB:                  config.DB,
+	}
+
 	serviceService := &services.ServiceService{
 		ServiceRepo: serviceRepo,
 		DB:          config.DB,
@@ -159,6 +165,7 @@ func main() {
 
 	subServiceAdditionalService := &services.SubServiceAdditionalService{
 		SubServiceAdditionalRepo: subServiceAdditionalRepo,
+		UserRepo:                 userRepo,
 		DB:                       config.DB,
 	}
 
@@ -282,6 +289,10 @@ func main() {
 		LayananServiceService: layananServiceService,
 	}
 
+	CategoryServiceController := &controllers.CategoryServiceController{
+		CategoryServiceService: categoryServiceService,
+	}
+
 	ServiceController := &controllers.ServiceController{
 		ServiceService: serviceService,
 	}
@@ -316,6 +327,7 @@ func main() {
 	routes.CustomerRoutes(api, CustomerController, config.DB)
 	routes.BannerRoutes(api, BannerController, config.DB)
 	routes.LayananServiceRoutes(api, LayananServiceController, config.DB)
+	routes.CategoryServiceRoutes(api, CategoryServiceController, config.DB)
 	routes.ServiceRoutes(api, ServiceController, config.DB)
 	routes.SubServiceRoutes(api, subServiceController, config.DB)
 	routes.SubServiceAdditionalRoutes(api, subServiceAdditionalController, config.DB)

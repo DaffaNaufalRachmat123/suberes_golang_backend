@@ -119,13 +119,25 @@ func (c *ScheduleController) Update(ctx *gin.Context) {
 
 func (c *ScheduleController) Delete(ctx *gin.Context) {
 	id := ctx.Param("id")
-	password := ctx.Param("password")
+
+	var req dtos.DeleteScheduleRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	userCtx, _ := ctx.Get("currentUser")
 	user := userCtx.(models.User)
 
-	err := c.ScheduleService.Delete(id, password, user.ID)
+	err := c.ScheduleService.Delete(id, req.Password, user.ID)
 	if err != nil {
+		if err.Error() == "unauthorized" {
+			ctx.JSON(http.StatusUnauthorized, gin.H{
+				"server_message": "Password salah",
+				"status":         "failure",
+			})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"server_message": err.Error(),
 			"status":         "failure",

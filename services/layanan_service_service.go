@@ -18,9 +18,9 @@ import (
 )
 
 type LayananServiceService struct {
-	LayananServiceRepo *repositories.LayananServiceRepository
+	LayananServiceRepo  *repositories.LayananServiceRepository
 	CategoryServiceRepo *repositories.CategoryServiceRepository
-	DB                 *gorm.DB
+	DB                  *gorm.DB
 }
 
 const (
@@ -102,6 +102,18 @@ func (s *LayananServiceService) Create(ctx *gin.Context) error {
 	if err := ctx.SaveUploadedFile(fileHeader, fullPath); err != nil {
 		return err
 	}
+
+	userCtx, exists := ctx.Get("currentUser")
+	if !exists || userCtx == nil {
+		_ = os.Remove(fullPath)
+		return errors.New("Unauthorized: creator ID not found")
+	}
+	user, ok := userCtx.(models.User)
+	if !ok {
+		_ = os.Remove(fullPath)
+		return errors.New("Unauthorized: invalid user context")
+	}
+
 	tx := s.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -109,6 +121,7 @@ func (s *LayananServiceService) Create(ctx *gin.Context) error {
 		}
 	}()
 	payload := models.LayananService{
+		CreatorID:             fmt.Sprintf("%v", user.ID),
 		LayananTitle:          req.LayananTitle,
 		LayananDescription:    req.LayananDescription,
 		LayananImage:          os.Getenv("LAYANAN_IMAGE_PATH") + filename,

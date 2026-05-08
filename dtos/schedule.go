@@ -27,3 +27,7 @@ type UpdateScheduleRequest struct {
 	TimezoneCode     string `json:"timezone_code" binding:"required"`
 	ScheduleTimezone string `json:"schedule_timezone" binding:"required,oneof=Asia/Jakarta Asia/Makassar Asia/Jayapura"`
 }
+
+type DeleteScheduleRequest struct {
+	Password string `json:"password" binding:"required"`
+}

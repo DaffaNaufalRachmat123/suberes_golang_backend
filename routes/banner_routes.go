@@ -32,6 +32,12 @@ func BannerRoutes(r *gin.RouterGroup, controller *controllers.BannerController, 
 			Roles:   []string{helpers.SuperAdminRole, helpers.CustomerRole},
 		},
 		{
+			Method:  "POST",
+			Path:    "/create",
+			Handler: controller.Create,
+			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole},
+		},
+		{
 			Method:  "PUT",
 			Path:    "/update/:id",
 			Handler: controller.Update,

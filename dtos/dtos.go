@@ -25,6 +25,7 @@ type ServiceRequest struct {
 	ServiceDescription string `json:"service_description" binding:"required"`
 	ServiceType        string `json:"service_type" binding:"required"`
 	ServiceCategory    string `json:"service_category" binding:"required"`
+	ServiceStatus      string `json:"service_status" binding:"required,oneof=Regular Premium 'Pro Premium'"`
 }
 type ServiceUpdateRequest struct {
 	ID                 int    `json:"id" binding:"required"`
@@ -32,8 +33,18 @@ type ServiceUpdateRequest struct {
 	ServiceDescription string `json:"service_description" binding:"required"`
 	ServiceCategory    string `json:"service_category" binding:"required,oneof=Cleaning Disinfectant Fogging Borongan Lainnya"`
 	ServiceType        string `json:"service_type" binding:"required,oneof=Durasi 'Luas Ruangan' Single"`
+	ServiceStatus      string `json:"service_status" binding:"required,oneof=Regular Premium 'Pro Premium'"`
 }
 type ServiceDeleteRequest struct {
+	Password string `json:"password" binding:"required"`
+}
+
+type CategoryServiceRequest struct {
+	LayananID       int    `json:"layanan_id" binding:"required"`
+	CategoryService string `json:"category_service" binding:"required"`
+}
+
+type CategoryServiceDeleteRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 

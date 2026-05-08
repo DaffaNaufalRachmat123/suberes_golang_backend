@@ -48,6 +48,7 @@ func (s *ComplainService) Create(ctx *gin.Context) error {
 	customerID := ctx.PostForm("customer_id")
 	titleProblem := ctx.PostForm("title_problem")
 	problem := ctx.PostForm("problem")
+	timezoneCode := ctx.PostForm("timezone_code")
 
 	if strings.TrimSpace(customerID) == "" || strings.TrimSpace(titleProblem) == "" || strings.TrimSpace(problem) == "" {
 		return errors.New("customer_id, title_problem, and problem are required")
@@ -83,6 +84,7 @@ func (s *ComplainService) Create(ctx *gin.Context) error {
 		TitleProblem: titleProblem,
 		Problem:      problem,
 		Status:       "SENT",
+		TimezoneCode: timezoneCode,
 	}
 
 	if err := s.ComplainRepo.Create(tx, complain); err != nil {
@@ -115,7 +117,7 @@ func (s *ComplainService) Create(ctx *gin.Context) error {
 
 			complainImages = append(complainImages, models.ComplainImage{
 				ComplainID:         strconv.Itoa(complain.ID),
-				ImageName:          filename,
+				ImageName:          "/complains/" + filename,
 				ImageSize:          formatComplainFileSize(fileHeader.Size),
 				ImageSizeDimension: sizeDimension,
 			})

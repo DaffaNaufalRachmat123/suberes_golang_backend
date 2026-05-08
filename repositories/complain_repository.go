@@ -18,13 +18,16 @@ func (r *ComplainRepository) FindAllAdmin(page, limit int, search string) ([]mod
 
 	query := r.DB.Model(&models.Complain{}).
 		Joins("JOIN users ON users.id = complains.customer_id AND users.user_type IN ('customer','mitra')").
-		Where("complains.complain_code LIKE ?", "%"+search+"%")
+		Where("complains.complain_code LIKE ? OR complains.title_problem LIKE ? OR complains.problem LIKE ? OR users.complete_name LIKE ?",
+			"%"+search+"%", "%"+search+"%", "%"+search+"%", "%"+search+"%")
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	err := query.
-		Preload("Customer").
+		Preload("Customer", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, complete_name")
+		}).
 		Order("complains.id DESC").
 		Offset(offset).
 		Limit(limit).
@@ -57,6 +60,9 @@ func (r *ComplainRepository) FindByID(id int) (*models.Complain, error) {
 	var complain models.Complain
 	err := r.DB.
 		Preload("ComplainImages").
+		Preload("Customer", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id, complete_name")
+		}).
 		Where("id = ?", id).
 		First(&complain).Error
 	if err != nil {

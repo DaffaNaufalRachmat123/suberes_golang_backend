@@ -69,6 +69,11 @@ func (s *ServiceService) Create(ctx *gin.Context) error {
 	if err := json.Unmarshal([]byte(jsonData), &req); err != nil {
 		return errors.New("Invalid data request")
 	}
+	// Validate allowed values for ServiceStatus
+	allowedStatus := map[string]bool{"Regular": true, "Premium": true, "Pro Premium": true}
+	if !allowedStatus[req.ServiceStatus] {
+		return errors.New("Invalid service_status value")
+	}
 	fileHeader, err := ctx.FormFile("file")
 	if err != nil {
 		return errors.New("Service image required")
@@ -126,20 +131,26 @@ func (s *ServiceService) Create(ctx *gin.Context) error {
 		}
 	}()
 	payload := models.Service{
+		ParentID:              int(req.ParentID),
 		ServiceName:           req.ServiceName,
 		ServiceDescription:    req.ServiceDescription,
 		ServiceImageThumbnail: os.Getenv("SERVICE_IMAGE_PATH") + filename,
 		ServiceCount:          0,
 		ServiceType:           req.ServiceType,
 		ServiceCategory:       req.ServiceCategory,
+		ServiceStatus:         req.ServiceStatus,
 		IsActive:              "1",
+		IsResidental:          "false",
 	}
 	if err := tx.Create(&payload).Error; err != nil {
 		tx.Rollback()
 		_ = os.Remove(fullPath)
 		return err
 	}
-	tx.Commit()
+	if err := tx.Commit().Error; err != nil {
+		_ = os.Remove(fullPath)
+		return err
+	}
 	return nil
 }
 
@@ -274,6 +285,7 @@ func (s *ServiceService) UpdateImage(ctx *gin.Context) error {
 		ServiceImageThumbnail: os.Getenv("SERVICE_IMAGE_PATH") + filename,
 		ServiceType:           req.ServiceType,
 		ServiceCategory:       req.ServiceCategory,
+		ServiceStatus:         req.ServiceStatus,
 	}
 	if err := tx.Model(&service).Updates(payload).Error; err != nil {
 		tx.Rollback()

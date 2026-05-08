@@ -160,6 +160,7 @@ func (s *NewsService) CreateNews(ctx *gin.Context) error {
 		NewsBody:           req.NewsBody,
 		NewsType:           req.NewsType,
 		IsBroadcast:        req.IsBroadcast,
+		IsRevision:         "0",
 		NewsImage:          "/news/" + mainFilename,
 		NewsImageSize:      strconv.FormatInt(fileHeader.Size/(1024*1024), 10),
 		NewsImageDimension: fmt.Sprintf("%dpx and %dpx", width, height),
@@ -312,12 +313,12 @@ func (s *NewsService) UpdateNews(ctx *gin.Context, id uint) error {
 	existNews.NewsType = req.NewsType
 	existNews.IsBroadcast = req.IsBroadcast
 	existNews.UpdatedAt = time.Now()
+	existNews.IsRevision = "1"
 
 	if isNewImage {
 		existNews.NewsImage = "/news/" + newFilename
 		existNews.NewsImageSize = newSize
 		existNews.NewsImageDimension = newDim
-		existNews.IsRevision = "1"
 	}
 	err = s.NewsRepo.Update(tx, existNews)
 	if err != nil {

@@ -2,8 +2,42 @@ package helpers
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
+
+// TimezoneLabel returns WIB/WITA/WIT label for the given IANA timezone code.
+func TimezoneLabel(timezoneCode string) string {
+	switch timezoneCode {
+	case "Asia/Jakarta":
+		return "WIB"
+	case "Asia/Makassar":
+		return "WITA"
+	case "Asia/Jayapura":
+		return "WIT"
+	default:
+		return "WIB"
+	}
+}
+
+// FormatDateByTimezone formats t into "DD-MM-YYYY HH:MM:SS WIB/WITA/WIT" based on timezoneCode.
+// Falls back to Asia/Jakarta if timezoneCode is invalid.
+func FormatDateByTimezone(t time.Time, timezoneCode string) string {
+	iana := timezoneCode
+	if iana == "" {
+		iana = "Asia/Jakarta"
+	}
+	loc, err := time.LoadLocation(iana)
+	if err != nil {
+		loc, _ = time.LoadLocation("Asia/Jakarta")
+	}
+	label := TimezoneLabel(iana)
+	tLocal := t.In(loc)
+	// Format bulan pakai nama Indonesia (Mei, dst)
+	monthIndo := [...]string{"Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"}
+	month := monthIndo[int(tLocal.Month())-1]
+	return fmt.Sprintf("%02d %s %d %02d:%02d:%02d %s", tLocal.Day(), month, tLocal.Year(), tLocal.Hour(), tLocal.Minute(), tLocal.Second(), label)
+}
 
 func GetStartAndEndDate(timezoneCode string) (time.Time, time.Time, error) {
 	loc, err := time.LoadLocation(timezoneCode)

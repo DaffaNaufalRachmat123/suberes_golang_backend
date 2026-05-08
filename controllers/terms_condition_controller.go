@@ -1,13 +1,14 @@
 package controllers
 
 import (
-"net/http"
-"strconv"
-"suberes_golang/dtos"
-"suberes_golang/helpers"
-"suberes_golang/services"
+	"net/http"
+	"strconv"
+	"suberes_golang/dtos"
+	"suberes_golang/helpers"
+	"suberes_golang/models"
+	"suberes_golang/services"
 
-"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 )
 
 type TermsConditionController struct {
@@ -29,9 +30,9 @@ func (c *TermsConditionController) Index(ctx *gin.Context) {
 	termsConditions, total, err := c.TermsConditionService.GetAllTermsConditions(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-"server_message": "Internal server error",
-"status":         "failure",
-})
+			"server_message": "Internal server error",
+			"status":         "failure",
+		})
 		return
 	}
 
@@ -44,26 +45,26 @@ func (c *TermsConditionController) Detail(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-"server_message": "Invalid ID",
-"status":         "failure",
-})
+			"server_message": "Invalid ID",
+			"status":         "failure",
+		})
 		return
 	}
 
 	termsCondition, err := c.TermsConditionService.GetTermsConditionByID(uint(id))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-"server_message": "Internal server error",
-"status":         "failure",
-})
+			"server_message": "Internal server error",
+			"status":         "failure",
+		})
 		return
 	}
 
 	if termsCondition == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{
-"server_message": "Terms condition not found",
-"status":         "failure",
-})
+			"server_message": "Terms condition not found",
+			"status":         "failure",
+		})
 		return
 	}
 
@@ -77,26 +78,26 @@ func (c *TermsConditionController) GetByTypeAndUserType(ctx *gin.Context) {
 
 	if tocType == "" || tocUserType == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-"server_message": "Missing required parameters",
-"status":         "failure",
-})
+			"server_message": "Missing required parameters",
+			"status":         "failure",
+		})
 		return
 	}
 
 	termsCondition, err := c.TermsConditionService.GetTermsConditionByTypeAndUserType(tocType, tocUserType)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-"server_message": "Internal server error",
-"status":         "failure",
-})
+			"server_message": "Internal server error",
+			"status":         "failure",
+		})
 		return
 	}
 
 	if termsCondition == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{
-"server_message": "Terms condition not found",
-"status":         "failure",
-})
+			"server_message": "Terms condition not found",
+			"status":         "failure",
+		})
 		return
 	}
 
@@ -111,45 +112,46 @@ func (c *TermsConditionController) Create(ctx *gin.Context) {
 	var req dtos.TermsConditionCreateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-"server_message": "Bad request",
-"status":         "failure",
-"error":          err.Error(),
+			"server_message": "Bad request",
+			"status":         "failure",
+			"error":          err.Error(),
 		})
 		return
 	}
 
 	// Get creator ID from JWT token
-	creatorID, exists := ctx.Get("user_id")
+	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
-"server_message": "Unauthorized",
-"status":         "failure",
-})
+			"server_message": "Unauthorized",
+			"status":         "failure",
+		})
 		return
 	}
+	user := userCtx.(models.User)
 
-	if err := c.TermsConditionService.CreateTermsCondition(&req, creatorID.(string), force); err != nil {
+	if err := c.TermsConditionService.CreateTermsCondition(&req, user.ID, force); err != nil {
 		// Check if conflict error
 		if err.Error() == "There is still an active TOC for this user" {
 			ctx.JSON(http.StatusConflict, gin.H{
-"server_message": err.Error(),
+				"server_message": err.Error(),
 				"status":         "failed",
 			})
 			return
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-"server_message": "Failed to create terms condition",
-"status":         "failure",
-"error":          err.Error(),
+			"server_message": "Failed to create terms condition",
+			"status":         "failure",
+			"error":          err.Error(),
 		})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-"server_message": "toc created",
-"status":         "succeeded",
-})
+		"server_message": "toc created",
+		"status":         "succeeded",
+	})
 }
 
 // UpdateStatus updates the status of a terms condition (admin only)
@@ -157,18 +159,18 @@ func (c *TermsConditionController) UpdateStatus(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-"server_message": "Invalid ID",
-"status":         "failure",
-})
+			"server_message": "Invalid ID",
+			"status":         "failure",
+		})
 		return
 	}
 
 	var req dtos.TermsConditionUpdateStatusRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-"server_message": "Bad Request",
-"status":         "failure",
-"error":          err.Error(),
+			"server_message": "Bad Request",
+			"status":         "failure",
+			"error":          err.Error(),
 		})
 		return
 	}
@@ -178,31 +180,31 @@ func (c *TermsConditionController) UpdateStatus(ctx *gin.Context) {
 		errorMsg := err.Error()
 		if errorMsg == "Masih ada TOC yang aktif untuk sasaran ini" {
 			ctx.JSON(http.StatusForbidden, gin.H{
-"server_message": errorMsg,
-"status":         "failure",
-})
+				"server_message": errorMsg,
+				"status":         "failure",
+			})
 			return
 		}
 		if errorMsg == "TOC not found" {
 			ctx.JSON(http.StatusNotFound, gin.H{
-"server_message": errorMsg,
-"status":         "failed",
-})
+				"server_message": errorMsg,
+				"status":         "failed",
+			})
 			return
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-"server_message": "Failed to update status",
-"status":         "failure",
-"error":          errorMsg,
-})
+			"server_message": "Failed to update status",
+			"status":         "failure",
+			"error":          errorMsg,
+		})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-"server_message": "terms condition updated",
-"status":         "success",
-})
+		"server_message": "terms condition updated",
+		"status":         "success",
+	})
 }
 
 // Update updates a terms condition (admin only)
@@ -210,9 +212,9 @@ func (c *TermsConditionController) Update(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-"server_message": "Invalid ID",
-"status":         "failure",
-})
+			"server_message": "Invalid ID",
+			"status":         "failure",
+		})
 		return
 	}
 
@@ -222,54 +224,55 @@ func (c *TermsConditionController) Update(ctx *gin.Context) {
 	var req dtos.TermsConditionUpdateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-"server_message": "Bad request",
-"status":         "failure",
-"error":          err.Error(),
+			"server_message": "Bad request",
+			"status":         "failure",
+			"error":          err.Error(),
 		})
 		return
 	}
 
 	// Get creator ID from JWT token
-	creatorID, exists := ctx.Get("user_id")
+	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
-"server_message": "Unauthorized",
-"status":         "failure",
-})
+			"server_message": "Unauthorized",
+			"status":         "failure",
+		})
 		return
 	}
+	user := userCtx.(models.User)
 
-	if err := c.TermsConditionService.UpdateTermsCondition(uint(id), &req, creatorID.(string), force); err != nil {
+	if err := c.TermsConditionService.UpdateTermsCondition(uint(id), &req, user.ID, force); err != nil {
 		errorMsg := err.Error()
 
 		// Check specific error messages
 		if errorMsg == "There are no TOC data" {
 			ctx.JSON(http.StatusNotFound, gin.H{
-"server_message": errorMsg,
-"status":         "failed",
-})
+				"server_message": errorMsg,
+				"status":         "failed",
+			})
 			return
 		}
 		if errorMsg == "Masih ada TOC aktif dengan kategori untuk user ini" {
 			ctx.JSON(http.StatusConflict, gin.H{
-"server_message": errorMsg,
-"status":         "failed",
-})
+				"server_message": errorMsg,
+				"status":         "failed",
+			})
 			return
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-"server_message": "Failed to update terms condition",
-"status":         "failure",
-"error":          errorMsg,
-})
+			"server_message": "Failed to update terms condition",
+			"status":         "failure",
+			"error":          errorMsg,
+		})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-"server_message": "toc updated",
-"status":         "succeeded",
-})
+		"server_message": "toc updated",
+		"status":         "succeeded",
+	})
 }
 
 // Delete deletes a terms condition (admin only)
@@ -277,9 +280,9 @@ func (c *TermsConditionController) Delete(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-"server_message": "Invalid ID",
-"status":         "failure",
-})
+			"server_message": "Invalid ID",
+			"status":         "failure",
+		})
 		return
 	}
 
@@ -288,29 +291,29 @@ func (c *TermsConditionController) Delete(ctx *gin.Context) {
 
 		if errorMsg == "Data TOC tak ditemukan" {
 			ctx.JSON(http.StatusNotFound, gin.H{
-"server_message": errorMsg,
-"status":         "failure",
-})
+				"server_message": errorMsg,
+				"status":         "failure",
+			})
 			return
 		}
 		if errorMsg == "Harap nonaktifkan TOC dahulu" {
 			ctx.JSON(http.StatusForbidden, gin.H{
-"server_message": errorMsg,
-"status":         "failure",
-})
+				"server_message": errorMsg,
+				"status":         "failure",
+			})
 			return
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-"server_message": "Failed to delete terms condition",
-"status":         "failure",
-"error":          errorMsg,
-})
+			"server_message": "Failed to delete terms condition",
+			"status":         "failure",
+			"error":          errorMsg,
+		})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-"server_message": "Berhasil menghapus TOC",
-"status":         "success",
-})
+		"server_message": "Berhasil menghapus TOC",
+		"status":         "success",
+	})
 }

@@ -133,6 +133,7 @@ func (c *ServiceController) Create(ctx *gin.Context) {
 			"server_message": err.Error(),
 			"status":         "failure",
 		})
+		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "Service created",
@@ -145,6 +146,7 @@ func (c *ServiceController) UpdateImage(ctx *gin.Context) {
 			"server_message": err.Error(),
 			"status":         "failure",
 		})
+		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "Service updated with image",
@@ -158,6 +160,7 @@ func (c *ServiceController) Update(ctx *gin.Context) {
 			"server_message": err.Error(),
 			"status":         "failure",
 		})
+		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"server_message": "Service updated",

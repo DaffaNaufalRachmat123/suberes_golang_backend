@@ -33,7 +33,7 @@ func BantuanRoutes(r *gin.RouterGroup, controller *controllers.BantuanController
 		},
 		{
 			Method:  "GET",
-			Path:    "/get/:id",
+			Path:    "/index/detail/:id",
 			Handler: controller.GetByID,
 			Roles:   []string{helpers.SuperAdminRole, helpers.AdminRole, helpers.CustomerRole, helpers.MitraRole},
 		},

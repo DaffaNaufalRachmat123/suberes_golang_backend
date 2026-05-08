@@ -168,6 +168,7 @@ func (s *BannerService) CreateBanner(ctx *gin.Context) error {
 		BannerBody:           req.BannerBody,
 		BannerType:           req.BannerType,
 		IsBroadcast:          req.IsBroadcast,
+		IsRevision:           "0",
 		BannerImage:          "/banners/" + mainFilename,
 		BannerImageSize:      strconv.FormatInt(fileHeader.Size, 10),
 		BannerImageDimension: fmt.Sprintf("%dpx and %dpx", width, height),
@@ -330,13 +331,13 @@ func (s *BannerService) UpdateBanner(ctx *gin.Context, id uint) error {
 	existBanner.BannerType = req.BannerType
 	existBanner.IsBroadcast = req.IsBroadcast
 	existBanner.UpdatedAt = time.Now()
+	existBanner.IsRevision = "1"
 
-	// Jika gambar diganti, update field gambar & flag revisi
+	// Jika gambar diganti, update field gambar
 	if isNewImage {
 		existBanner.BannerImage = "/banners/" + newFilename
 		existBanner.BannerImageSize = newSize
 		existBanner.BannerImageDimension = newDim
-		existBanner.IsRevision = "1"
 	}
 	err = s.BannerRepo.Update(tx, existBanner)
 	if err != nil {

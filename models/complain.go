@@ -7,6 +7,7 @@ type Complain struct {
 	TitleProblem string `gorm:"type:text" json:"title_problem"`
 	Problem      string `gorm:"type:varchar(255)" json:"problem"`
 	Status       string `gorm:"type:varchar(20);check:status IN ('SENT','ON_REVIEW','SOLVED','CLOSED')" json:"status"`
+	TimezoneCode string `gorm:"type:varchar(50)" json:"timezone_code"`
 
 	// Associations
 	Customer       *User           `gorm:"foreignKey:CustomerID;references:ID" json:"customer,omitempty"`
