@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"suberes_golang/dtos"
@@ -1028,16 +1028,22 @@ func (s *OrderTransactionService) CancelBlast(ctx *gin.Context, orderID string) 
 		return fmt.Errorf("payment not found")
 	}
 
-	// Prepare for Redis/FCM logic
+	// Ambil mitra IDs dari order_offers di DB (mitra IDs tidak disimpan di Redis)
 	var playerMitraIDs []string
 	sendPushNotifToMitra := false
+	log.Printf("[CancelBlast] orderID=%s, order.TempID=%q", orderID, order.TempID)
+	var orderOffers []models.OrderOffer
 	if order.TempID != "" {
-		mitraIDsStr, err := helpers.GetValue(order.TempID)
-		if err == nil && mitraIDsStr != "" {
-			playerMitraIDs = strings.Split(mitraIDsStr, ",")
-			sendPushNotifToMitra = true
-		}
-		_ = helpers.DeleteValue(order.TempID)
+		s.DB.Where("temp_id = ? AND order_id = ?", order.TempID, orderID).Find(&orderOffers)
+	} else {
+		s.DB.Where("order_id = ?", orderID).Find(&orderOffers)
+	}
+	for _, offer := range orderOffers {
+		playerMitraIDs = append(playerMitraIDs, offer.MitraID)
+	}
+	log.Printf("[CancelBlast] mitra IDs dari order_offers: %v", playerMitraIDs)
+	if len(playerMitraIDs) > 0 {
+		sendPushNotifToMitra = true
 	}
 
 	tx := s.DB.Begin()
@@ -1083,7 +1089,15 @@ func (s *OrderTransactionService) CancelBlast(ctx *gin.Context, orderID string) 
 			return err
 		}
 	} else {
-		// Other payment types: delete order
+		// Other payment types: delete order (hapus child records dulu karena ada FK constraint)
+		if err := tx.Where("order_id = ?", order.ID).Delete(&models.Notification{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Where("order_id = ?", order.ID).Delete(&models.OrderOffer{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
 		if err := tx.Where("id = ?", order.ID).Delete(&models.OrderTransaction{}).Error; err != nil {
 			tx.Rollback()
 			return err
@@ -1123,10 +1137,12 @@ func (s *OrderTransactionService) CancelBlast(ctx *gin.Context, orderID string) 
 	// Example: helpers.SendPushNotificationToMitras(...)
 
 	// --- Begin: Push Notification to Mitra (if needed) ---
+	log.Printf("[CancelBlast] sendPushNotifToMitra=%v, playerMitraIDs=%v", sendPushNotifToMitra, playerMitraIDs)
 	if sendPushNotifToMitra && len(playerMitraIDs) > 0 {
 		// Get mitra firebase tokens
 		var mitraTokens []string
 		s.DB.Model(&models.User{}).Where("id IN ? AND user_type = ?", playerMitraIDs, "mitra").Pluck("firebase_token", &mitraTokens)
+		log.Printf("[CancelBlast] mitraTokens (raw): %v", mitraTokens)
 		// Remove empty tokens
 		var filteredTokens []string
 		for _, t := range mitraTokens {
@@ -1134,10 +1150,11 @@ func (s *OrderTransactionService) CancelBlast(ctx *gin.Context, orderID string) 
 				filteredTokens = append(filteredTokens, t)
 			}
 		}
+		log.Printf("[CancelBlast] filteredTokens: %v", filteredTokens)
 		if len(filteredTokens) > 0 {
 			msg := map[string]interface{}{
 				"data": map[string]interface{}{
-					"notification_type": "ORDER_OFFER_EXPIRED",
+					"notification_type": "CANCEL_BROADCAST",
 					"title":             "Order dibatalin",
 					"message":           "Customer gak jadi mesen",
 					"order_id":          order.ID,
@@ -1149,48 +1166,8 @@ func (s *OrderTransactionService) CancelBlast(ctx *gin.Context, orderID string) 
 				"tokens": filteredTokens,
 			}
 			_, err := service.SendMulticast(s.DB, "mitra", msg)
-			if err != nil {
-			}
+			log.Printf("[CancelBlast] SendMulticast err=%v", err)
 		}
-	}
-
-	// --- Begin: Socket.io emit to admin rooms ---
-	// Get online admin socket IDs
-	var adminSocketIDs []string
-	s.DB.Model(&models.User{}).
-		Where("user_type IN ? AND is_logged_in = ?", []string{"admin", "superadmin"}, "1").
-		Pluck("socket_id", &adminSocketIDs)
-
-	// Count canceled and waiting orders
-	var orderCanceledCount int64
-	s.DB.Model(&models.OrderTransaction{}).
-		Where("order_status IN ?", []string{
-			"CANCELED",
-			"CANCELED_CANT_FIND_MITRA",
-			"CANCELED_BY_SYSTEM",
-			"CANCELED_VOID",
-			"CANCELED_VOID_BY_SYSTEM",
-			"CANCELED_REFUND",
-			"CANCELED_LATE_PAYMENT",
-		}).
-		Count(&orderCanceledCount)
-
-	var orderWaitingCount int64
-	s.DB.Model(&models.OrderTransaction{}).
-		Where("order_status = ?", "WAITING_FOR_SELECTED_MITRA").
-		Count(&orderWaitingCount)
-
-	// Emit to each admin socket using realtime.Server
-	for _, socketID := range adminSocketIDs {
-		if socketID == "" {
-			continue
-		}
-		realtime.Server.BroadcastToRoom("/", socketID, "admin_message", map[string]interface{}{
-			"notification_type":    "NOTIFICATION_ORDER_CANCELED",
-			"order_id":             order.ID,
-			"order_canceled_count": orderCanceledCount,
-			"order_waiting_count":  orderWaitingCount,
-		})
 	}
 
 	return nil

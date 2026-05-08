@@ -596,7 +596,7 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 				}
 				queueOrderID = orderID
 				s.webhookPushFCM("customer", customerID,
-					"NOW_EWALLET_ORDER_PAID_NOTIFICATION",
+					"NOW_EWALLET_ORDER_PAID_SUCCEEDED_NOTIFICATION",
 					"Pembayaran Berhasil",
 					"Pembayaran order kamu berhasil dan mitra sedang dicarikan",
 					orderID, customerID)
@@ -745,7 +745,7 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 		subPaymentID := fmt.Sprintf("%v", orderData["sub_payment_id"])
 		s.DB.Where("id = ?", subPaymentID).First(&subPayment)
 
-		notifType, notifTitle, notifMsg := webhookVoidNotifMessage(payload.Data.VoidStatus, grossAmount, subPayment.TitlePayment)
+		notifType, notifTitle, notifMsg := webhookVoidNotifMessage(payload.Data.VoidStatus, grossAmount, subPayment.Title)
 		s.webhookPushFCM("customer", customerID, notifType, notifTitle, notifMsg, orderID, customerID)
 
 	default:
@@ -786,7 +786,9 @@ func (s *WebhookService) webhookPushFCM(userType, userID, notifType, title, mess
 
 // webhookVoidNotifMessage returns the FCM notification type, title and message for ewallet void events.
 func webhookVoidNotifMessage(voidStatus, grossAmount, paymentTitle string) (string, string, string) {
-	amount := fmt.Sprintf("Rp. %s", grossAmount)
+	var amountInt int64
+	fmt.Sscan(grossAmount, &amountInt)
+	amount := helpers.FormatRupiah(amountInt)
 	switch voidStatus {
 	case "PENDING":
 		return "NOW_EWALLET_ORDER_VOID_PENDING_NOTIFICATION",

@@ -433,9 +433,38 @@ func HandleOrderOfferMitraExpiredTask(ctx context.Context, t *asynq.Task) error 
 	if result.Error != nil {
 		return result.Error
 	}
+
+	// Kirim CANCEL_BROADCAST ke mitra agar dismiss notif broadcast yang sudah diterima
 	if result.RowsAffected > 0 {
-	} else {
+		var mitra models.User
+		if err := config.DB.Select("id, firebase_token, complete_name").
+			Where("id = ? AND user_type = ?", p.MitraID, "mitra").
+			First(&mitra).Error; err == nil {
+			if mitra.FirebaseToken != nil && *mitra.FirebaseToken != "" {
+				var orderData models.OrderTransaction
+				_ = config.DB.Select("id, temp_id, customer_id, notification_id").
+					Where("id = ?", p.OrderID).First(&orderData)
+
+				fcmPayload := map[string]interface{}{
+					"data": map[string]interface{}{
+						"notification_type": "CANCEL_BROADCAST",
+						"title":             "Order dibatalin",
+						"message":           "Waktu untuk ambil orderan ini sudah habis",
+						"order_id":          p.OrderID,
+						"order_temp_id":     p.TempID,
+						"customer_id":       orderData.CustomerID,
+						"notification_id":   strconv.Itoa(orderData.NotificationID),
+						"notif_type":        "order",
+					},
+					"tokens": []string{*mitra.FirebaseToken},
+				}
+				if _, err := service.SendMulticast(config.DB, "mitra", fcmPayload); err != nil {
+					log.Printf("[HandleOrderOfferMitraExpiredTask] SendMulticast failed mitra_id=%s: %v", p.MitraID, err)
+				}
+			}
+		}
 	}
+
 	return nil
 }
 
