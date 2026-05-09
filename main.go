@@ -350,6 +350,7 @@ func main() {
 	routes.PaymentRoutes(api, paymentController, config.DB)
 	routes.SubPaymentRoutes(api, subPaymentController, config.DB)
 	routes.OrderTransactionRoutes(api, orderTransactionController, config.DB)
+	routes.OrderPendapatanRoutes(api, orderTransactionController, config.DB)
 	routes.OrderOfferRoutes(api, OrderOfferController, config.DB)
 	routes.OrderEwalletRoutes(api, OrderEwalletController, config.DB)
 	routes.OrderVARoutes(api, OrderVAController, config.DB)

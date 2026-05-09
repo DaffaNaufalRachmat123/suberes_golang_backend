@@ -1591,3 +1591,28 @@ func (s *OrderTransactionService) GetDirections(orderID string) (*DirectionsResu
 
 	return &DirectionsResult{Cached: false, Response: parsed}, nil
 }
+
+// ---------- 19. GetOrderPendapatan ----------
+func (s *OrderTransactionService) GetOrderPendapatan(mitraID string, paymentID int, orderTime string) ([]models.OrderTransaction, error) {
+	startDate, endDate := helpers.GetStartEndDateFromString(orderTime)
+
+	orders, err := s.OrderTransactionRepo.GetOrderPendapatan(mitraID, paymentID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range orders {
+		switch orders[i].OrderType {
+		case "now":
+			orders[i].OrderType = "Order Sekali"
+		case "coming soon":
+			orders[i].OrderType = "Order Sekali"
+		case "repeat":
+			orders[i].OrderType = "Order Berulang"
+		default:
+			orders[i].OrderType = "-"
+		}
+	}
+
+	return orders, nil
+}

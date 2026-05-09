@@ -748,3 +748,18 @@ func (r *OrderTransactionRepository) FindRunningOrderDetailByMitraID(mitraID str
 	}
 	return &order, err
 }
+
+func (r *OrderTransactionRepository) GetOrderPendapatan(mitraID string, paymentID int, startDate, endDate string) ([]models.OrderTransaction, error) {
+	var orders []models.OrderTransaction
+	err := r.DB.
+		Preload("Service").
+		Preload("OrderTransactionRepeats").
+		Where("mitra_id = ? AND payment_id = ? AND order_status = ? AND order_time BETWEEN ? AND ?",
+			mitraID, paymentID, "FINISH", startDate, endDate).
+		Find(&orders).Error
+
+	if err != nil {
+		return nil, err
+	}
+	return orders, nil
+}

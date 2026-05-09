@@ -517,3 +517,24 @@ func (c *OrderTransactionController) GetDirections(ctx *gin.Context) {
 	}
 	helpers.APIResponse(ctx, "OK", http.StatusOK, result)
 }
+
+// GET /order_pendapatan/index/:mitra_id/:payment_id/:order_time
+func (c *OrderTransactionController) GetOrderPendapatan(ctx *gin.Context) {
+	mitraID := ctx.Param("mitra_id")
+	paymentIDStr := ctx.Param("payment_id")
+	orderTime := ctx.Param("order_time")
+
+	paymentID, err := strconv.Atoi(paymentIDStr)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, "Invalid payment ID", http.StatusBadRequest)
+		return
+	}
+
+	orders, err := c.OrderTransactionService.GetOrderPendapatan(mitraID, paymentID, orderTime)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, orders)
+}
