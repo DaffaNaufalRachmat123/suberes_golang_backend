@@ -59,13 +59,25 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		var user models.User
 
-		err = db.Select("id, complete_name, email, phone_number, country_code, user_type, user_gender, is_logged_in, user_status, is_active, is_mitra_accepted, is_mitra_activated, is_suspended").
+		err = db.Select("id, complete_name, email, phone_number, country_code, user_type, user_gender, is_logged_in, user_status, is_active, is_mitra_accepted, is_mitra_activated, is_suspended, device_id").
 			Where("id = ?", claims.ID).
 			First(&user).Error
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "User not found", "status": "failure"})
 			return
+		}
+
+		// Validate device binding — if user has a bound device_id, incoming request must match
+		if user.DeviceID != "" {
+			deviceID := c.GetHeader("device_id")
+			if deviceID == "" || deviceID != user.DeviceID {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"server_message": "Device mismatch, please login again",
+					"status":         "failure",
+				})
+				return
+			}
 		}
 
 		isValid := false

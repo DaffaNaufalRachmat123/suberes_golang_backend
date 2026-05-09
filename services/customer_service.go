@@ -1,11 +1,13 @@
 package services
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/big"
+	mrand "math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -147,7 +149,7 @@ func (s *CustomerService) ChangePhoneMail(
 	if tx.Error != nil {
 		return nil, 500, tx.Error
 	}
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 	otpCode := fmt.Sprintf("%06d", rng.Intn(900000)+100000)
 	hashedOtp, err := bcrypt.GenerateFromPassword([]byte(otpCode), 12)
 	if err != nil {
@@ -258,7 +260,7 @@ func (s *CustomerService) Register(
 	}
 
 	// generate OTP
-	otpCode := rand.Intn(900000) + 100000
+	otpCode := mrand.Intn(900000) + 100000
 
 	hashedOtp, _ := bcrypt.GenerateFromPassword(
 		[]byte(strconv.Itoa(otpCode)),
@@ -301,13 +303,8 @@ func (s *CustomerService) LoginByEmail(email string) (string, error) {
 		return "", errors.New("CUSTOMER_NOT_FOUND")
 	}
 
-	if user.IsLoggedIn == "1" {
-		tx.Rollback()
-		return "", errors.New("CUSTOMER_ALREADY_LOGGED_IN")
-	}
-
-	rand.Seed(time.Now().UnixNano())
-	otp := rand.Intn(900000) + 100000
+	mrand.Seed(time.Now().UnixNano())
+	otp := mrand.Intn(900000) + 100000
 
 	fmt.Println("OTP Code", otp)
 
@@ -368,7 +365,17 @@ func (s *CustomerService) UpdateFirebaseTokenCustomer(userId, firebaseToken stri
 	}, 200, nil
 }
 
-func (s *CustomerService) OtpValidatorMail(email, otpCode string) (map[string]interface{}, int, error) {
+func generateAdvertisingID() string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	b := make([]byte, 10)
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[n.Int64()]
+	}
+	return string(b)
+}
+
+func (s *CustomerService) OtpValidatorMail(email, otpCode, deviceID, deviceName, deviceOS, deviceOSAndroid string) (map[string]interface{}, int, error) {
 	tx := s.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -383,10 +390,6 @@ func (s *CustomerService) OtpValidatorMail(email, otpCode string) (map[string]in
 	if user == nil {
 		tx.Rollback()
 		return nil, 404, errors.New("Email is not registered")
-	}
-	if user.IsLoggedIn == "1" {
-		tx.Rollback()
-		return nil, 401, errors.New("User already logged on other device, please logout first")
 	}
 	otp, err := s.UserOTPRepo.GetValidOtp(user.ID)
 	if err != nil {
@@ -456,11 +459,47 @@ func (s *CustomerService) OtpValidatorMail(email, otpCode string) (map[string]in
 		TokenHash: tokenHash,
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		Revoked:   "0",
+		DeviceID:  deviceID,
 	}
 
 	if err := tx.Create(&refreshTokenModel).Error; err != nil {
 		tx.Rollback()
 		return nil, 500, err
+	}
+
+	// Handle device binding
+	advertisingID := user.AdvertisingID
+	if user.DeviceID == "" {
+		// First login — generate advertising_id and bind device
+		advertisingID = generateAdvertisingID()
+		if err := tx.Model(&models.User{}).Where("id = ?", user.ID).Updates(map[string]interface{}{
+			"device_id":         deviceID,
+			"device_name":       deviceName,
+			"device_os":         deviceOS,
+			"device_os_android": deviceOSAndroid,
+			"advertising_id":    advertisingID,
+		}).Error; err != nil {
+			tx.Rollback()
+			return nil, 500, err
+		}
+	} else if user.DeviceID != deviceID {
+		// Device changed — revoke tokens associated with old device_id
+		if err := tx.Model(&models.RefreshToken{}).
+			Where("users_id = ? AND device_id = ? AND revoked = '0'", user.ID, user.DeviceID).
+			Update("revoked", "1").Error; err != nil {
+			tx.Rollback()
+			return nil, 500, err
+		}
+		// Update device info
+		if err := tx.Model(&models.User{}).Where("id = ?", user.ID).Updates(map[string]interface{}{
+			"device_id":         deviceID,
+			"device_name":       deviceName,
+			"device_os":         deviceOS,
+			"device_os_android": deviceOSAndroid,
+		}).Error; err != nil {
+			tx.Rollback()
+			return nil, 500, err
+		}
 	}
 
 	if err := s.UserRepo.SetLoggedIn(tx, user.ID); err != nil {
@@ -471,13 +510,18 @@ func (s *CustomerService) OtpValidatorMail(email, otpCode string) (map[string]in
 	tx.Commit()
 
 	return map[string]interface{}{
-		"server_message": "login successfully",
-		"status":         "success",
-		"token":          "Bearer " + tokenString,
-		"refresh_token":  "Bearer " + refreshString,
-		"data":           user,
-		"shared_prime":   sharedPrime,
-		"shared_secret":  sharedSecret,
+		"server_message":    "login successfully",
+		"status":            "success",
+		"token":             "Bearer " + tokenString,
+		"refresh_token":     "Bearer " + refreshString,
+		"data":              user,
+		"shared_prime":      sharedPrime,
+		"shared_secret":     sharedSecret,
+		"device_id":         deviceID,
+		"device_name":       deviceName,
+		"device_os":         deviceOS,
+		"device_os_android": deviceOSAndroid,
+		"advertising_id":    advertisingID,
 	}, 200, nil
 }
 

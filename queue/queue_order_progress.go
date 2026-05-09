@@ -23,7 +23,6 @@ func HandleOrderOnProgressToFinishTask(ctx context.Context, t *asynq.Task) error
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 
-
 	var orderData models.OrderTransaction
 	if err := config.DB.Where("id = ? AND order_status = ?", p.ID, "ON_PROGRESS").
 		Preload("SubService").

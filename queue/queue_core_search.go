@@ -15,7 +15,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
-	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 )
 
@@ -35,6 +34,15 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 
+	// Backfill FirstEnqueued for tasks created before this field existed
+	if p.FirstEnqueued == 0 {
+		p.FirstEnqueued = time.Now().Unix()
+	}
+
+	asynqRetry, _ := asynq.GetRetryCount(ctx)
+	log.Printf("[QUEUE][CORE_SEARCH_CASH] START order_id=%s | asynq_retry=%d | enqueued_ago=%s",
+		p.OrderID, asynqRetry, time.Since(time.Unix(p.FirstEnqueued, 0)).Truncate(time.Second))
+
 	var orderData models.OrderTransaction
 	if err := config.DB.Where("id = ?", p.OrderID).First(&orderData).Error; err != nil {
 		return fmt.Errorf("failed to find order transaction with id %s: %v", p.OrderID, err)
@@ -46,24 +54,7 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 		return nil
 	}
 
-	// Fetch customer, sub_service, service in parallel — they are independent once we have orderData.
-	var customerData models.User
-	var subServiceData models.SubService
-	var serviceData models.Service
-
-	eg, _ := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		return config.DB.Where("id = ? AND user_type = ?", orderData.CustomerID, "customer").First(&customerData).Error
-	})
-	eg.Go(func() error {
-		return config.DB.Where("id = ?", orderData.SubServiceID).First(&subServiceData).Error
-	})
-	eg.Go(func() error {
-		return config.DB.Where("id = ?", orderData.ServiceID).First(&serviceData).Error
-	})
-	if err := eg.Wait(); err != nil {
-		return fmt.Errorf("failed to fetch order dependencies: %v", err)
-	}
+	// IsWithTime and ServiceDuration are pre-fetched at enqueue time — no DB round-trip needed here.
 
 	initialRange, _ := strconv.ParseFloat(os.Getenv("INITIAL_RANGE_CUSTOMER"), 64)
 	if initialRange == 0 {
@@ -84,19 +75,24 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 		OrderType:            orderData.OrderType,
 		SubPaymentID:         orderData.SubPaymentID,
 		IsAutoBid:            "yes",
-		ServiceDuration:      subServiceData.MinutesSubServices,
+		ServiceDuration:      p.ServiceDuration,
 		CustomerTimezoneCode: orderData.TimezoneCode,
 		CustomerTimeOrder:    orderData.OrderTime.String(),
 		GrossAmountCompany:   float64(orderData.GrossAmountCompany),
-		IsWithTime:           serviceData.ServiceType == "Durasi",
+		IsWithTime:           p.IsWithTime,
 		IsCash:               orderData.PaymentType == "tunai",
 		Limit:                10,
 		Page:                 0,
 	}
 
+	queryStart := time.Now()
 	result, err := GetNearestMitraProduction(params)
+	queryElapsed := time.Since(queryStart).Truncate(time.Millisecond)
 	if err != nil {
-		return fmt.Errorf("failed to get nearest mitra: %v", err)
+		// Spatial query errors (e.g. missing column, PostGIS issue) are permanent — SkipRetry
+		// so Asynq does not pile up exponential-backoff delay on top of a schema-level bug.
+		log.Printf("[QUEUE][CORE_SEARCH_CASH] ERROR spatial query order_id=%s | elapsed=%s | %v", p.OrderID, queryElapsed, err)
+		return fmt.Errorf("failed to get nearest mitra: %v: %w", err, asynq.SkipRetry)
 	}
 
 	// Log mitra search result
@@ -104,9 +100,9 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 	for _, m := range result.PayloadMitra {
 		mitraIDs = append(mitraIDs, m.ID)
 	}
-	log.Printf("[QUEUE][CORE_SEARCH_CASH] order_id=%s | order_type=%s | lat=%.6f | lng=%.6f | max_range=%.1f | mitra_found=%d | mitra_ids=%v | is_auto_bid=%v",
+	log.Printf("[QUEUE][CORE_SEARCH_CASH] order_id=%s | order_type=%s | lat=%.6f | lng=%.6f | max_range=%.1f | mitra_found=%d | mitra_ids=%v | is_auto_bid=%v | query_elapsed=%s",
 		orderData.ID, orderData.OrderType, orderData.CustomerLatitude, orderData.CustomerLongitude,
-		maxRange, len(result.PayloadMitra), mitraIDs, result.IsAutoBid)
+		maxRange, len(result.PayloadMitra), mitraIDs, result.IsAutoBid, queryElapsed)
 
 	if len(result.PayloadMitra) > 0 {
 		tempID := uuid.New().String()
@@ -128,15 +124,18 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 		tx := config.DB.Begin()
 		if err := tx.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Update("temp_id", tempID).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("failed to update order transaction temp_id: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_CASH] ERROR update temp_id order_id=%s | %v", orderData.ID, err)
+			return fmt.Errorf("failed to update order transaction temp_id: %v: %w", err, asynq.SkipRetry)
 		}
 
 		if err := tx.Create(&orderOffersPayload).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("failed to create order offers: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_CASH] ERROR create order_offers order_id=%s | %v", orderData.ID, err)
+			return fmt.Errorf("failed to create order offers: %v: %w", err, asynq.SkipRetry)
 		}
 		if err := tx.Commit().Error; err != nil {
-			return fmt.Errorf("failed to commit order offers transaction: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_CASH] ERROR tx commit order_id=%s | %v", orderData.ID, err)
+			return fmt.Errorf("failed to commit order offers transaction: %v: %w", err, asynq.SkipRetry)
 		}
 
 		// --- Kirim push notification ke mitra ---
@@ -184,12 +183,13 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 
 		// ---
 
+		// PENTING: Setelah TX commit, jangan return error — akan menyebabkan Asynq retry
+		// dan membuat offer duplikat dengan tempID baru. Log + lanjutkan saja.
 		offerExpiredTaskPayload, err := NewOrderOfferExpiredTask(orderData.ID, tempID, orderData.CustomerID, orderData.NotificationID, timeoutFindingOrder.String())
 		if err != nil {
-			return fmt.Errorf("failed to create offer expired task payload: %v", err)
-		}
-		if _, err = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferExpired, offerExpiredTaskPayload), asynq.ProcessIn(timeoutCanTakeOrder)); err != nil {
-			return fmt.Errorf("could not enqueue offer expired task: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_CASH] WARN marshal offer_expired payload failed order_id=%s | %v", orderData.ID, err)
+		} else if _, err = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferExpired, offerExpiredTaskPayload), asynq.ProcessIn(timeoutCanTakeOrder)); err != nil {
+			log.Printf("[QUEUE][CORE_SEARCH_CASH] WARN enqueue offer_expired failed order_id=%s | %v (offers tetap ada di DB, mitra bisa accept)", orderData.ID, err)
 		}
 		// Enqueue per-mitra expiry cleanup
 		for _, offer := range orderOffersPayload {
@@ -205,7 +205,8 @@ func HandleOrderQueueCashTask(ctx context.Context, t *asynq.Task) error {
 			"order_status": "WAITING_FOR_SELECTED_MITRA",
 			"order_time":   time.Now(),
 		}).Error; err != nil {
-			return fmt.Errorf("failed to update order status: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_CASH] ERROR update to WAITING_FOR_SELECTED_MITRA order_id=%s | %v", orderData.ID, err)
+			return fmt.Errorf("failed to update order status: %v: %w", err, asynq.SkipRetry)
 		}
 		timeoutFindingOrder := envMinutes("TIMEOUT_FINDING_ORDER", 2)
 		orderSelectedExpiredTaskPayload, err := NewOrderSelectedExpiredTask(orderData.ID)
@@ -226,39 +227,28 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
 
-	// 1. Fetch order, customer, service, sub_service, repeats
+	// Backfill FirstEnqueued for tasks created before this field existed
+	if p.FirstEnqueued == 0 {
+		p.FirstEnqueued = time.Now().Unix()
+	}
+
+	asynqRetry, _ := asynq.GetRetryCount(ctx)
+	log.Printf("[QUEUE][CORE_SEARCH_VA] START order_id=%s | asynq_retry=%d | enqueued_ago=%s",
+		p.OrderID, asynqRetry, time.Since(time.Unix(p.FirstEnqueued, 0)).Truncate(time.Second))
+
 	var orderData models.OrderTransaction
 	if err := config.DB.Where("id = ?", p.OrderID).First(&orderData).Error; err != nil {
-		return fmt.Errorf("failed to find order transaction with id %s: %v", p.OrderID, err)
+		log.Printf("[QUEUE][CORE_SEARCH_VA] ERROR fetch order order_id=%s | %v", p.OrderID, err)
+		return fmt.Errorf("failed to find order transaction with id %s: %v: %w", p.OrderID, err, asynq.SkipRetry)
 	}
 
 	// Guard: only proceed if order is in FINDING_MITRA status
 	if orderData.OrderStatus != "FINDING_MITRA" {
+		log.Printf("[QUEUE][CORE_SEARCH_VA] Skipping order_id=%s | current_status=%s (not FINDING_MITRA)", orderData.ID, orderData.OrderStatus)
 		return nil
 	}
 
-	// Fetch customer, service, sub_service, repeats in parallel.
-	var customerData models.User
-	var serviceData models.Service
-	var subServiceData models.SubService
-	var repeatsData []models.OrderTransactionRepeat
-
-	eg, _ := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		return config.DB.Where("id = ? AND user_type = ?", orderData.CustomerID, "customer").First(&customerData).Error
-	})
-	eg.Go(func() error {
-		return config.DB.Where("id = ?", orderData.ServiceID).First(&serviceData).Error
-	})
-	eg.Go(func() error {
-		return config.DB.Where("id = ?", orderData.SubServiceID).First(&subServiceData).Error
-	})
-	eg.Go(func() error {
-		return config.DB.Where("order_id = ?", p.OrderID).Find(&repeatsData).Error
-	})
-	if err := eg.Wait(); err != nil {
-		return fmt.Errorf("failed to fetch order dependencies: %v", err)
-	}
+	// IsWithTime and ServiceDuration are pre-fetched at enqueue time — no DB round-trip needed here.
 
 	initialRange, _ := strconv.ParseFloat(os.Getenv("INITIAL_RANGE_CUSTOMER"), 64)
 	if initialRange == 0 {
@@ -269,7 +259,7 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 		maxRange = 10
 	}
 
-	// 2. Cari mitra terdekat (pakai core logic yang sudah ada)
+	// Cari mitra terdekat
 	params := GetNearestMitraProductionParams{
 		CustomerID:           orderData.CustomerID,
 		Latitude:             orderData.CustomerLatitude,
@@ -280,20 +270,22 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 		OrderType:            orderData.OrderType,
 		SubPaymentID:         orderData.SubPaymentID,
 		IsAutoBid:            "yes",
-		ServiceDuration:      subServiceData.MinutesSubServices,
+		ServiceDuration:      p.ServiceDuration,
 		CustomerTimezoneCode: orderData.TimezoneCode,
 		CustomerTimeOrder:    orderData.OrderTime.String(),
-		JsonOrderTimes:       repeatsData,
 		GrossAmountCompany:   float64(orderData.GrossAmountCompany),
-		IsWithTime:           serviceData.ServiceType == "Durasi",
+		IsWithTime:           p.IsWithTime,
 		IsCash:               orderData.PaymentType == "tunai",
 		Limit:                10,
 		Page:                 0,
 	}
 
+	queryStart := time.Now()
 	result, err := GetNearestMitraProduction(params)
+	queryElapsed := time.Since(queryStart).Truncate(time.Millisecond)
 	if err != nil {
-		return fmt.Errorf("failed to get nearest mitra: %v", err)
+		log.Printf("[QUEUE][CORE_SEARCH_VA] ERROR spatial query order_id=%s | elapsed=%s | %v", p.OrderID, queryElapsed, err)
+		return fmt.Errorf("failed to get nearest mitra: %v: %w", err, asynq.SkipRetry)
 	}
 
 	// Log mitra search result
@@ -301,16 +293,16 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 	for _, m := range result.PayloadMitra {
 		vaSearchMitraIDs = append(vaSearchMitraIDs, m.ID)
 	}
-	log.Printf("[QUEUE][CORE_SEARCH_VA] order_id=%s | order_type=%s | lat=%.6f | lng=%.6f | max_range=%.1f | mitra_found=%d | mitra_ids=%v | is_auto_bid=%v",
+	log.Printf("[QUEUE][CORE_SEARCH_VA] order_id=%s | order_type=%s | lat=%.6f | lng=%.6f | max_range=%.1f | mitra_found=%d | mitra_ids=%v | is_auto_bid=%v | query_elapsed=%s",
 		orderData.ID, orderData.OrderType, orderData.CustomerLatitude, orderData.CustomerLongitude,
-		maxRange, len(result.PayloadMitra), vaSearchMitraIDs, result.IsAutoBid)
+		maxRange, len(result.PayloadMitra), vaSearchMitraIDs, result.IsAutoBid, queryElapsed)
 
 	tempID := uuid.New().String()
 	var orderOffersPayload []models.OrderOffer
 	var registrationTokenList []string
 
 	if len(result.PayloadMitra) > 0 {
-		// 3. Ada mitra ditemukan
+		// Ada mitra ditemukan
 		for _, mitra := range result.PayloadMitra {
 			orderOffersPayload = append(orderOffersPayload, models.OrderOffer{
 				TempID:     tempID,
@@ -330,14 +322,17 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 			"created_at":   time.Now(),
 		}).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("failed to update order transaction: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_VA] ERROR update temp_id order_id=%s | %v", orderData.ID, err)
+			return fmt.Errorf("failed to update order transaction: %v: %w", err, asynq.SkipRetry)
 		}
 		if err := tx.Create(&orderOffersPayload).Error; err != nil {
 			tx.Rollback()
-			return fmt.Errorf("failed to create order offers: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_VA] ERROR create order_offers order_id=%s | %v", orderData.ID, err)
+			return fmt.Errorf("failed to create order offers: %v: %w", err, asynq.SkipRetry)
 		}
 		if err := tx.Commit().Error; err != nil {
-			return fmt.Errorf("failed to commit order offers transaction: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_VA] ERROR tx commit order_id=%s | %v", orderData.ID, err)
+			return fmt.Errorf("failed to commit order offers transaction: %v: %w", err, asynq.SkipRetry)
 		}
 
 		// Push notification ke mitra
@@ -381,13 +376,13 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 		now := time.Now()
 		config.DB.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Update("search_time_complete", now)
 
-		// Delay untuk offer expired dan selected expired
+		// PENTING: Setelah TX commit, jangan return error — akan menyebabkan Asynq retry
+		// dan membuat offer duplikat dengan tempID baru. Log + lanjutkan saja.
 		offerExpiredTaskPayload, err := NewOrderOfferExpiredTask(orderData.ID, tempID, orderData.CustomerID, orderData.NotificationID, timeoutFindingOrder.String())
 		if err != nil {
-			return fmt.Errorf("failed to create offer expired task payload: %v", err)
-		}
-		if _, err = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferExpired, offerExpiredTaskPayload), asynq.ProcessIn(timeoutCanTakeOrder)); err != nil {
-			return fmt.Errorf("could not enqueue offer expired task: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_VA] WARN marshal offer_expired payload failed order_id=%s | %v", orderData.ID, err)
+		} else if _, err = AsynqClient.Enqueue(asynq.NewTask(TypeOrderOfferExpired, offerExpiredTaskPayload), asynq.ProcessIn(timeoutCanTakeOrder)); err != nil {
+			log.Printf("[QUEUE][CORE_SEARCH_VA] WARN enqueue offer_expired failed order_id=%s | %v (offers tetap ada di DB, mitra bisa accept)", orderData.ID, err)
 		}
 		// Enqueue per-mitra expiry cleanup
 		for _, offer := range orderOffersPayload {
@@ -397,7 +392,7 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 			}
 		}
 	} else {
-		// 4. Tidak ada mitra ditemukan — langsung ubah ke WAITING_FOR_SELECTED_MITRA
+		// Tidak ada mitra ditemukan — langsung ubah ke WAITING_FOR_SELECTED_MITRA
 		log.Printf("[QUEUE][CORE_SEARCH_VA] No mitra found | order_id=%s | updating status to WAITING_FOR_SELECTED_MITRA", orderData.ID)
 		if err := config.DB.Model(&models.OrderTransaction{}).Where("id = ?", orderData.ID).Updates(map[string]interface{}{
 			"order_time":   time.Now(),
@@ -405,7 +400,8 @@ func HandleOrderQueueVATask(ctx context.Context, t *asynq.Task) error {
 			"order_radius": result.TriedRange,
 			"order_status": "WAITING_FOR_SELECTED_MITRA",
 		}).Error; err != nil {
-			return fmt.Errorf("failed to update order status: %v", err)
+			log.Printf("[QUEUE][CORE_SEARCH_VA] ERROR update to WAITING_FOR_SELECTED_MITRA order_id=%s | %v", orderData.ID, err)
+			return fmt.Errorf("failed to update order status: %v: %w", err, asynq.SkipRetry)
 		}
 
 		timeoutFindingOrder := envMinutes("TIMEOUT_FINDING_ORDER", 2)

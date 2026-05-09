@@ -14,6 +14,7 @@ type BankList struct {
 	TopupFee         float64 `gorm:"type:float" json:"topup_fee"`
 	DisbursementFee  float64 `gorm:"type:float" json:"disbursement_fee"`
 	IsPercentage     string  `gorm:"type:varchar(1);check:is_percentage IN ('0','1')" json:"is_percentage"`
+	Tutorial         string  `gorm:"type:text" json:"tutorial"`
 	disburse_type    string  `gorm:"type:varchar(255)" json:"type"`
 
 	// Associations

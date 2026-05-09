@@ -76,6 +76,11 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 	}
 
 	grossAmount := dto.GrossAmount
+
+	if grossAmount < 10000 {
+		return "", 0, "", "", http.StatusBadRequest, errors.New("minimum order amount is Rp 10.000")
+	}
+
 	grossAmountMitra := grossAmount - ((grossAmount * int64(subService.CompanyPercentage)) / 100)
 	grossAmountCompany := grossAmount - grossAmountMitra
 
@@ -236,6 +241,7 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 
 	n, _ := rand.Int(rand.Reader, big.NewInt(9000))
 	randomNotificationID := int(n.Int64()) + 1000
+	vaNotifyJobID := uuid.New().String()
 
 	orderData := &models.OrderTransaction{
 		CustomerID:            customerID,
@@ -266,6 +272,7 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 		NotificationID:        randomNotificationID,
 		OfferExpiredJobID:     uuid.New().String(),
 		OfferSelectedJobID:    uuid.New().String(),
+		EwalletNotifyJobID:    vaNotifyJobID,
 		VAID:                  vaID,
 		OwnerID:               vaOwnerID,
 		ExternalID:            vaExternalID,
@@ -360,9 +367,10 @@ func (s *OrderVAService) CreateOrderVA(customerID string, dto dtos.CreateOrderDT
 	}
 
 	// Enqueue payment expiry job: cancel order to CANCELED_LATE_PAYMENT if not paid in time
+	// asynq.TaskID(vaNotifyJobID) agar task bisa di-delete by ID saat VA payment berhasil.
 	notifyPayload, _ := queue.NewOrderEwalletNotifyExpiredTask(order.ID, customerID)
 	notifyTask := asynq.NewTask(queue.TypeOrderVAEwalletNotifyExpired, notifyPayload)
-	if _, enqErr := queue.AsynqClient.Enqueue(notifyTask, asynq.ProcessIn(time.Duration(timeoutMinutes)*time.Minute)); enqErr != nil {
+	if _, enqErr := queue.AsynqClient.Enqueue(notifyTask, asynq.ProcessIn(time.Duration(timeoutMinutes)*time.Minute), asynq.TaskID(vaNotifyJobID)); enqErr != nil {
 	} else {
 	}
 

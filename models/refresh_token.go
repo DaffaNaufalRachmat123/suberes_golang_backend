@@ -8,6 +8,7 @@ type RefreshToken struct {
 	TokenHash string    `gorm:"type:text;not null" json:"token_hash"`
 	ExpiresAt time.Time `gorm:"type:timestamp;not null" json:"expires_at"`
 	Revoked   string    `gorm:"type:varchar(1);default:'0';check:revoked IN ('0','1')" json:"revoked"`
+	DeviceID  string    `gorm:"type:varchar(36);default:''" json:"device_id"`
 
 	// Associations
 	User *User `gorm:"foreignKey:UsersID;references:ID" json:"user,omitempty"`

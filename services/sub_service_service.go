@@ -25,6 +25,11 @@ func (s *SubServiceService) Create(req dtos.SubServiceCreateRequest) (*models.Su
 		}
 	}()
 
+	if req.SubPriceService < 10000 {
+		tx.Rollback()
+		return nil, errors.New("minimum sub service price is 10000")
+	}
+
 	newSubService := models.SubService{
 		ServiceID:             uint(req.ServiceID),
 		SubPriceServiceTitle:  req.SubPriceServiceTitle,

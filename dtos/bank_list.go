@@ -27,4 +27,5 @@ type BankListUpdateRequest struct {
 	DisbursementFee  float64 `json:"disbursement_fee"`
 	IsPercentage     string  `json:"is_percentage"`
 	MethodType       string  `json:"method_type"`
+	Tutorial         string  `json:"tutorial"`
 }

@@ -46,6 +46,24 @@ func (r *BankListRepository) FindDisbursementBanks(page, limit int) ([]models.Ba
 	return banks, total, nil
 }
 
+func (r *BankListRepository) FindAllBankLists(page, limit int) ([]models.BankList, int64, error) {
+	var banks []models.BankList
+	var total int64
+
+	query := r.DB.Model(&models.BankList{})
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := query.Order("id ASC").Limit(limit).Offset(offset).Find(&banks).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return banks, total, nil
+}
+
 func (r *BankListRepository) BulkCreate(tx *gorm.DB, banks []models.BankList) error {
 	return tx.Create(&banks).Error
 }

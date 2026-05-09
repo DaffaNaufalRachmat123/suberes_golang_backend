@@ -1,6 +1,9 @@
 package queue
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 const (
 	TypeOrderQueueCash              = "order:cash"
@@ -63,25 +66,39 @@ func NewOrderOnProgressToFinishTask(id, customerID, mitraID string, serviceID, s
 }
 
 type OrderQueueCashPayload struct {
-	OrderID    string `json:"order_id"`
-	CustomerID string `json:"customer_id"`
+	OrderID         string `json:"order_id"`
+	CustomerID      string `json:"customer_id"`
+	IsWithTime      bool   `json:"is_with_time"`     // serviceData.ServiceType == "Durasi"
+	ServiceDuration int    `json:"service_duration"` // subServiceData.MinutesSubServices
+	SearchAttempt   int    `json:"search_attempt"`   // how many times the search has been tried (0 = first)
+	FirstEnqueued   int64  `json:"first_enqueued"`   // unix timestamp of the first enqueue time
 }
 
-func NewOrderQueueCashTask(orderID, customerID string) ([]byte, error) {
+func NewOrderQueueCashTask(orderID, customerID string, isWithTime bool, serviceDuration int) ([]byte, error) {
 	payload := OrderQueueCashPayload{
-		OrderID:    orderID,
-		CustomerID: customerID,
+		OrderID:         orderID,
+		CustomerID:      customerID,
+		IsWithTime:      isWithTime,
+		ServiceDuration: serviceDuration,
+		SearchAttempt:   0,
+		FirstEnqueued:   time.Now().Unix(),
 	}
 	return json.Marshal(payload)
 }
 
 type OrderQueueVAPayload struct {
-	OrderID string `json:"order_id"`
+	OrderID         string `json:"order_id"`
+	IsWithTime      bool   `json:"is_with_time"`     // serviceData.ServiceType == "Durasi"
+	ServiceDuration int    `json:"service_duration"` // subServiceData.MinutesSubServices
+	FirstEnqueued   int64  `json:"first_enqueued"`   // unix timestamp of the first enqueue time
 }
 
-func NewOrderQueueVATask(orderID string) ([]byte, error) {
+func NewOrderQueueVATask(orderID string, isWithTime bool, serviceDuration int) ([]byte, error) {
 	payload := OrderQueueVAPayload{
-		OrderID: orderID,
+		OrderID:         orderID,
+		IsWithTime:      isWithTime,
+		ServiceDuration: serviceDuration,
+		FirstEnqueued:   time.Now().Unix(),
 	}
 	return json.Marshal(payload)
 }

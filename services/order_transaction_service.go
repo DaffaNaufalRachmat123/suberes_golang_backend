@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,7 +15,6 @@ import (
 	"suberes_golang/helpers"
 	"suberes_golang/models"
 	"suberes_golang/queue"
-	"suberes_golang/realtime"
 	"suberes_golang/repositories"
 	"suberes_golang/service"
 
@@ -384,55 +384,27 @@ func (s *OrderTransactionService) UpdateToOnProgress(id, customerID, mitraID str
 		minutes = 60
 	}
 
-	delay := time.Duration(minutes) * time.Minute
+	// delay := time.Duration(minutes) * time.Minute
 
-	taskPayload, err := queue.NewOrderOnProgressToFinishTask(id, customerID, mitraID, order.ServiceID, order.SubServiceID)
-	if err == nil {
-		taskInfo, enqErr := queue.AsynqClient.Enqueue(
-			asynq.NewTask(queue.TypeOrderOnProgressToFinish, taskPayload),
-			asynq.ProcessIn(delay),
-		)
-		if enqErr != nil {
-		} else {
-			// Save job ID to order
-			tx.Model(&models.OrderTransaction{}).Where("id = ?", id).
-				Update("on_progress_job_id", taskInfo.ID)
-		}
-	}
+	// taskPayload, err := queue.NewOrderOnProgressToFinishTask(id, customerID, mitraID, order.ServiceID, order.SubServiceID)
+	// if err == nil {
+	// 	taskInfo, enqErr := queue.AsynqClient.Enqueue(
+	// 		asynq.NewTask(queue.TypeOrderOnProgressToFinish, taskPayload),
+	// 		asynq.ProcessIn(delay),
+	// 	)
+	// 	if enqErr != nil {
+	// 	} else {
+	// 		// Save job ID to order
+	// 		tx.Model(&models.OrderTransaction{}).Where("id = ?", id).
+	// 			Update("on_progress_job_id", taskInfo.ID)
+	// 	}
+	// }
 
 	if err := tx.Commit().Error; err != nil {
 		return err
 	}
 
 	// TODO: Send FCM notification to customer
-	// TODO: Emit socket.io to admin rooms
-	// Emit to admin rooms using realtime.Server
-	var adminSocketIDs []string
-	s.DB.Model(&models.User{}).
-		Where("user_type IN ? AND is_logged_in = ?", []string{"admin", "superadmin"}, "1").
-		Pluck("socket_id", &adminSocketIDs)
-
-	var orderRunningCount int64
-	s.DB.Model(&models.OrderTransaction{}).
-		Where("order_status IN ?", []string{"OTW", "ON_PROGRESS"}).
-		Count(&orderRunningCount)
-
-	var orderWaitingCount int64
-	s.DB.Model(&models.OrderTransaction{}).
-		Where("order_status = ?", "WAITING_FOR_SELECTED_MITRA").
-		Count(&orderWaitingCount)
-
-	for _, socketID := range adminSocketIDs {
-		if socketID == "" {
-			continue
-		}
-		realtime.Server.BroadcastToRoom("/", socketID, "admin_message", map[string]interface{}{
-			"notification_type":   "NOTIFICATION_ORDER_RUNNING",
-			"order_id":            id,
-			"order_running_count": orderRunningCount,
-			"order_waiting_count": orderWaitingCount,
-		})
-	}
 	if order.Customer != nil {
 
 		// Kirim push notification ke customer jika ada firebase_token
@@ -1298,6 +1270,16 @@ func (s *OrderTransactionService) CancelOrder(id, customerID, mitraID, canceledU
 		return fmt.Errorf("order cannot be canceled from status %s", order.OrderStatus)
 	}
 
+	customer, err := s.UserRepo.FindCustomerById(customerID)
+	if err != nil {
+		return fmt.Errorf("customer not found")
+	}
+
+	mitra, err := s.UserRepo.FindMitraById(mitraID)
+	if err != nil {
+		return fmt.Errorf("mitra not found")
+	}
+
 	tx := s.DB.Begin()
 	if tx.Error != nil {
 		return tx.Error
@@ -1316,21 +1298,66 @@ func (s *OrderTransactionService) CancelOrder(id, customerID, mitraID, canceledU
 
 	if err := tx.Model(&models.User{}).Where("id = ?", mitraID).
 		Updates(map[string]interface{}{
-			"user_status": "stay",
-			"is_busy":     "no",
-			"updated_at":  now,
+			"user_status":            "stay",
+			"is_busy":                "no",
+			"order_id_running":       nil,
+			"sub_order_id_running":   nil,
+			"service_id_running":     nil,
+			"sub_service_id_running": nil,
+			"updated_at":             now,
 		}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 
+	orderStatus := "CANCELED"
+	updates := map[string]interface{}{
+		"canceled_user":   canceledUser,
+		"canceled_reason": canceledReason,
+		"updated_at":      now,
+	}
+
+	if order.PaymentType == "ewallet" {
+		orderStatus = "CANCELED_VOID"
+		paymentClient := helpers.NewClient()
+		resultVoid, _ := paymentClient.CreateVoidChargeXendit(context.Background(), order.PaymentIDPay)
+		var responseVoid struct {
+			VoidStatus string `json:"void_status"`
+		}
+		if err := json.Unmarshal(resultVoid, &responseVoid); err == nil && responseVoid.VoidStatus != "" {
+			updates["void_status"] = fmt.Sprintf("VOID_%s", responseVoid.VoidStatus)
+		}
+	} else if order.PaymentType == "balance" {
+		orderStatus = "CANCELED_VOID"
+	}
+
+	updates["order_status"] = orderStatus
+
 	if err := tx.Model(&models.OrderTransaction{}).Where("id = ?", id).
-		Updates(map[string]interface{}{
-			"order_status":    "CANCELED",
-			"canceled_user":   canceledUser,
-			"canceled_reason": canceledReason,
-			"updated_at":      now,
-		}).Error; err != nil {
+		Updates(updates).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	txRecord := models.Transaction{
+		ID:                     uuid.New().String(),
+		MitraID:                helpers.StringPtr(mitraID),
+		CustomerID:             helpers.StringPtr(customerID),
+		OrderID:                helpers.StringPtr(id),
+		UserType:               "customer",
+		TransactionName:        "Refund Biaya Order",
+		TransactionAmount:      order.GrossAmount,
+		TransactionType:        "transaction_out",
+		TransactionTypeFor:     "Refund",
+		TransactionFor:         "order",
+		TransactionStatus:      "success",
+		TransactionDescription: fmt.Sprintf("Pengembalian dana kepada customer %s karena order dibatalkan", customer.CompleteName),
+		TimezoneCode:           order.TimezoneCode,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+
+	if err := tx.Create(&txRecord).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -1344,8 +1371,51 @@ func (s *OrderTransactionService) CancelOrder(id, customerID, mitraID, canceledU
 		_ = queue.Inspector.DeleteTask("default", order.OnProgressJobID)
 	}
 
-	// TODO: FCM - if canceled by customer, notify mitra; if by mitra, notify customer
-	// TODO: Socket.io emit to admin rooms
+	messageToCustomer := fmt.Sprintf("Yah, order kamu dibatalkan oleh mitra %s", mitra.CompleteName)
+	if order.PaymentType == "virtual account" {
+		messageToCustomer += fmt.Sprintf("\ndan uang mu sebesar %s dikembalikan ke rekening mu segera", helpers.FormatRupiah(order.GrossAmount))
+	} else if order.PaymentType == "balance" {
+		messageToCustomer += fmt.Sprintf("\ndan uang mu sebesar %s dikembalikan ke saldo", helpers.FormatRupiah(order.GrossAmount))
+	} else if order.PaymentType == "ewallet" {
+		messageToCustomer += fmt.Sprintf("\ndan uang mu sebesar %s dikembalikan ke ewallet mu segera", helpers.FormatRupiah(order.GrossAmount))
+	}
+
+	messageToMitra := fmt.Sprintf("Yah, order kamu dibatalkan oleh customer %s", customer.CompleteName)
+
+	if canceledUser == "customer" {
+		if mitra.FirebaseToken != nil && *mitra.FirebaseToken != "" {
+			msgMitra := map[string]interface{}{
+				"data": map[string]interface{}{
+					"notification_type": "CANCEL_BROADCAST",
+					"title":             "Order dibatalin",
+					"message":           messageToMitra,
+					"order_id":          id,
+					"customer_id":       customerID,
+					"mitra_id":          mitraID,
+					"notif_type":        "order",
+				},
+			}
+			_, _ = service.SendToDevice(s.DB, "mitra", *mitra.FirebaseToken, msgMitra)
+		}
+	} else if canceledUser == "mitra" {
+		if customer.FirebaseToken != nil && *customer.FirebaseToken != "" {
+			var cust models.User
+			s.DB.Where("id = ?", customerID).First(&cust)
+			msgCustomer := map[string]interface{}{
+				"data": map[string]interface{}{
+					"notification_type": "CANCEL_BROADCAST",
+					"title":             "Order dibatalin",
+					"message":           messageToCustomer,
+					"order_id":          id,
+					"customer_id":       customerID,
+					"mitra_id":          mitraID,
+					"account_balance":   strconv.FormatInt(cust.AccountBalance, 10),
+					"notif_type":        "order",
+				},
+			}
+			_, _ = service.SendToDevice(s.DB, "customer", *customer.FirebaseToken, msgCustomer)
+		}
+	}
 	return nil
 }
 

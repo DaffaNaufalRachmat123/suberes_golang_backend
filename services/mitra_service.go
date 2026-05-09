@@ -52,11 +52,6 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.UserLoginRespon
 		}
 		return nil, err
 	}
-
-	if mitra.IsLoggedIn == "1" {
-		return nil, errors.New("mitra already logged in another device, please log out first")
-	}
-
 	if mitra.IsMitraActivated != "1" {
 		return nil, errors.New("mitra not activated")
 	}
@@ -72,7 +67,6 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.UserLoginRespon
 	}
 
 	sharedSecret := helpers.GetRandomPrimeNumber()
-	mitra.IsLoggedIn = "1"
 	mitra.SharedSecret = sharedSecret
 
 	if err := s.MitraRepository.UpdateMitra(tx, mitra); err != nil {
@@ -150,11 +144,44 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.UserLoginRespon
 		TokenHash: tokenHash,
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		Revoked:   "0",
+		DeviceID:  loginDTO.DeviceID,
 	}
 
 	if err := tx.Create(&refreshTokenModel).Error; err != nil {
 		tx.Rollback()
 		return nil, err
+	}
+
+	// Handle device binding
+	if mitra.DeviceID == "" {
+		// First login — bind device
+		if err := tx.Model(&models.User{}).Where("id = ?", mitra.ID).Updates(map[string]interface{}{
+			"device_id":         loginDTO.DeviceID,
+			"device_name":       loginDTO.DeviceName,
+			"device_os":         loginDTO.DeviceOS,
+			"device_os_android": loginDTO.DeviceOSAndroid,
+		}).Error; err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	} else if loginDTO.DeviceID != "" && mitra.DeviceID != loginDTO.DeviceID {
+		// Device changed — revoke all active tokens from the old device
+		if err := tx.Model(&models.RefreshToken{}).
+			Where("users_id = ? AND device_id = ? AND revoked = '0'", mitra.ID, mitra.DeviceID).
+			Update("revoked", "1").Error; err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		// Update device info
+		if err := tx.Model(&models.User{}).Where("id = ?", mitra.ID).Updates(map[string]interface{}{
+			"device_id":         loginDTO.DeviceID,
+			"device_name":       loginDTO.DeviceName,
+			"device_os":         loginDTO.DeviceOS,
+			"device_os_android": loginDTO.DeviceOSAndroid,
+		}).Error; err != nil {
+			tx.Rollback()
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit().Error; err != nil {
@@ -164,6 +191,14 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.UserLoginRespon
 	status := "NOT_IN_ORDER"
 	if order != nil {
 		status = "IN_ORDER"
+	}
+
+	// Reflect device fields in response (DB updated above, update in-memory struct too)
+	if loginDTO.DeviceID != "" {
+		mitra.DeviceID = loginDTO.DeviceID
+		mitra.DeviceName = loginDTO.DeviceName
+		mitra.DeviceOS = loginDTO.DeviceOS
+		mitra.DeviceOSAndroid = loginDTO.DeviceOSAndroid
 	}
 
 	return &dtos.UserLoginResponseDTO{
@@ -241,6 +276,7 @@ func (s *MitraService) RefreshToken(userID string, stored models.RefreshToken) (
 		TokenHash: tokenHash,
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		Revoked:   "0",
+		DeviceID:  stored.DeviceID,
 	}
 
 	if err := tx.Create(&newStored).Error; err != nil {
@@ -670,7 +706,6 @@ func (s *MitraService) Logout(mitraID string) error {
 	mitra.FirebaseToken = nil
 	mitra.IsActive = "no"
 	mitra.IsAutoBid = "no"
-	mitra.IsLoggedIn = "0"
 
 	if err := s.MitraRepository.UpdateMitra(tx, mitra); err != nil {
 		tx.Rollback()
@@ -879,7 +914,7 @@ func (s *MitraService) UpdateMitraStatus(ctx context.Context, mitraID, status, u
 		if err := tx.Commit().Error; err != nil {
 			return 500, err
 		}
-		if mitra.IsLoggedIn == "1" && (*mitra.FirebaseToken != "" || mitra.FirebaseToken != nil) {
+		if *mitra.FirebaseToken != "" || mitra.FirebaseToken != nil {
 			payloadMitra := map[string]interface{}{
 				"data": map[string]interface{}{
 					"notification_type": "SUSPEND_NOTIFICATION",

@@ -18,8 +18,12 @@ type CustomerController struct {
 }
 
 type OtpValidatorMailRequest struct {
-	Email   string `json:"email" binding:"required,email"`
-	OtpCode string `json:"otp_code" binding:"required"`
+	Email           string `json:"email" binding:"required,email"`
+	OtpCode         string `json:"otp_code" binding:"required"`
+	DeviceID        string `json:"device_id"`
+	DeviceName      string `json:"device_name"`
+	DeviceOS        string `json:"device_os"`
+	DeviceOSAndroid string `json:"device_os_android"`
 }
 
 type UpdateFirebaseTokenRequest struct {
@@ -332,6 +336,10 @@ func (c *CustomerController) OtpValidatorMail(ctx *gin.Context) {
 	resp, status, err := c.CustomerService.OtpValidatorMail(
 		req.Email,
 		req.OtpCode,
+		req.DeviceID,
+		req.DeviceName,
+		req.DeviceOS,
+		req.DeviceOSAndroid,
 	)
 
 	if err != nil {

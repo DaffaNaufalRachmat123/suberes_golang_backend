@@ -123,11 +123,19 @@ func (s *XenditService) handleSuccessfulPayment(tx *gorm.DB, orderData *models.O
 		if err := s.OrderRepo.UpdateOrderStatus(tx, orderData.ID, "WAITING_PAYMENT", updates); err != nil {
 			return err
 		}
-		taskPayload, err := queue.NewOrderQueueVATask(orderData.ID)
+		// Hapus ewallet notify task karena payment sudah berhasil
+		if orderData.EwalletNotifyJobID != "" {
+			_ = queue.Inspector.DeleteTask("default", orderData.EwalletNotifyJobID)
+		}
+		var xServiceData models.Service
+		var xSubServiceData models.SubService
+		s.DB.Where("id = ?", orderData.ServiceID).First(&xServiceData)
+		s.DB.Where("id = ?", orderData.SubServiceID).First(&xSubServiceData)
+		taskPayload, err := queue.NewOrderQueueVATask(orderData.ID, xServiceData.ServiceType == "Durasi", xSubServiceData.MinutesSubServices)
 		if err != nil {
 			return err
 		}
-		_, err = queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
+		_, err = queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"), asynq.ProcessIn(1*time.Second))
 		if err != nil {
 			return err
 		}

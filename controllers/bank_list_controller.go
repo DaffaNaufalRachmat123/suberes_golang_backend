@@ -20,6 +20,28 @@ func NewBankListController(bankListService *services.BankListService) *BankListC
 	}
 }
 
+// GetAllBankLists returns all bank lists (no filter) paginated.
+// GET /bank_list/all
+func (c *BankListController) GetAllBankLists(ctx *gin.Context) {
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+
+	banks, total, err := c.BankListService.GetAllBankLists(page, limit)
+	if err != nil {
+		helpers.APIErrorResponse(ctx, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	response := helpers.GetPaginationData(ctx, banks, len(banks), page, limit, total)
+	ctx.JSON(http.StatusOK, response)
+}
+
 // GetTopupBanks returns paginated banks eligible for topup.
 // GET /bank_list/topup
 func (c *BankListController) GetTopupBanks(ctx *gin.Context) {
@@ -148,17 +170,7 @@ func (c *BankListController) UpdateBankEwallet(ctx *gin.Context) {
 		return
 	}
 
-	var req dtos.BankListUpdateRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "bad request",
-			"status":         "failure",
-			"error":          err.Error(),
-		})
-		return
-	}
-
-	if err := c.BankListService.Update(id, &req); err != nil {
+	if err := c.BankListService.UpdateWithContext(ctx, id); err != nil {
 		if err.Error() == "bank not found" {
 			ctx.JSON(http.StatusNotFound, gin.H{
 				"server_message": "bank not found",

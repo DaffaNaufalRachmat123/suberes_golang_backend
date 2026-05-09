@@ -273,7 +273,7 @@ func (s *WebhookService) HandleVAPaid(body map[string]interface{}) (int, error) 
 		if customerData.FirebaseToken != nil && *customerData.FirebaseToken != "" {
 			service.SendMulticast(s.DB, "customer", map[string]interface{}{
 				"data": map[string]string{
-					"notification_type": "NOW_VIRTUAL_ACCOUNT_ORDER_PAID_NOTIFICATION",
+					"notification_type": "NOW_VIRTUAL_ACCOUNT_ORDER_PAID_SUCCEEDED_NOTIFICATION",
 					"title":             "Pembayaran Order Berhasil",
 					"message":           fmt.Sprintf("Pembayaran order dengan ID Transaksi : %s berhasil dan kami sedang mencarikan mitra untukmu", orderData.IDTransaction),
 					"order_id":          orderData.ID,
@@ -286,7 +286,11 @@ func (s *WebhookService) HandleVAPaid(body map[string]interface{}) (int, error) 
 		}
 	}
 
-	taskPayload, _ := queue.NewOrderQueueVATask(orderData.ID)
+	var vaServiceData models.Service
+	var vaSubServiceData models.SubService
+	s.DB.Where("id = ?", orderData.ServiceID).First(&vaServiceData)
+	s.DB.Where("id = ?", orderData.SubServiceID).First(&vaSubServiceData)
+	taskPayload, _ := queue.NewOrderQueueVATask(orderData.ID, vaServiceData.ServiceType == "Durasi", vaSubServiceData.MinutesSubServices)
 
 	s.DB.Create(&models.SuberesLogs{
 		LogName: "Notification Paid VA Order",
@@ -299,8 +303,13 @@ func (s *WebhookService) HandleVAPaid(body map[string]interface{}) (int, error) 
 		return http.StatusInternalServerError, err
 	}
 
+	// Hapus ewallet/VA notify task karena payment sudah berhasil
+	if orderData.EwalletNotifyJobID != "" {
+		_ = queue.Inspector.DeleteTask("default", orderData.EwalletNotifyJobID)
+	}
+
 	// Enqueue mitra search AFTER commit so the queue worker sees committed data
-	queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
+	queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"), asynq.ProcessIn(1*time.Second))
 	return http.StatusOK, nil
 }
 
@@ -673,9 +682,20 @@ func (s *WebhookService) HandleEwallet(payload dtos.XenditCallbackPayload) (int,
 				return http.StatusInternalServerError, err
 			}
 
+			// Hapus ewallet notify task karena payment sudah berhasil
+			if jobID, ok := orderData["ewallet_notify_job_id"].(string); ok && jobID != "" {
+				_ = queue.Inspector.DeleteTask("default", jobID)
+			}
+
 			if queueOrderID != "" {
-				taskPayload, _ := queue.NewOrderQueueVATask(queueOrderID)
-				_, enqErr := queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"))
+				var ewOrderForQueue models.OrderTransaction
+				s.DB.Select("service_id, sub_service_id").Where("id = ?", queueOrderID).First(&ewOrderForQueue)
+				var ewServiceData models.Service
+				var ewSubServiceData models.SubService
+				s.DB.Where("id = ?", ewOrderForQueue.ServiceID).First(&ewServiceData)
+				s.DB.Where("id = ?", ewOrderForQueue.SubServiceID).First(&ewSubServiceData)
+				taskPayload, _ := queue.NewOrderQueueVATask(queueOrderID, ewServiceData.ServiceType == "Durasi", ewSubServiceData.MinutesSubServices)
+				_, enqErr := queue.AsynqClient.Enqueue(asynq.NewTask(queue.TypeOrderQueueVA, taskPayload), asynq.Queue("critical"), asynq.ProcessIn(1*time.Second))
 				if enqErr != nil {
 				} else {
 				}

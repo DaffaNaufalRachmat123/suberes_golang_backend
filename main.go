@@ -246,6 +246,13 @@ func main() {
 		PaymentService: paymentService,
 	}
 
+	subPaymentService := &services.SubPaymentService{
+		DB: config.DB,
+	}
+	subPaymentController := &controllers.SubPaymentController{
+		SubPaymentService: subPaymentService,
+	}
+
 	orderTransactionService := &services.OrderTransactionService{
 		DB:                          config.DB,
 		OrderTransactionRepo:        orderTransactionRepo,
@@ -341,6 +348,7 @@ func main() {
 	routes.TermsConditionRoutes(api, termsConditionController, config.DB)
 	routes.PanduanRoutes(api, panduanController, config.DB)
 	routes.PaymentRoutes(api, paymentController, config.DB)
+	routes.SubPaymentRoutes(api, subPaymentController, config.DB)
 	routes.OrderTransactionRoutes(api, orderTransactionController, config.DB)
 	routes.OrderOfferRoutes(api, OrderOfferController, config.DB)
 	routes.OrderEwalletRoutes(api, OrderEwalletController, config.DB)

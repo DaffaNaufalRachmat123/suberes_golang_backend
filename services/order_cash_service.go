@@ -2,7 +2,6 @@ package services
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -340,12 +339,11 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 	if err := tx.Commit().Error; err != nil {
 		return "", 0, "", "", 500, err
 	}
-	payload, _ := json.Marshal(queue.OrderQueueCashPayload{
-		OrderID:    order.ID,
-		CustomerID: order.CustomerID,
-	})
+	payload, _ := queue.NewOrderQueueCashTask(order.ID, order.CustomerID, service.ServiceType == "Durasi", subService.MinutesSubServices)
 	task := asynq.NewTask(queue.TypeOrderQueueCash, payload)
-	_, err = queue.AsynqClient.Enqueue(task, asynq.Queue("critical"))
+	// ProcessIn(1s): memberi jeda kecil setelah tx.Commit() agar semua koneksi di pool
+	// bisa melihat data yang baru di-commit sebelum worker mengeksekusi task.
+	_, err = queue.AsynqClient.Enqueue(task, asynq.Queue("critical"), asynq.ProcessIn(1*time.Second))
 	if err != nil {
 		return "", 0, "", "", 500, err
 	}

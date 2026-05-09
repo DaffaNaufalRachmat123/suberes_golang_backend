@@ -101,6 +101,18 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Validate device_id if present in the stored token
+		if stored.DeviceID != "" {
+			deviceID := c.GetHeader("device_id")
+			if deviceID == "" || deviceID != stored.DeviceID {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"server_message": "Device mismatch, please login again",
+					"status":         "failure",
+				})
+				return
+			}
+		}
+
 		// ✅ inject ke context
 		c.Set("refreshUserID", userID)
 		c.Set("refreshTokenRecord", stored)

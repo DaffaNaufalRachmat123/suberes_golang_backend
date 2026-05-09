@@ -4,11 +4,6 @@ import (
 	"time"
 )
 
-// Marshal only id and complete_name for complain relation
-func (u *User) MarshalJSON() ([]byte, error) {
-	return []byte(`{"id":"` + u.ID + `","complete_name":"` + u.CompleteName + `"}`), nil
-}
-
 type User struct {
 	ID                          string     `gorm:"type:varchar(36);primaryKey;column:id" json:"id"`
 	CompleteName                string     `gorm:"type:varchar(255);not null" json:"complete_name"`
@@ -93,6 +88,11 @@ type User struct {
 	NonactivateReason           string     `gorm:"type:text;default:''" json:"nonactivate_reason"`
 	ActivateReason              string     `gorm:"type:text;default:''" json:"activate_reason"`
 	RegisteredFromMobile        string     `gorm:"type:varchar(1);default:'0';check:registered_from_mobile IN ('0','1')" json:"registered_from_mobile"`
+	DeviceID                    string     `gorm:"type:varchar(36);default:''" json:"device_id"`
+	DeviceName                  string     `gorm:"type:varchar(255);default:''" json:"device_name"`
+	DeviceOS                    string     `gorm:"type:varchar(255);default:''" json:"device_os"`
+	DeviceOSAndroid             string     `gorm:"type:varchar(255);default:''" json:"device_os_android"`
+	AdvertisingID               string     `gorm:"type:varchar(20);default:''" json:"advertising_id"`
 	CreatedAt                   time.Time  `gorm:"type:timestamp;default:now()" json:"created_at"`
 	UpdatedAt                   time.Time  `gorm:"type:timestamp;default:now()" json:"updated_at"`
 

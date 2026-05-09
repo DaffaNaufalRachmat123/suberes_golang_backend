@@ -14,15 +14,28 @@ func OrderHistoryRoutes(r *gin.RouterGroup, c *controllers.OrderHistoryControlle
 	// ── Order Canceleds ───────────────────────────────────────────────────────
 	canceled := r.Group("/order_canceled")
 
-	// Public (no auth in original JS)
-	canceled.GET("/index/date/:mitra_id", c.GetCanceledDatesByMitra)
-	canceled.GET("/count/:mitra_id", c.GetCanceledCountByMitra)
-	canceled.GET("/index/:mitra_id/:order_time", c.GetCanceledByMitraAndDate)
-
 	// Protected — customer only
 	canceledProtected := canceled.Group("")
 	canceledProtected.Use(middleware.AuthMiddleware(db))
 	helpers.RegisterProtectedRoutes(canceledProtected, []helpers.ProtectedRoute{
+		{
+			Method:  "GET",
+			Path:    "/index/date/:mitra_id",
+			Handler: c.GetCanceledDatesByMitra,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/count/:mitra_id",
+			Handler: c.GetCanceledCountByMitra,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/index/:mitra_id/:order_time",
+			Handler: c.GetCanceledByMitraAndDate,
+			Roles:   []string{helpers.MitraRole},
+		},
 		{
 			Method:  "GET",
 			Path:    "/list/customer/:customer_id",
@@ -34,15 +47,28 @@ func OrderHistoryRoutes(r *gin.RouterGroup, c *controllers.OrderHistoryControlle
 	// ── Order Dones ───────────────────────────────────────────────────────────
 	done := r.Group("/order_dones")
 
-	// Public
-	done.GET("/index/date/:mitra_id", c.GetDoneDatesByMitra)
-	done.GET("/count/:mitra_id", c.GetDoneCountByMitra)
-	done.GET("/index/:mitra_id/:order_time", c.GetDoneByMitraAndDate)
-
 	// Protected — customer only
 	doneProtected := done.Group("")
 	doneProtected.Use(middleware.AuthMiddleware(db))
 	helpers.RegisterProtectedRoutes(doneProtected, []helpers.ProtectedRoute{
+		{
+			Method:  "GET",
+			Path:    "/index/date/:mitra_id",
+			Handler: c.GetDoneDatesByMitra,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/count/:mitra_id",
+			Handler: c.GetDoneCountByMitra,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/index/:mitra_id/:order_time",
+			Handler: c.GetDoneByMitraAndDate,
+			Roles:   []string{helpers.MitraRole},
+		},
 		{
 			Method:  "GET",
 			Path:    "/list/customer/:customer_id",
@@ -54,15 +80,28 @@ func OrderHistoryRoutes(r *gin.RouterGroup, c *controllers.OrderHistoryControlle
 	// ── Order Coming Soon ─────────────────────────────────────────────────────
 	comingSoon := r.Group("/order_coming_soon")
 
-	// Public
-	comingSoon.GET("/index/date/:mitra_id", c.GetComingSoonDatesByMitra)
-	comingSoon.GET("/count/:mitra_id", c.GetComingSoonCountByMitra)
-	comingSoon.GET("/index/:mitra_id/:order_time", c.GetComingSoonByMitraAndDate)
-
 	// Protected — customer only
 	comingSoonProtected := comingSoon.Group("")
 	comingSoonProtected.Use(middleware.AuthMiddleware(db))
 	helpers.RegisterProtectedRoutes(comingSoonProtected, []helpers.ProtectedRoute{
+		{
+			Method:  "GET",
+			Path:    "/index/date/:mitra_id",
+			Handler: c.GetComingSoonDatesByMitra,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/count/:mitra_id",
+			Handler: c.GetComingSoonCountByMitra,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/index/:mitra_id/:order_time",
+			Handler: c.GetComingSoonByMitraAndDate,
+			Roles:   []string{helpers.MitraRole},
+		},
 		{
 			Method:  "GET",
 			Path:    "/list/customer/:customer_id",
@@ -74,15 +113,28 @@ func OrderHistoryRoutes(r *gin.RouterGroup, c *controllers.OrderHistoryControlle
 	// ── Order Repeat ──────────────────────────────────────────────────────────
 	repeat := r.Group("/order_repeat")
 
-	// Public
-	repeat.GET("/index/date/:mitra_id", c.GetRepeatDatesByMitra)
-	repeat.GET("/count/:mitra_id", c.GetRepeatCountByMitra)
-	repeat.GET("/index/:mitra_id/:order_time", c.GetRepeatByMitraAndDate)
-
 	// Protected — customer only
 	repeatProtected := repeat.Group("")
 	repeatProtected.Use(middleware.AuthMiddleware(db))
 	helpers.RegisterProtectedRoutes(repeatProtected, []helpers.ProtectedRoute{
+		{
+			Method:  "GET",
+			Path:    "/index/date/:mitra_id",
+			Handler: c.GetRepeatDatesByMitra,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/count/:mitra_id",
+			Handler: c.GetRepeatCountByMitra,
+			Roles:   []string{helpers.MitraRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/index/:mitra_id/:order_time",
+			Handler: c.GetRepeatByMitraAndDate,
+			Roles:   []string{helpers.MitraRole},
+		},
 		{
 			Method:  "GET",
 			Path:    "/list/customer/:customer_id",
@@ -100,14 +152,22 @@ func OrderHistoryRoutes(r *gin.RouterGroup, c *controllers.OrderHistoryControlle
 	// ── Order Pending ─────────────────────────────────────────────────────────
 	pending := r.Group("/order_pending")
 
-	// Public (no auth in original JS)
-	pending.GET("/count/:customer_id", c.GetPendingCountByCustomer)
-	pending.GET("/list/customer/:customer_id", c.GetPendingByCustomer)
-
 	// Protected — mitra only
 	pendingProtected := pending.Group("")
 	pendingProtected.Use(middleware.AuthMiddleware(db))
 	helpers.RegisterProtectedRoutes(pendingProtected, []helpers.ProtectedRoute{
+		{
+			Method:  "GET",
+			Path:    "/count/:customer_id",
+			Handler: c.GetPendingCountByCustomer,
+			Roles:   []string{helpers.CustomerRole},
+		},
+		{
+			Method:  "GET",
+			Path:    "/list/customer/:customer_id",
+			Handler: c.GetPendingByCustomer,
+			Roles:   []string{helpers.CustomerRole},
+		},
 		{
 			Method:  "GET",
 			Path:    "/index/mitra/:mitra_id",

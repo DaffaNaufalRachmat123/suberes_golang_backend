@@ -16,6 +16,12 @@ func BankListRoutes(r *gin.RouterGroup, controller *controllers.BankListControll
 	routes := []helpers.ProtectedRoute{
 		{
 			Method:  "GET",
+			Path:    "/bank_list/all",
+			Handler: controller.GetAllBankLists,
+			Roles:   helpers.AllRole,
+		},
+		{
+			Method:  "GET",
 			Path:    "/bank_list/topup",
 			Handler: controller.GetTopupBanks,
 			Roles:   helpers.AllRole,

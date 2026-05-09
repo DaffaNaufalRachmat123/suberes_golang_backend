@@ -89,6 +89,10 @@ func (s *OrderEwalletService) CreateOrderEwallet(ctx *gin.Context, customerID st
 
 	grossAmount := dto.GrossAmount
 
+	if grossAmount < 10000 {
+		return "", 0, "", "", http.StatusBadRequest, errors.New("minimum order amount is Rp 10.000")
+	}
+
 	if subPayment.TitlePayment == "BALANCE" {
 		if float64(customerData.AccountBalance) < float64(grossAmount) {
 			return "", 0, "", "", http.StatusPaymentRequired, errors.New("insufficient account balance")
@@ -382,9 +386,10 @@ func (s *OrderEwalletService) CreateOrderEwallet(ctx *gin.Context, customerID st
 	}
 
 	// Enqueue ewallet notify expired task
+	// asynq.TaskID(ewalletNotifyJobID) agar task bisa di-delete by ID saat payment berhasil.
 	notifyPayload, _ := queue.NewOrderEwalletNotifyExpiredTask(order.ID, customerID)
 	notifyTask := asynq.NewTask(queue.TypeOrderEwalletNotifyExpired, notifyPayload)
-	queue.AsynqClient.Enqueue(notifyTask, asynq.ProcessIn(time.Duration(timeoutMinutes)*time.Minute))
+	queue.AsynqClient.Enqueue(notifyTask, asynq.ProcessIn(time.Duration(timeoutMinutes)*time.Minute), asynq.TaskID(ewalletNotifyJobID))
 
 	return order.ID, -1, order.CustomerID, helpers.DerefStr(order.MitraID), http.StatusOK, nil
 }
