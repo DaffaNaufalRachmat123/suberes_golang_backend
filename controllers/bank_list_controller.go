@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
+	"suberes_golang/i18n"
 	"suberes_golang/services"
 
 	"github.com/gin-gonic/gin"
@@ -94,7 +95,7 @@ func (c *BankListController) BulkCreateBanks(ctx *gin.Context) {
 	var items []dtos.BankListCreateItem
 	if err := ctx.ShouldBindJSON(&items); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "bad request",
+			"server_message": i18n.Tc(ctx, i18n.MsgBadRequest),
 			"status":         "failure",
 			"error":          err.Error(),
 		})
@@ -104,7 +105,7 @@ func (c *BankListController) BulkCreateBanks(ctx *gin.Context) {
 	if err := c.BankListService.BulkCreateBanks(adminID, items); err != nil {
 		if err.Error() == "admin not found" {
 			ctx.JSON(http.StatusNotFound, gin.H{
-				"server_message": "admin not found",
+				"server_message": i18n.Tc(ctx, i18n.MsgAdminNotFound),
 				"status":         "failure",
 			})
 			return
@@ -117,7 +118,7 @@ func (c *BankListController) BulkCreateBanks(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Bank List Created",
+		"server_message": i18n.Tc(ctx, i18n.MsgBankListCreated),
 		"status":         "success",
 	})
 }
@@ -130,7 +131,7 @@ func (c *BankListController) BulkCreateEwallets(ctx *gin.Context) {
 	var items []dtos.BankListCreateItem
 	if err := ctx.ShouldBindJSON(&items); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "bad request",
+			"server_message": i18n.Tc(ctx, i18n.MsgBadRequest),
 			"status":         "failure",
 			"error":          err.Error(),
 		})
@@ -140,7 +141,7 @@ func (c *BankListController) BulkCreateEwallets(ctx *gin.Context) {
 	if err := c.BankListService.BulkCreateEwallets(adminID, items); err != nil {
 		if err.Error() == "admin not found" {
 			ctx.JSON(http.StatusNotFound, gin.H{
-				"server_message": "admin not found",
+				"server_message": i18n.Tc(ctx, i18n.MsgAdminNotFound),
 				"status":         "failure",
 			})
 			return
@@ -153,7 +154,7 @@ func (c *BankListController) BulkCreateEwallets(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Ewallet List Created",
+		"server_message": i18n.Tc(ctx, i18n.MsgEwalletCreated),
 		"status":         "success",
 	})
 }
@@ -164,7 +165,7 @@ func (c *BankListController) UpdateBankEwallet(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "invalid id",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -173,7 +174,7 @@ func (c *BankListController) UpdateBankEwallet(ctx *gin.Context) {
 	if err := c.BankListService.UpdateWithContext(ctx, id); err != nil {
 		if err.Error() == "bank not found" {
 			ctx.JSON(http.StatusNotFound, gin.H{
-				"server_message": "bank not found",
+				"server_message": i18n.Tc(ctx, i18n.MsgBankNotFound),
 				"status":         "failure",
 			})
 			return
@@ -186,7 +187,7 @@ func (c *BankListController) UpdateBankEwallet(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Bank/Ewallet updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgBankEwalletUpdated),
 		"status":         "success",
 	})
 }

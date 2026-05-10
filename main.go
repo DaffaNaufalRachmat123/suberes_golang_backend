@@ -60,11 +60,14 @@ func main() {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Request-ID"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Request-ID", "device_language"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	// i18n: baca header "device_language" dan simpan ke context sebelum handler manapun.
+	r.Use(middleware.I18nMiddleware())
 
 	userRepo := &repositories.UserRepository{DB: config.DB}
 	userOtpRepo := &repositories.UserOtpRepository{DB: config.DB}

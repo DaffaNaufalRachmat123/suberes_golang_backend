@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"errors"
 	"net/http"
 	"strconv"
@@ -97,7 +98,7 @@ func (c *RatingController) CreateRatingToMitra(ctx *gin.Context) {
 
 	ratingVal, err := strconv.ParseFloat(ctx.Param("rating"), 64)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "invalid rating value", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgRatingInvalid), "status": "failure"})
 		return
 	}
 
@@ -123,7 +124,7 @@ func (c *RatingController) CreateRatingToMitra(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "rating submitted", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgRatingSubmitted), "status": "success"})
 }
 
 // CreateRatingToCustomer POST /api/ratings/create_to_customer/:order_id/:customer_id/:mitra_id/:rating
@@ -134,7 +135,7 @@ func (c *RatingController) CreateRatingToCustomer(ctx *gin.Context) {
 
 	ratingVal, err := strconv.ParseFloat(ctx.Param("rating"), 64)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "invalid rating value", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgRatingInvalid), "status": "failure"})
 		return
 	}
 
@@ -160,5 +161,5 @@ func (c *RatingController) CreateRatingToCustomer(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "rating submitted", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgRatingSubmitted), "status": "success"})
 }

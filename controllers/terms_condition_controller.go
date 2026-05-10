@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"strconv"
 	"suberes_golang/dtos"
@@ -30,7 +31,7 @@ func (c *TermsConditionController) Index(ctx *gin.Context) {
 	termsConditions, total, err := c.TermsConditionService.GetAllTermsConditions(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -45,7 +46,7 @@ func (c *TermsConditionController) Detail(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid ID",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -54,7 +55,7 @@ func (c *TermsConditionController) Detail(ctx *gin.Context) {
 	termsCondition, err := c.TermsConditionService.GetTermsConditionByID(uint(id))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -62,7 +63,7 @@ func (c *TermsConditionController) Detail(ctx *gin.Context) {
 
 	if termsCondition == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{
-			"server_message": "Terms condition not found",
+			"server_message": i18n.Tc(ctx, i18n.MsgTermsNotFound),
 			"status":         "failure",
 		})
 		return
@@ -78,7 +79,7 @@ func (c *TermsConditionController) GetByTypeAndUserType(ctx *gin.Context) {
 
 	if tocType == "" || tocUserType == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Missing required parameters",
+			"server_message": i18n.Tc(ctx, i18n.MsgMissingParams),
 			"status":         "failure",
 		})
 		return
@@ -87,7 +88,7 @@ func (c *TermsConditionController) GetByTypeAndUserType(ctx *gin.Context) {
 	termsCondition, err := c.TermsConditionService.GetTermsConditionByTypeAndUserType(tocType, tocUserType)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -95,7 +96,7 @@ func (c *TermsConditionController) GetByTypeAndUserType(ctx *gin.Context) {
 
 	if termsCondition == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{
-			"server_message": "Terms condition not found",
+			"server_message": i18n.Tc(ctx, i18n.MsgTermsNotFound),
 			"status":         "failure",
 		})
 		return
@@ -112,7 +113,7 @@ func (c *TermsConditionController) Create(ctx *gin.Context) {
 	var req dtos.TermsConditionCreateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Bad request",
+			"server_message": i18n.Tc(ctx, i18n.MsgBadRequest),
 			"status":         "failure",
 			"error":          err.Error(),
 		})
@@ -123,7 +124,7 @@ func (c *TermsConditionController) Create(ctx *gin.Context) {
 	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"server_message": "Unauthorized",
+			"server_message": i18n.Tc(ctx, i18n.MsgUnauthorized),
 			"status":         "failure",
 		})
 		return
@@ -141,7 +142,7 @@ func (c *TermsConditionController) Create(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Failed to create terms condition",
+			"server_message": i18n.Tc(ctx, i18n.MsgTermsCreateFailed),
 			"status":         "failure",
 			"error":          err.Error(),
 		})
@@ -149,7 +150,7 @@ func (c *TermsConditionController) Create(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "toc created",
+		"server_message": i18n.Tc(ctx, i18n.MsgTocCreated),
 		"status":         "succeeded",
 	})
 }
@@ -159,7 +160,7 @@ func (c *TermsConditionController) UpdateStatus(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid ID",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -168,7 +169,7 @@ func (c *TermsConditionController) UpdateStatus(ctx *gin.Context) {
 	var req dtos.TermsConditionUpdateStatusRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Bad Request",
+			"server_message": i18n.Tc(ctx, i18n.MsgBadRequest),
 			"status":         "failure",
 			"error":          err.Error(),
 		})
@@ -194,7 +195,7 @@ func (c *TermsConditionController) UpdateStatus(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Failed to update status",
+			"server_message": i18n.Tc(ctx, i18n.MsgTermsUpdateStatusFailed),
 			"status":         "failure",
 			"error":          errorMsg,
 		})
@@ -202,7 +203,7 @@ func (c *TermsConditionController) UpdateStatus(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "terms condition updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgTermsUpdated),
 		"status":         "success",
 	})
 }
@@ -212,7 +213,7 @@ func (c *TermsConditionController) Update(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid ID",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -224,7 +225,7 @@ func (c *TermsConditionController) Update(ctx *gin.Context) {
 	var req dtos.TermsConditionUpdateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Bad request",
+			"server_message": i18n.Tc(ctx, i18n.MsgBadRequest),
 			"status":         "failure",
 			"error":          err.Error(),
 		})
@@ -235,7 +236,7 @@ func (c *TermsConditionController) Update(ctx *gin.Context) {
 	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"server_message": "Unauthorized",
+			"server_message": i18n.Tc(ctx, i18n.MsgUnauthorized),
 			"status":         "failure",
 		})
 		return
@@ -262,7 +263,7 @@ func (c *TermsConditionController) Update(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Failed to update terms condition",
+			"server_message": i18n.Tc(ctx, i18n.MsgTermsUpdateFailed),
 			"status":         "failure",
 			"error":          errorMsg,
 		})
@@ -270,7 +271,7 @@ func (c *TermsConditionController) Update(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "toc updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgTocUpdated),
 		"status":         "succeeded",
 	})
 }
@@ -280,7 +281,7 @@ func (c *TermsConditionController) Delete(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid ID",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -305,7 +306,7 @@ func (c *TermsConditionController) Delete(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Failed to delete terms condition",
+			"server_message": i18n.Tc(ctx, i18n.MsgTermsDeleteFailed),
 			"status":         "failure",
 			"error":          errorMsg,
 		})
@@ -313,7 +314,7 @@ func (c *TermsConditionController) Delete(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Berhasil menghapus TOC",
+		"server_message": i18n.Tc(ctx, i18n.MsgTocDeleted),
 		"status":         "success",
 	})
 }

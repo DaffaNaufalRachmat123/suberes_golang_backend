@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"strconv"
 	"suberes_golang/helpers"
@@ -27,7 +28,7 @@ func (c *PanduanController) IndexCustomer(ctx *gin.Context) {
 	panduans, total, err := c.PanduanService.GetPanduansCustomer(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -51,7 +52,7 @@ func (c *PanduanController) IndexMitra(ctx *gin.Context) {
 	panduans, total, err := c.PanduanService.GetPanduansMitra(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -75,7 +76,7 @@ func (c *PanduanController) IndexAdmin(ctx *gin.Context) {
 	panduans, total, err := c.PanduanService.GetPanduansAdmin(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -89,7 +90,7 @@ func (c *PanduanController) Detail(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid ID",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -98,7 +99,7 @@ func (c *PanduanController) Detail(ctx *gin.Context) {
 	panduan, err := c.PanduanService.GetPanduanByID(uint(id))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -106,7 +107,7 @@ func (c *PanduanController) Detail(ctx *gin.Context) {
 
 	if panduan == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{
-			"server_message": "Panduan not found",
+			"server_message": i18n.Tc(ctx, i18n.MsgPanduanNotFound),
 			"status":         "failure",
 		})
 		return
@@ -118,7 +119,7 @@ func (c *PanduanController) Detail(ctx *gin.Context) {
 func (c *PanduanController) Create(ctx *gin.Context) {
 	if err := c.PanduanService.CreatePanduan(ctx); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Bad request",
+			"server_message": i18n.Tc(ctx, i18n.MsgBadRequest),
 			"status":         "failed",
 			"error":          err.Error(),
 		})
@@ -126,7 +127,7 @@ func (c *PanduanController) Create(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Panduan created",
+		"server_message": i18n.Tc(ctx, i18n.MsgPanduanCreated),
 		"status":         "success",
 	})
 }
@@ -135,7 +136,7 @@ func (c *PanduanController) UpdateWatchingCount(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid ID",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -143,14 +144,14 @@ func (c *PanduanController) UpdateWatchingCount(ctx *gin.Context) {
 
 	if err := c.PanduanService.UpdateWatchingCount(uint(id)); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Watching count updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgWatchingCountUpdated),
 		"status":         "success",
 	})
 }
@@ -159,7 +160,7 @@ func (c *PanduanController) Update(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid ID",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -167,7 +168,7 @@ func (c *PanduanController) Update(ctx *gin.Context) {
 
 	if err := c.PanduanService.UpdatePanduan(ctx, uint(id)); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Bad request",
+			"server_message": i18n.Tc(ctx, i18n.MsgBadRequest),
 			"status":         "failed",
 			"error":          err.Error(),
 		})
@@ -175,7 +176,7 @@ func (c *PanduanController) Update(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Panduan updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgPanduanUpdated),
 		"status":         "success",
 	})
 }
@@ -184,7 +185,7 @@ func (c *PanduanController) Delete(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid ID",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -199,7 +200,7 @@ func (c *PanduanController) Delete(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Panduan removed",
+		"server_message": i18n.Tc(ctx, i18n.MsgPanduanRemoved),
 		"status":         "success",
 	})
 }

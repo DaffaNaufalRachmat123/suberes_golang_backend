@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
@@ -35,7 +36,7 @@ func (c *OrderController) CreateOrderCash(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusCreated, gin.H{
-		"server_message": "order created",
+		"server_message": i18n.Tc(ctx, i18n.MsgOrderCreated),
 		"status":         "success",
 		"order_id":       orderId,
 		"sub_id":         subId,
@@ -53,7 +54,7 @@ func (c *OrderController) AcceptOrderCash(ctx *gin.Context) {
 		})
 		return
 	}
-	code, response, err := c.OrderCashService.AcceptOrder(req)
+	code, response, err := c.OrderCashService.AcceptOrder(req, i18n.GetLang(ctx))
 	if err != nil {
 		helpers.APIErrorResponse(ctx, err.Error(), code)
 		return

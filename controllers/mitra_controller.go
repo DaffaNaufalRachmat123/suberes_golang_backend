@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
+	"suberes_golang/i18n"
 	"suberes_golang/models"
 	"suberes_golang/services"
 	"time"
@@ -195,7 +196,7 @@ func (c *MitraController) Register(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message":        "register successful",
+		"server_message":        i18n.Tc(ctx, i18n.MsgRegisterSuccess),
 		"status":                "ok",
 		"register_success_text": "Pendaftaran mitra baru berhasil selanjutnya kita akan ngasih tau kamu lewat email untuk proses verifikasi data diri dan kelengkapan",
 		"data":                  createdMitra,
@@ -275,7 +276,7 @@ func (c *MitraController) ChangePassword(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "change password successfuly", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgPasswordChanged), "status": "success"})
 }
 
 func (c *MitraController) UpdateMitraStatus(ctx *gin.Context) {
@@ -284,7 +285,7 @@ func (c *MitraController) UpdateMitraStatus(ctx *gin.Context) {
 	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"server_message": "Customer not found",
+			"server_message": i18n.Tc(ctx, i18n.MsgCustomerNotFound),
 			"status":         "failure",
 		})
 		return
@@ -308,7 +309,7 @@ func (c *MitraController) UpdateMitraStatus(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Mitra status updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgMitraStatusUpdated),
 		"status":         "success",
 	})
 }
@@ -322,7 +323,7 @@ func (c *MitraController) UpdateMitraActive(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Mitra active status updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgMitraActiveUpdated),
 		"status":         "success",
 	})
 }
@@ -336,7 +337,7 @@ func (c *MitraController) UpdateMitraAutoBid(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Mitra auto bid status updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgMitraAutoBidUpdated),
 		"status":         "success",
 	})
 }
@@ -359,7 +360,7 @@ func (c *MitraController) UpdateMitraCoordinate(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Mitra coordinate updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgMitraCoordUpdated),
 		"status":         "success",
 	})
 }
@@ -385,7 +386,7 @@ func (c *MitraController) GetMitraDetail(ctx *gin.Context) {
 	status := ctx.Param("status")
 	timezone := ctx.DefaultQuery("timezone", "Asia/Jakarta")
 
-	response, code, err := c.MitraService.GetMitraDetail(idParam, status, timezone)
+	response, code, err := c.MitraService.GetMitraDetail(idParam, status, timezone, i18n.GetLang(ctx))
 	if err != nil {
 		ctx.JSON(code, gin.H{
 			"server_message": err.Error(),
@@ -406,7 +407,7 @@ func (c *MitraController) AdminUpdate(ctx *gin.Context) {
 		helpers.JSONError(ctx, code, err)
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Mitra updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgMitraUpdated),
 		"status":         "success",
 	})
 }
@@ -519,7 +520,7 @@ func (c *MitraController) UpdateMitraCandidate(ctx *gin.Context) {
 	}
 
 	ctx.JSON(200, gin.H{
-		"server_message": "mitra candidate data updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgMitraCandidateUpdated),
 		"status":         "success",
 	})
 }
@@ -535,7 +536,7 @@ func (c *MitraController) UpdateDocumentStatus(ctx *gin.Context) {
 		helpers.JSONError(ctx, code, err)
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Document status updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgDocumentStatusUpdated),
 		"status":         "success",
 	})
 }
@@ -555,7 +556,7 @@ func (c *MitraController) ChangeEmail(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "email & password updatead",
+		"server_message": i18n.Tc(ctx, i18n.MsgEmailPasswordUpdated),
 		"status":         "success",
 		"otp_timeout":    otpTimeout,
 	})
@@ -589,7 +590,7 @@ func (c *MitraController) OtpValidatorEmailVerification(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "email changed",
+		"server_message": i18n.Tc(ctx, i18n.MsgEmailChanged),
 		"status":         "success",
 		"email":          newEmail,
 	})
@@ -608,7 +609,7 @@ func (c *MitraController) ChangeForgotPassword(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "Password updated", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgPasswordUpdated), "status": "success"})
 }
 
 func (c *MitraController) RequestForgotPassword(ctx *gin.Context) {
@@ -620,7 +621,7 @@ func (c *MitraController) RequestForgotPassword(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "forgot password request succeeded",
+		"server_message": i18n.Tc(ctx, i18n.MsgForgotPasswordSuccess),
 		"status":         "success",
 		"otp_timeout":    otpTimeout,
 	})
@@ -639,7 +640,7 @@ func (c *MitraController) OTPValidatorForgotPassword(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "email changed", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgEmailChanged), "status": "success"})
 }
 
 func (c *MitraController) Logout(ctx *gin.Context) {
@@ -649,7 +650,7 @@ func (c *MitraController) Logout(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "logout success", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgLogoutSuccess), "status": "success"})
 }
 
 func (c *MitraController) UpdateFirebaseToken(ctx *gin.Context) {
@@ -660,7 +661,7 @@ func (c *MitraController) UpdateFirebaseToken(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "refresh token updated", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgRefreshTokenUpdated), "status": "success"})
 }
 
 func (c *MitraController) InviteMitra(ctx *gin.Context) {
@@ -675,7 +676,7 @@ func (c *MitraController) InviteMitra(ctx *gin.Context) {
 		helpers.JSONError(ctx, code, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "mitra invited", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgMitraInvited), "status": "success"})
 }
 
 func (c *MitraController) TrainingStatus(ctx *gin.Context) {
@@ -686,7 +687,7 @@ func (c *MitraController) TrainingStatus(ctx *gin.Context) {
 		helpers.JSONError(ctx, code, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "Berhasil memperbarui status mitra", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgMitraStatusUpdated), "status": "success"})
 }
 
 func (c *MitraController) ActivateMitraStatus(ctx *gin.Context) {
@@ -697,13 +698,13 @@ func (c *MitraController) ActivateMitraStatus(ctx *gin.Context) {
 		helpers.JSONError(ctx, code, err)
 		return
 	}
-	var msg string
+	var msgKey string
 	if status == "successful" {
-		msg = "Akun mitra diaktifkan"
+		msgKey = i18n.MsgMitraActivated
 	} else {
-		msg = "Akun mitra telah ditolak"
+		msgKey = i18n.MsgMitraRejected
 	}
-	ctx.JSON(http.StatusOK, gin.H{"server_message": msg, "update_status": status, "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, msgKey), "update_status": status, "status": "success"})
 }
 
 func (c *MitraController) DashboardCount(ctx *gin.Context) {
@@ -739,14 +740,14 @@ func (c *MitraController) PhoneChange(ctx *gin.Context) {
 	if err != nil {
 		if err.Error() == "mitra data not found" {
 			ctx.JSON(http.StatusNotFound, gin.H{
-				"server_message": "mitra data not found",
+				"server_message": i18n.Tc(ctx, i18n.MsgMitraDataNotFound),
 				"status":         "failure",
 			})
 			return
 		}
 		if err.Error() == "phone number already used" {
 			ctx.JSON(http.StatusConflict, gin.H{
-				"server_message": "phone number already used",
+				"server_message": i18n.Tc(ctx, i18n.MsgPhoneAlreadyUsed),
 				"status":         "failure",
 			})
 			return
@@ -759,7 +760,7 @@ func (c *MitraController) PhoneChange(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "otp number sent",
+		"server_message": i18n.Tc(ctx, i18n.MsgOtpSent),
 		"otp_timeout":    otpTimeout,
 		"status":         "success",
 	})
@@ -804,7 +805,7 @@ func (c *MitraController) OtpValidatorChangePhoneNumber(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "phone number changed",
+		"server_message": i18n.Tc(ctx, i18n.MsgPhoneChanged),
 		"status":         "success",
 		"phone_number":   newPhone,
 	})
@@ -821,7 +822,7 @@ func (c *MitraController) UpdateRejectionOrderCount(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "rejection count updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgRejectionCountUpdated),
 		"status":         "success",
 	})
 }

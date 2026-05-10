@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
@@ -35,7 +36,7 @@ func (c *OrderVAController) CreateOrderVA(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusCreated, gin.H{
-		"server_message": "order created",
+		"server_message": i18n.Tc(ctx, i18n.MsgOrderCreated),
 		"status":         "success",
 		"order_id":       orderID,
 		"sub_id":         subID,

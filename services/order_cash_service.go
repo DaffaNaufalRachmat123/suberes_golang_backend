@@ -1,6 +1,7 @@
 package services
 
 import (
+	"suberes_golang/i18n"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -351,7 +352,7 @@ func (s *OrderCashService) CreateOrderCash(customerId string, dto dtos.CreateOrd
 	return order.ID, -1, order.CustomerID, helpers.DerefStr(order.MitraID), 200, nil
 }
 
-func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[string]interface{}, error) {
+func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO, lang string) (int, map[string]interface{}, error) {
 	// Local helpers for safe type conversion from map[string]interface{} DB scan results.
 	asString := func(v interface{}) string {
 		switch s := v.(type) {
@@ -752,7 +753,7 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 		"mitra_id":       data.MitraID,
 		"order_type":     data.OrderType,
 		"payment_type":   payment.Type,
-		"server_message": "successfully took the order",
+		"server_message": i18n.T(lang, i18n.MsgOrderTookSuccess),
 		"status":         "success",
 	}
 	if orderType == "now" {

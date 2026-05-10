@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"strconv"
 	"suberes_golang/helpers"
@@ -26,7 +27,7 @@ func (c *NewsController) Index(ctx *gin.Context) {
 	news, total, err := c.NewsService.GetNews(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -39,7 +40,7 @@ func (c *NewsController) GetByID(ctx *gin.Context) {
 	data, err := c.NewsService.GetNewsByID(uint(id))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -50,7 +51,7 @@ func (c *NewsController) GetPopular(ctx *gin.Context) {
 	data, err := c.NewsService.GetPopularNews()
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -66,7 +67,7 @@ func (c *NewsController) Create(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "news created",
+		"server_message": i18n.Tc(ctx, i18n.MsgNewsCreated),
 		"status":         "success",
 	})
 }
@@ -81,7 +82,7 @@ func (c *NewsController) Update(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "news updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgNewsUpdated),
 		"status":         "success",
 	})
 }
@@ -96,7 +97,7 @@ func (c *NewsController) Delete(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "news removed",
+		"server_message": i18n.Tc(ctx, i18n.MsgNewsRemoved),
 		"status":         "success",
 	})
 }

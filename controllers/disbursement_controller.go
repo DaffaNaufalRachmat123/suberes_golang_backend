@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"errors"
 	"net/http"
 	"strconv"
@@ -29,7 +30,7 @@ func (c *DisbursementController) GetTopupPaymentStatus(ctx *gin.Context) {
 	result, err := c.DisbursementService.GetTopupPaymentStatus(topupID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "transaction not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgTransactionNotFound), "status": "failure"})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
@@ -43,7 +44,7 @@ func (c *DisbursementController) GetTopupPaymentStatus(ctx *gin.Context) {
 func (c *DisbursementController) ValidateBank(ctx *gin.Context) {
 	var req dtos.ValidateBankRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure"})
 		return
 	}
 
@@ -68,7 +69,7 @@ func (c *DisbursementController) CreateMitraTopup(ctx *gin.Context) {
 	mitraID := ctx.Param("mitra_id")
 	var req dtos.TopupRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure", "error": err.Error()})
 		return
 	}
 
@@ -76,9 +77,9 @@ func (c *DisbursementController) CreateMitraTopup(ctx *gin.Context) {
 	if err != nil {
 		switch err.Error() {
 		case "bank not found":
-			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "disbursement with this method is not allowed", "status": "failure"})
+			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgDisbursementNotAllowed), "status": "failure"})
 		case "mitra not found":
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "mitra not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgMitraNotFound), "status": "failure"})
 		default:
 			if len(err.Error()) > 20 && err.Error()[:20] == "min transactions for" {
 				ctx.JSON(http.StatusBadRequest, gin.H{"server_message": err.Error(), "status": "failure"})
@@ -90,7 +91,7 @@ func (c *DisbursementController) CreateMitraTopup(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message":  "top up created",
+		"server_message":  i18n.Tc(ctx, i18n.MsgTopUpCreated),
 		"status":          "success",
 		"transaction_id":  transactionID,
 		"idempotency_key": idempotencyKey,
@@ -102,7 +103,7 @@ func (c *DisbursementController) CreateCustomerTopup(ctx *gin.Context) {
 	customerID := ctx.Param("customer_id")
 	var req dtos.TopupRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure", "error": err.Error()})
 		return
 	}
 
@@ -110,9 +111,9 @@ func (c *DisbursementController) CreateCustomerTopup(ctx *gin.Context) {
 	if err != nil {
 		switch err.Error() {
 		case "bank not found":
-			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "disbursement with this method is not allowed", "status": "failure"})
+			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgDisbursementNotAllowed), "status": "failure"})
 		case "customer not found":
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "customer not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgCustomerNotFound), "status": "failure"})
 		default:
 			if len(err.Error()) > 20 && err.Error()[:20] == "min transactions for" {
 				ctx.JSON(http.StatusBadRequest, gin.H{"server_message": err.Error(), "status": "failure"})
@@ -124,7 +125,7 @@ func (c *DisbursementController) CreateCustomerTopup(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message":  "top up created",
+		"server_message":  i18n.Tc(ctx, i18n.MsgTopUpCreated),
 		"status":          "success",
 		"transaction_id":  transactionID,
 		"idempotency_key": idempotencyKey,
@@ -205,7 +206,7 @@ func (c *DisbursementController) CreateMitraDisburse(ctx *gin.Context) {
 	mitraID := ctx.Param("mitra_id")
 	var req dtos.DisburseRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure", "error": err.Error()})
 		return
 	}
 
@@ -215,11 +216,11 @@ func (c *DisbursementController) CreateMitraDisburse(ctx *gin.Context) {
 		case "amount less than Rp 6.000":
 			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": err.Error(), "status": "failure"})
 		case "mitra not found":
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "mitra not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgMitraNotFound), "status": "failure"})
 		case "bank data not found":
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "bank data not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBankDataNotFound), "status": "failure"})
 		case "password not match":
-			ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": "password not match", "status": "failure"})
+			ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgPasswordNotMatch), "status": "failure"})
 		default:
 			ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
 		}
@@ -227,7 +228,7 @@ func (c *DisbursementController) CreateMitraDisburse(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message":  "disbursement created",
+		"server_message":  i18n.Tc(ctx, i18n.MsgDisbursementCreated),
 		"status":          "success",
 		"id":              transactionID,
 		"idempotency_key": idempotencyKey,
@@ -239,7 +240,7 @@ func (c *DisbursementController) CreateCustomerDisburse(ctx *gin.Context) {
 	customerID := ctx.Param("customer_id")
 	var req dtos.DisburseCustomerRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure", "error": err.Error()})
 		return
 	}
 
@@ -247,11 +248,11 @@ func (c *DisbursementController) CreateCustomerDisburse(ctx *gin.Context) {
 	if err != nil {
 		switch err.Error() {
 		case "bank data or ewallet data not found":
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "bank data or ewallet data not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBankOrEwalletNotFound), "status": "failure"})
 		case "amount less than minimum disbursement":
-			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "amount less", "status": "failure"})
+			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgAmountInsufficient), "status": "failure"})
 		case "customer not found":
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "customer not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgCustomerNotFound), "status": "failure"})
 		case "pin required", "Unauthorized , PIN not match":
 			ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": err.Error(), "status": "failure"})
 		default:
@@ -261,7 +262,7 @@ func (c *DisbursementController) CreateCustomerDisburse(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message":  "disbursement created",
+		"server_message":  i18n.Tc(ctx, i18n.MsgDisbursementCreated),
 		"status":          "success",
 		"id":              transactionID,
 		"external_id":     externalID,

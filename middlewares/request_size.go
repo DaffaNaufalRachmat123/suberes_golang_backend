@@ -3,6 +3,8 @@ package middleware
 import (
 	"net/http"
 
+	"suberes_golang/i18n"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,7 +16,8 @@ func RequestSizeLimiter(maxBytes int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.ContentLength > maxBytes {
 			c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{
-				"error": "request body too large",
+				"server_message": i18n.Tc(c, i18n.MsgRequestBodyLarge),
+				"status":         "failure",
 			})
 			return
 		}

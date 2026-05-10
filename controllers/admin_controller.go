@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
+	"suberes_golang/i18n"
 	"suberes_golang/models"
 	"suberes_golang/services"
 	"time"
@@ -100,7 +101,7 @@ func (c *AdminController) CreateAdmin(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusCreated, gin.H{
-		"server_message": "admin created",
+		"server_message": i18n.Tc(ctx, i18n.MsgAdminCreated),
 		"status":         "success",
 		"callback":       admin,
 	})
@@ -123,7 +124,7 @@ func (c *AdminController) UpdateAdminStatus(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "admin status updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgAdminStatusUpdated),
 		"status":         "success",
 	})
 }
@@ -148,7 +149,7 @@ func (c *AdminController) RemoveAdmin(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "remove account succeed",
+		"server_message": i18n.Tc(ctx, i18n.MsgRemoveAccountSuccess),
 		"status":         "success",
 	})
 }
@@ -217,7 +218,7 @@ func (c *AdminController) Login(ctx *gin.Context) {
 	})
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Berhasil masuk. Selamat datang kembali",
+		"server_message": i18n.Tc(ctx, i18n.MsgLoginSuccess),
 		"status":         "success",
 		"token":          "Bearer " + token,
 		"refresh_token":  "Bearer " + refreshToken,
@@ -238,7 +239,7 @@ func (c *AdminController) Logout(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "logout successful",
+		"server_message": i18n.Tc(ctx, i18n.MsgLogoutSuccess),
 		"status":         "ok",
 		"isLogout":       true,
 	})
@@ -261,7 +262,7 @@ func (c *AdminController) UpdateFirebaseToken(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "refresh token updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgRefreshTokenUpdated),
 		"status":         "success",
 	})
 }

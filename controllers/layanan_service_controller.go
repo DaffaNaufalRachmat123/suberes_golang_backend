@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"strconv"
 	"suberes_golang/helpers"
@@ -26,7 +27,7 @@ func (c *LayananServiceController) Index(ctx *gin.Context) {
 	layananServices, total, err := c.LayananServiceService.GetLayananService(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -40,7 +41,7 @@ func (c *LayananServiceController) GetByID(ctx *gin.Context) {
 	data, err := c.LayananServiceService.GetLayananByID(uint(id))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -52,7 +53,7 @@ func (c *LayananServiceController) GetPopular(ctx *gin.Context) {
 	data, err := c.LayananServiceService.GetLayananPopular()
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -69,7 +70,7 @@ func (c *LayananServiceController) Create(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Layanan created",
+		"server_message": i18n.Tc(ctx, i18n.MsgLayananCreated),
 		"status":         "success",
 	})
 }
@@ -84,7 +85,7 @@ func (c *LayananServiceController) Update(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "banner updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgBannerUpdated),
 		"status":         "success",
 	})
 }
@@ -94,7 +95,7 @@ func (c *LayananServiceController) GetDetail(ctx *gin.Context) {
 	layananID, err := strconv.Atoi(ctx.Param("layanan_id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid layanan_id",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidLayananID),
 			"status":         "failure",
 		})
 		return
@@ -113,7 +114,7 @@ func (c *LayananServiceController) GetDetail(ctx *gin.Context) {
 	categoryServices, total, err := c.LayananServiceService.GetCategoryServiceByLayananID(layananID, page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -133,7 +134,7 @@ func (c *LayananServiceController) Delete(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "banner removed",
+		"server_message": i18n.Tc(ctx, i18n.MsgBannerRemoved),
 		"status":         "success",
 	})
 }

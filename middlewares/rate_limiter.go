@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"suberes_golang/i18n"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -72,7 +74,8 @@ func RateLimitMiddleware(limiter *RateLimiter) gin.HandlerFunc {
 		ip := c.ClientIP()
 		if !limiter.isAllowed(ip) {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "too many requests, please try again later",
+				"server_message": i18n.Tc(c, i18n.MsgTooManyRequests),
+				"status":         "failure",
 			})
 			return
 		}

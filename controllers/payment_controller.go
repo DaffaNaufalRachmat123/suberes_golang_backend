@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"strconv"
 	"suberes_golang/services"
@@ -19,7 +20,7 @@ func (c *PaymentController) Index(ctx *gin.Context) {
 	data, err := c.PaymentService.GetAllActive()
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -37,7 +38,7 @@ func (c *PaymentController) Create(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "payment created",
+		"server_message": i18n.Tc(ctx, i18n.MsgPaymentCreated),
 		"status":         "success",
 	})
 }
@@ -47,7 +48,7 @@ func (c *PaymentController) UpdateWithImage(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "invalid id",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -64,7 +65,7 @@ func (c *PaymentController) UpdateWithImage(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "payment updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgPaymentUpdated),
 		"status":         "success",
 	})
 }
@@ -74,7 +75,7 @@ func (c *PaymentController) Update(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "invalid id",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -91,7 +92,7 @@ func (c *PaymentController) Update(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "payment updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgPaymentUpdated),
 		"status":         "success",
 	})
 }
@@ -101,7 +102,7 @@ func (c *PaymentController) Delete(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "invalid id",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -118,7 +119,7 @@ func (c *PaymentController) Delete(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "payment deleted",
+		"server_message": i18n.Tc(ctx, i18n.MsgPaymentDeleted),
 		"status":         "success",
 	})
 }

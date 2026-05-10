@@ -1,6 +1,7 @@
 package services
 
 import (
+	"suberes_golang/i18n"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -1109,7 +1110,7 @@ func (s *MitraService) UpdateMitraCoordinate(mitraID string, latitude, longitude
 func (s *MitraService) AdminIndex(page, limit int, search string) ([]models.User, int64, error) {
 	return s.UserRepository.FindMitraPagination(page, limit, search)
 }
-func (s *MitraService) GetMitraDetail(id string, status string, timezone string) (interface{}, int, error) {
+func (s *MitraService) GetMitraDetail(id string, status string, timezone string, lang string) (interface{}, int, error) {
 
 	// timezone handling
 	loc, _ := time.LoadLocation(timezone)
@@ -1143,7 +1144,7 @@ func (s *MitraService) GetMitraDetail(id string, status string, timezone string)
 	}
 
 	response := map[string]interface{}{
-		"server_message": "success",
+		"server_message": i18n.T(lang, i18n.MsgSuccess),
 		"status":         "OK",
 		"data":           user,
 		"order_data":     orderData,

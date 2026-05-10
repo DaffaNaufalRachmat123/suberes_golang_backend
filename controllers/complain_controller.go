@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"suberes_golang/helpers"
+	"suberes_golang/i18n"
 	"suberes_golang/models"
 	"suberes_golang/services"
 
@@ -81,13 +82,13 @@ func (c *ComplainController) IndexMitra(ctx *gin.Context) {
 func (c *ComplainController) Detail(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure"})
 		return
 	}
 	data, err := c.ComplainService.GetDetail(id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "complain not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgComplainNotFound), "status": "failure"})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
@@ -110,42 +111,42 @@ func (c *ComplainController) Create(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": err.Error(), "status": "failure"})
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "complain created", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgComplainCreated), "status": "success"})
 }
 
 // UpdateStatus PUT /api/complains/update/:id/:status
 func (c *ComplainController) UpdateStatus(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure"})
 		return
 	}
 	status := ctx.Param("status")
 	if err := c.ComplainService.UpdateStatus(id, status); err != nil {
 		if err.Error() == "complain not found" {
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "complain not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgComplainNotFound), "status": "failure"})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "complain updated", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgComplainUpdated), "status": "success"})
 }
 
 // Remove DELETE /api/complains/remove/:id
 func (c *ComplainController) Remove(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure"})
 		return
 	}
 	if err := c.ComplainService.Remove(id); err != nil {
 		if err.Error() == "complain not found" {
-			ctx.JSON(http.StatusNotFound, gin.H{"server_message": "complain not found", "status": "failure"})
+			ctx.JSON(http.StatusNotFound, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgComplainNotFound), "status": "failure"})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "complain removed", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgComplainRemoved), "status": "success"})
 }

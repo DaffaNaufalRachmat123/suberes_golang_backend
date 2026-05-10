@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"strconv"
 	"suberes_golang/services"
@@ -26,7 +27,7 @@ func (c *SubPaymentController) Index(ctx *gin.Context) {
 	data, total, err := c.SubPaymentService.GetAll(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -48,7 +49,7 @@ func (c *SubPaymentController) Detail(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid id",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -74,7 +75,7 @@ func (c *SubPaymentController) Update(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "Invalid id",
+			"server_message": i18n.Tc(ctx, i18n.MsgInvalidID),
 			"status":         "failure",
 		})
 		return
@@ -90,7 +91,7 @@ func (c *SubPaymentController) Update(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Sub payment updated successfully",
+		"server_message": i18n.Tc(ctx, i18n.MsgSubPaymentUpdated),
 		"status":         "success",
 		"data":           data,
 	})

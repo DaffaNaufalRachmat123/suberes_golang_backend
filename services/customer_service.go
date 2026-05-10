@@ -1,6 +1,7 @@
 package services
 
 import (
+	"suberes_golang/i18n"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -38,6 +39,7 @@ func (s *CustomerService) OtpUpdatePhoneMail(
 	OtpCode string,
 	PhoneChange bool,
 	MailChange bool,
+	lang string,
 ) (map[string]interface{}, int, error) {
 	user, _ := s.UserRepo.FindCustomerById(ID)
 	if user == nil {
@@ -109,7 +111,7 @@ func (s *CustomerService) OtpUpdatePhoneMail(
 	tx.Commit()
 
 	return map[string]interface{}{
-		"server_message": "change data succeed",
+		"server_message": i18n.T(lang, i18n.MsgChangeDataSuccess),
 		"status":         "OK",
 		"token":          tokenString,
 		"data":           user,
@@ -122,6 +124,7 @@ func (s *CustomerService) ChangePhoneMail(
 	mailChange bool,
 	phoneNumber string,
 	email string,
+	lang string,
 ) (map[string]interface{}, int, error) {
 	userData, err := s.UserRepo.FindCustomerById(ID)
 	if err != nil {
@@ -185,7 +188,7 @@ func (s *CustomerService) ChangePhoneMail(
 
 	// 10. Return Success Response
 	return map[string]interface{}{
-		"server_message": "otp number sent",
+		"server_message": i18n.T(lang, i18n.MsgOtpSent),
 		"otp_timeout":    os.Getenv("OTP_TIMEOUT"),
 		"status":         "success",
 	}, 200, nil
@@ -336,7 +339,7 @@ func (s *CustomerService) LoginByEmail(email string) (string, error) {
 	return strconv.Itoa(otp), nil
 }
 
-func (s *CustomerService) UpdateFirebaseTokenCustomer(userId, firebaseToken string) (map[string]interface{}, int, error) {
+func (s *CustomerService) UpdateFirebaseTokenCustomer(userId, firebaseToken, lang string) (map[string]interface{}, int, error) {
 	tx := s.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -360,7 +363,7 @@ func (s *CustomerService) UpdateFirebaseTokenCustomer(userId, firebaseToken stri
 		return nil, 500, err
 	}
 	return map[string]interface{}{
-		"server_message": "Firebase token updated",
+		"server_message": i18n.T(lang, i18n.MsgFirebaseTokenUpdated),
 		"status":         "OK",
 	}, 200, nil
 }
@@ -375,7 +378,7 @@ func generateAdvertisingID() string {
 	return string(b)
 }
 
-func (s *CustomerService) OtpValidatorMail(email, otpCode, deviceID, deviceName, deviceOS, deviceOSAndroid string) (map[string]interface{}, int, error) {
+func (s *CustomerService) OtpValidatorMail(email, otpCode, deviceID, deviceName, deviceOS, deviceOSAndroid, lang string) (map[string]interface{}, int, error) {
 	tx := s.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -510,7 +513,7 @@ func (s *CustomerService) OtpValidatorMail(email, otpCode, deviceID, deviceName,
 	tx.Commit()
 
 	return map[string]interface{}{
-		"server_message":    "login successfully",
+		"server_message": i18n.T(lang, i18n.MsgLoginSuccess),
 		"status":            "success",
 		"token":             "Bearer " + tokenString,
 		"refresh_token":     "Bearer " + refreshString,
@@ -612,6 +615,7 @@ func (s *CustomerService) RefreshToken(userID string, stored models.RefreshToken
 func (s *CustomerService) UpdateUserProfile(
 	ID string,
 	CompleteName string,
+	lang string,
 ) (map[string]interface{}, int, error) {
 	user, err := s.UserRepo.FindCustomerById(ID)
 	if err != nil {
@@ -633,13 +637,13 @@ func (s *CustomerService) UpdateUserProfile(
 		"complete_name": CompleteName,
 	})
 	return map[string]interface{}{
-		"server_message": "Profile updated",
+		"server_message": i18n.T(lang, i18n.MsgProfileUpdated),
 		"status":         "OK",
 		"data":           updatedUser,
 	}, 200, nil
 }
 
-func (s *CustomerService) Logout(ID string) (map[string]interface{}, int, error) {
+func (s *CustomerService) Logout(ID, lang string) (map[string]interface{}, int, error) {
 	user, err := s.UserRepo.FindCustomerById(ID)
 	if err != nil {
 		return nil, 500, err
@@ -669,7 +673,7 @@ func (s *CustomerService) Logout(ID string) (map[string]interface{}, int, error)
 	}
 	tx.Commit()
 	return map[string]interface{}{
-		"server_message": "Logout succeed",
+		"server_message": i18n.T(lang, i18n.MsgLogoutSuccess),
 		"status":         "OK",
 	}, 200, nil
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"suberes_golang/i18n"
 	"suberes_golang/models"
 
 	"github.com/gin-gonic/gin"
@@ -21,7 +22,7 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"server_message": "Missing refresh token",
+				"server_message": i18n.Tc(c, i18n.MsgMissingRefreshToken),
 				"status":         "failure",
 			})
 			return
@@ -30,7 +31,7 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"server_message": "Invalid token format",
+				"server_message": i18n.Tc(c, i18n.MsgTokenInvalidFormat),
 				"status":         "failure",
 			})
 			return
@@ -38,7 +39,7 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		secretKey := os.Getenv("SECRET_KEY_REFRESH")
 		if secretKey == "" {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"server_message": "Server configuration error", "status": "failure"})
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"server_message": i18n.Tc(c, i18n.MsgServerConfigError), "status": "failure"})
 			return
 		}
 		// ✅ parse tanpa validasi expiry
@@ -52,7 +53,7 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		if err != nil || token == nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"server_message": "Invalid refresh token",
+				"server_message": i18n.Tc(c, i18n.MsgRefreshTokenInvalid),
 				"status":         "failure",
 			})
 			return
@@ -61,7 +62,7 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"server_message": "Invalid claims",
+				"server_message": i18n.Tc(c, i18n.MsgTokenInvalidClaims),
 				"status":         "failure",
 			})
 			return
@@ -70,7 +71,7 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 		idVal, ok := claims["id"]
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"server_message": "Invalid token payload",
+				"server_message": i18n.Tc(c, i18n.MsgTokenInvalidPayload),
 				"status":         "failure",
 			})
 			return
@@ -87,7 +88,7 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"server_message": "Refresh token not recognized",
+				"server_message": i18n.Tc(c, i18n.MsgRefreshTokenNotRecognized),
 				"status":         "failure",
 			})
 			return
@@ -95,7 +96,7 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		if time.Now().After(stored.ExpiresAt) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"server_message": "Refresh token expired",
+				"server_message": i18n.Tc(c, i18n.MsgRefreshTokenExpired),
 				"status":         "failure",
 			})
 			return
@@ -106,7 +107,7 @@ func RefreshTokenMiddleware(db *gorm.DB) gin.HandlerFunc {
 			deviceID := c.GetHeader("device_id")
 			if deviceID == "" || deviceID != stored.DeviceID {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-					"server_message": "Device mismatch, please login again",
+					"server_message": i18n.Tc(c, i18n.MsgDeviceMismatch),
 					"status":         "failure",
 				})
 				return

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"suberes_golang/dtos"
+	"suberes_golang/i18n"
 	"suberes_golang/models"
 	"suberes_golang/services"
 
@@ -17,7 +18,7 @@ type CategoryServiceController struct {
 func (c *CategoryServiceController) GetDetail(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "Invalid ID", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgInvalidID), "status": "failure"})
 		return
 	}
 
@@ -27,24 +28,24 @@ func (c *CategoryServiceController) GetDetail(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "OK", "status": "success", "data": data})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgOK), "status": "success", "data": data})
 }
 
 func (c *CategoryServiceController) Create(ctx *gin.Context) {
 	var req dtos.CategoryServiceRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "Invalid data request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgInvalidPayload), "status": "failure", "error": err.Error()})
 		return
 	}
 
 	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": "Unauthorized", "status": "failure"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgUnauthorized), "status": "failure"})
 		return
 	}
 	user, ok := userCtx.(models.User)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": "Unauthorized", "status": "failure"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgUnauthorized), "status": "failure"})
 		return
 	}
 
@@ -53,30 +54,30 @@ func (c *CategoryServiceController) Create(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "category service created", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgCategoryCreated), "status": "success"})
 }
 
 func (c *CategoryServiceController) Update(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "Invalid ID", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgInvalidID), "status": "failure"})
 		return
 	}
 
 	var req dtos.CategoryServiceRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "Invalid data request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgInvalidPayload), "status": "failure", "error": err.Error()})
 		return
 	}
 
 	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": "Unauthorized", "status": "failure"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgUnauthorized), "status": "failure"})
 		return
 	}
 	user, ok := userCtx.(models.User)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": "Unauthorized", "status": "failure"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgUnauthorized), "status": "failure"})
 		return
 	}
 
@@ -85,30 +86,30 @@ func (c *CategoryServiceController) Update(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "category service updated", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgCategoryUpdated), "status": "success"})
 }
 
 func (c *CategoryServiceController) Delete(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "Invalid ID", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgInvalidID), "status": "failure"})
 		return
 	}
 
 	var req dtos.CategoryServiceDeleteRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "Invalid data request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgInvalidPayload), "status": "failure", "error": err.Error()})
 		return
 	}
 
 	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": "Unauthorized", "status": "failure"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgUnauthorized), "status": "failure"})
 		return
 	}
 	user, ok := userCtx.(models.User)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": "Unauthorized", "status": "failure"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgUnauthorized), "status": "failure"})
 		return
 	}
 
@@ -117,5 +118,5 @@ func (c *CategoryServiceController) Delete(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "category service deleted", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgCategoryDeleted), "status": "success"})
 }

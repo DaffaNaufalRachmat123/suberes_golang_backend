@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"suberes_golang/i18n"
 	"suberes_golang/models"
 
 	"github.com/gin-gonic/gin"
@@ -22,19 +23,19 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "UNAUTHORIZED", "status": "failure"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(c, i18n.MsgUnauthorized), "status": "failure"})
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Invalid token format", "status": "failure"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(c, i18n.MsgTokenInvalidFormat), "status": "failure"})
 			return
 		}
 
 		secretKey := os.Getenv("SECRET_KEY")
 		if secretKey == "" {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"server_message": "Server configuration error", "status": "failure"})
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"server_message": i18n.Tc(c, i18n.MsgServerConfigError), "status": "failure"})
 			return
 		}
 
@@ -44,16 +45,16 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		if err != nil || !token.Valid {
 			if errors.Is(err, jwt.ErrTokenExpired) {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Token expired", "status": "failure", "need_refresh": true})
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(c, i18n.MsgTokenExpired), "status": "failure", "need_refresh": true})
 			} else {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Invalid or expired token", "status": "failure"})
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(c, i18n.MsgTokenInvalidOrExpired), "status": "failure"})
 			}
 			return
 		}
 
 		claims, ok := token.Claims.(*JWTClaims)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Invalid token claims", "status": "failure"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(c, i18n.MsgTokenInvalidClaims), "status": "failure"})
 			return
 		}
 
@@ -64,7 +65,7 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 			First(&user).Error
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "User not found", "status": "failure"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(c, i18n.MsgNotFound), "status": "failure"})
 			return
 		}
 
@@ -73,7 +74,7 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 			deviceID := c.GetHeader("device_id")
 			if deviceID == "" || deviceID != user.DeviceID {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-					"server_message": "Device mismatch, please login again",
+					"server_message": i18n.Tc(c, i18n.MsgDeviceMismatch),
 					"status":         "failure",
 				})
 				return
@@ -95,7 +96,7 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		if !isValid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Account is not active or authorized", "status": "failure"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(c, i18n.MsgAccountNotActive), "status": "failure"})
 			return
 		}
 

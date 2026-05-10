@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"errors"
 	"net/http"
 	"suberes_golang/models"
@@ -45,20 +46,20 @@ func (c *PinController) PinCheck(ctx *gin.Context) {
 		Pin     string `json:"pin" binding:"required"`
 	}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure", "error": err.Error()})
 		return
 	}
 	userCtx, _ := ctx.Get("currentUser")
 	user := userCtx.(models.User)
 	if err := c.PinService.CheckPin(user.ID, body.PinType, body.Pin); err != nil {
 		if err.Error() == "old PIN is different" {
-			ctx.JSON(http.StatusForbidden, gin.H{"server_message": "old PIN is different", "status": "failure"})
+			ctx.JSON(http.StatusForbidden, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgOldPinDifferent), "status": "failure"})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"server_message": "pin check succeeded", "status": "success"})
+	ctx.JSON(http.StatusOK, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgPinCheckSuccess), "status": "success"})
 }
 
 // RequestChangePin POST /api/pins/customer/request_change_pin
@@ -68,7 +69,7 @@ func (c *PinController) RequestChangePin(ctx *gin.Context) {
 		Pin     string `json:"pin" binding:"required"`
 	}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure", "error": err.Error()})
 		return
 	}
 	userCtx, _ := ctx.Get("currentUser")
@@ -76,14 +77,14 @@ func (c *PinController) RequestChangePin(ctx *gin.Context) {
 	otpRecord, err := c.PinService.RequestChangePin(user.ID, body.PinType, body.Pin)
 	if err != nil {
 		if err.Error() == "old PIN is different" {
-			ctx.JSON(http.StatusForbidden, gin.H{"server_message": "old PIN is different", "status": "failure"})
+			ctx.JSON(http.StatusForbidden, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgOldPinDifferent), "status": "failure"})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "otp number sent",
+		"server_message": i18n.Tc(ctx, i18n.MsgOtpSent),
 		"otp_timeout":    ctx.GetString("OTP_TIMEOUT"),
 		"status":         "success",
 		"user_otp_id":    otpRecord.ID,
@@ -98,25 +99,25 @@ func (c *PinController) OtpValidate(ctx *gin.Context) {
 		OtpCode   string `json:"otp_code" binding:"required"`
 	}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure", "error": err.Error()})
 		return
 	}
 	userCtx, _ := ctx.Get("currentUser")
 	user := userCtx.(models.User)
 	if err := c.PinService.ValidateOtp(user.ID, body.PinType, body.UserOtpID, body.OtpCode); err != nil {
 		if err.Error() == "OTP Code is wrong" {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": "OTP Code is wrong", "status": "failure"})
+			ctx.JSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgOtpWrong), "status": "failure"})
 			return
 		}
 		if err.Error() == "invalid request" || errors.Is(err, gorm.ErrRecordNotFound) {
-			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "invalid request", "status": "failure"})
+			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgInvalidRequest), "status": "failure"})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "otp valid",
+		"server_message": i18n.Tc(ctx, i18n.MsgOtpValid),
 		"status":         "success",
 		"user_otp_id":    body.UserOtpID,
 	})
@@ -132,7 +133,7 @@ func (c *PinController) ConfigurePin(ctx *gin.Context) {
 		OtpCode   string `json:"otp_code"`
 	}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "bad request", "status": "failure", "error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgBadRequest), "status": "failure", "error": err.Error()})
 		return
 	}
 	userOtpID := 0
@@ -144,7 +145,7 @@ func (c *PinController) ConfigurePin(ctx *gin.Context) {
 	pinStatus, err := c.PinService.ConfigurePin(user.ID, body.PinType, body.ChangePin, body.Pin, userOtpID, body.OtpCode)
 	if err != nil {
 		if err.Error() == "invalid request" {
-			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "invalid request", "status": "failure"})
+			ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgInvalidRequest), "status": "failure"})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"server_message": err.Error(), "status": "failure"})

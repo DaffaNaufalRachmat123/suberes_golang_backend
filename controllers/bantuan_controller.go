@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"suberes_golang/helpers"
+	"suberes_golang/i18n"
 	"suberes_golang/services"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ func (c *BantuanController) IndexCustomer(ctx *gin.Context) {
 	bantuans, total, err := c.BantuanService.GetBantuans(page, limit, "customer")
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -48,7 +49,7 @@ func (c *BantuanController) IndexMitra(ctx *gin.Context) {
 	bantuans, total, err := c.BantuanService.GetBantuans(page, limit, "mitra")
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -70,7 +71,7 @@ func (c *BantuanController) IndexAdmin(ctx *gin.Context) {
 	bantuans, total, err := c.BantuanService.GetBantuansAdmin(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -84,7 +85,7 @@ func (c *BantuanController) GetByID(ctx *gin.Context) {
 	data, err := c.BantuanService.GetBantuanByID(uint(id))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -101,7 +102,7 @@ func (c *BantuanController) Create(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "bantuan created",
+		"server_message": i18n.Tc(ctx, i18n.MsgBantuanCreated),
 		"status":         "success",
 	})
 }
@@ -116,7 +117,7 @@ func (c *BantuanController) Update(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "bantuan updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgBantuanUpdated),
 		"status":         "success",
 	})
 }
@@ -131,7 +132,7 @@ func (c *BantuanController) Delete(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "bantuan removed",
+		"server_message": i18n.Tc(ctx, i18n.MsgBantuanRemoved),
 		"status":         "success",
 	})
 }

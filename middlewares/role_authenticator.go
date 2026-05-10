@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"net/http"
+
+	"suberes_golang/i18n"
 	"suberes_golang/models"
 
 	"github.com/gin-gonic/gin"
@@ -13,12 +15,11 @@ func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 		// Ambil user dari context (yang diset di AuthMiddleware)
 		userCtx, exists := c.Get("currentUser")
 		if !exists {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": "Unauthorized", "status": "failure"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"server_message": i18n.Tc(c, i18n.MsgUnauthorized), "status": "failure"})
 			return
 		}
 
 		user := userCtx.(models.User) // Type assertion ke struct User
-
 
 		isFound := false
 		for _, role := range allowedRoles {
@@ -30,7 +31,7 @@ func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 
 		if !isFound {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"server_message": "Unauthorized",
+				"server_message": i18n.Tc(c, i18n.MsgUnauthorized),
 				"status":         "failure",
 			})
 			return

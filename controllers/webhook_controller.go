@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -84,7 +85,7 @@ func (c *WebhookController) VAPaid(ctx *gin.Context) {
 func (c *WebhookController) Disbursement(ctx *gin.Context) {
 	var payload dtos.DisbursementCallbackPayload
 	if err := ctx.ShouldBindJSON(&payload); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": "invalid payload", "status": "failure"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"server_message": i18n.Tc(ctx, i18n.MsgInvalidPayload), "status": "failure"})
 		return
 	}
 	if err := c.WebhookService.HandleDisbursement(&payload); err != nil {

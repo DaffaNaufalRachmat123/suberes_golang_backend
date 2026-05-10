@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"strconv"
 	"suberes_golang/dtos"
@@ -88,7 +89,7 @@ func (c *ScheduleController) Create(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusCreated, gin.H{
-		"server_message": "schedule created",
+		"server_message": i18n.Tc(ctx, i18n.MsgScheduleCreated),
 		"status":         "success",
 		"data":           schedule,
 	})
@@ -111,7 +112,7 @@ func (c *ScheduleController) Update(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "schedule updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgScheduleUpdated),
 		"status":         "success",
 		"data":           schedule,
 	})
@@ -133,7 +134,7 @@ func (c *ScheduleController) Delete(ctx *gin.Context) {
 	if err != nil {
 		if err.Error() == "unauthorized" {
 			ctx.JSON(http.StatusUnauthorized, gin.H{
-				"server_message": "Password salah",
+				"server_message": i18n.Tc(ctx, i18n.MsgPasswordWrong),
 				"status":         "failure",
 			})
 			return
@@ -145,7 +146,7 @@ func (c *ScheduleController) Delete(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "schedule removed",
+		"server_message": i18n.Tc(ctx, i18n.MsgScheduleRemoved),
 		"status":         "success",
 	})
 }

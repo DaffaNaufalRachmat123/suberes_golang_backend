@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"suberes_golang/i18n"
 	"net/http"
 	"strconv"
 	"suberes_golang/dtos"
@@ -19,7 +20,7 @@ func (c *ServiceController) Index(ctx *gin.Context) {
 	parent_id, err := strconv.Atoi(ctx.Param("parent_id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "bad request",
+			"server_message": i18n.Tc(ctx, i18n.MsgBadRequest),
 			"status":         "failure",
 		})
 		return
@@ -36,7 +37,7 @@ func (c *ServiceController) Index(ctx *gin.Context) {
 	services, total, err := c.ServiceService.GetServices(parent_id, page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 	}
@@ -47,7 +48,7 @@ func (c *ServiceController) LayananServices(ctx *gin.Context) {
 	id, err := strconv.Atoi(ctx.Param("layanan_id"))
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"server_message": "bad request",
+			"server_message": i18n.Tc(ctx, i18n.MsgBadRequest),
 			"status":         "failure",
 		})
 		return
@@ -136,7 +137,7 @@ func (c *ServiceController) Create(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Service created",
+		"server_message": i18n.Tc(ctx, i18n.MsgServiceCreated),
 		"status":         "success",
 	})
 }
@@ -149,7 +150,7 @@ func (c *ServiceController) UpdateImage(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Service updated with image",
+		"server_message": i18n.Tc(ctx, i18n.MsgServiceUpdatedWithImage),
 		"status":         "success",
 	})
 }
@@ -163,7 +164,7 @@ func (c *ServiceController) Update(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Service updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgServiceUpdated),
 		"status":         "success",
 	})
 }
@@ -196,7 +197,7 @@ func (c *ServiceController) Delete(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "Service deleted",
+		"server_message": i18n.Tc(ctx, i18n.MsgServiceDeleted),
 		"status":         "success",
 	})
 }

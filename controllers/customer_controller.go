@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"suberes_golang/helpers"
+	"suberes_golang/i18n"
 	"suberes_golang/models"
 	"suberes_golang/services"
 
@@ -98,6 +99,7 @@ func (c *CustomerController) ChangePhoneMail(ctx *gin.Context) {
 		req.MailChange,
 		req.PhoneNumber,
 		req.Email,
+		i18n.GetLang(ctx),
 	)
 	if err != nil {
 		helpers.APIErrorResponse(ctx, err.Error(), status)
@@ -134,12 +136,12 @@ func (c *CustomerController) UserLogout(ctx *gin.Context) {
 	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"server_message": "Customer not found",
+			"server_message": i18n.Tc(ctx, i18n.MsgCustomerNotFound),
 			"status":         "failure",
 		})
 	}
 	user := userCtx.(models.User)
-	resp, status, err := c.CustomerService.Logout(user.ID)
+	resp, status, err := c.CustomerService.Logout(user.ID, i18n.GetLang(ctx))
 	if err != nil {
 		ctx.JSON(status, gin.H{
 			"server_message": err.Error(),
@@ -173,7 +175,7 @@ func (c *CustomerController) UpdateFirebaseToken(ctx *gin.Context) {
 	userCtx, exists := ctx.Get("currentUser")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"server_message": "Customer not found",
+			"server_message": i18n.Tc(ctx, i18n.MsgCustomerNotFound),
 			"status":         "failure",
 		})
 	}
@@ -184,7 +186,7 @@ func (c *CustomerController) UpdateFirebaseToken(ctx *gin.Context) {
 		return
 	}
 	resp, status, err := c.CustomerService.UpdateFirebaseTokenCustomer(
-		user.ID, req.FirebaseToken,
+		user.ID, req.FirebaseToken, i18n.GetLang(ctx),
 	)
 	if err != nil {
 		ctx.JSON(status, gin.H{
@@ -214,7 +216,7 @@ func (c *CustomerController) Register(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "register successfully",
+		"server_message": i18n.Tc(ctx, i18n.MsgRegisterSuccess),
 		"otp_timeout":    os.Getenv("OTP_TIMEOUT"),
 		"status":         "success",
 	})
@@ -251,7 +253,7 @@ func (c *CustomerController) LoginByEmail(ctx *gin.Context) {
 		if err.Error() == "CUSTOMER_ALREADY_LOGGED_IN" {
 			ctx.JSON(409, gin.H{
 				"failure_type":   err.Error(),
-				"server_message": "This account already logged in on other device",
+				"server_message": i18n.Tc(ctx, i18n.MsgAccountAlreadyLoggedIn),
 				"status":         "failure",
 			})
 			return
@@ -260,7 +262,7 @@ func (c *CustomerController) LoginByEmail(ctx *gin.Context) {
 		if err.Error() == "CUSTOMER_NOT_FOUND" {
 			ctx.JSON(404, gin.H{
 				"failure_type":   err.Error(),
-				"server_message": "Email tidak terdaftar",
+				"server_message": i18n.Tc(ctx, i18n.MsgEmailNotRegistered),
 				"status":         "failure",
 			})
 			return
@@ -271,7 +273,7 @@ func (c *CustomerController) LoginByEmail(ctx *gin.Context) {
 	}
 
 	ctx.JSON(200, gin.H{
-		"server_message": "otp number sent",
+		"server_message": i18n.Tc(ctx, i18n.MsgOtpSent),
 		"otp_timeout":    os.Getenv("OTP_TIMEOUT"),
 		"status":         "success",
 	})
@@ -293,6 +295,7 @@ func (c *CustomerController) UpdateUserProfile(ctx *gin.Context) {
 	resp, status, err := c.CustomerService.UpdateUserProfile(
 		userToken.ID,
 		req.CompleteName,
+		i18n.GetLang(ctx),
 	)
 	if err != nil {
 		helpers.APIErrorResponse(ctx, err.Error(), status)
@@ -315,6 +318,7 @@ func (c *CustomerController) OtpUpdatePhoneMail(ctx *gin.Context) {
 		req.OtpCode,
 		req.PhoneChange,
 		req.MailChange,
+		i18n.GetLang(ctx),
 	)
 	if err != nil {
 		ctx.JSON(status, gin.H{
@@ -340,6 +344,7 @@ func (c *CustomerController) OtpValidatorMail(ctx *gin.Context) {
 		req.DeviceName,
 		req.DeviceOS,
 		req.DeviceOSAndroid,
+		i18n.GetLang(ctx),
 	)
 
 	if err != nil {

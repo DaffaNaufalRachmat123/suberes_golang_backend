@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"os"
 
+	"suberes_golang/i18n"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,7 +19,10 @@ func XenditCallbackTokenMiddleware() gin.HandlerFunc {
 		}
 
 		if c.GetHeader("x-callback-token") != xenditCallbackToken {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid callback token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"server_message": i18n.Tc(c, i18n.MsgInvalidCallbackTok),
+				"status":         "failure",
+			})
 			return
 		}
 

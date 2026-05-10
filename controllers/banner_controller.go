@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"suberes_golang/helpers"
+	"suberes_golang/i18n"
 	"suberes_golang/services"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ func (c *BannerController) Index(ctx *gin.Context) {
 	banners, total, err := c.BannerService.GetBanners(page, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -39,7 +40,7 @@ func (c *BannerController) GetByID(ctx *gin.Context) {
 	data, err := c.BannerService.GetBannerByID(uint(id))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -50,7 +51,7 @@ func (c *BannerController) GetPopular(ctx *gin.Context) {
 	data, err := c.BannerService.GetPopularBanners()
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"server_message": "Internal server error",
+			"server_message": i18n.Tc(ctx, i18n.MsgInternalError),
 			"status":         "failure",
 		})
 		return
@@ -66,7 +67,7 @@ func (c *BannerController) Create(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "banner created",
+		"server_message": i18n.Tc(ctx, i18n.MsgBannerCreated),
 		"status":         "success",
 	})
 }
@@ -82,7 +83,7 @@ func (c *BannerController) Update(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "banner updated",
+		"server_message": i18n.Tc(ctx, i18n.MsgBannerUpdated),
 		"status":         "success",
 	})
 }
@@ -98,7 +99,7 @@ func (c *BannerController) Delete(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"server_message": "banner removed",
+		"server_message": i18n.Tc(ctx, i18n.MsgBannerRemoved),
 		"status":         "success",
 	})
 }
