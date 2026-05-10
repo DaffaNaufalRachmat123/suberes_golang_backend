@@ -82,19 +82,22 @@ type User struct {
 	PrivateKeyDisbursementPin   string     `gorm:"type:text" json:"-"`
 	PublicKeyDisbursementPin    string     `gorm:"type:text" json:"-"`
 	RejectionCount              int        `gorm:"type:integer;default:0" json:"rejection_count"`
-	SocketID                    string     `gorm:"type:text;default:''" json:"socket_id"`
-	BrowserName                 string     `gorm:"type:varchar(20);default:''" json:"browser_name"`
-	IsInCall                    string     `gorm:"type:varchar(1);default:'0';check:is_in_call IN ('0','1')" json:"is_in_call"`
-	NonactivateReason           string     `gorm:"type:text;default:''" json:"nonactivate_reason"`
-	ActivateReason              string     `gorm:"type:text;default:''" json:"activate_reason"`
-	RegisteredFromMobile        string     `gorm:"type:varchar(1);default:'0';check:registered_from_mobile IN ('0','1')" json:"registered_from_mobile"`
-	DeviceID                    string     `gorm:"type:varchar(36);default:''" json:"device_id"`
-	DeviceName                  string     `gorm:"type:varchar(255);default:''" json:"device_name"`
-	DeviceOS                    string     `gorm:"type:varchar(255);default:''" json:"device_os"`
-	DeviceOSAndroid             string     `gorm:"type:varchar(255);default:''" json:"device_os_android"`
-	AdvertisingID               string     `gorm:"type:varchar(20);default:''" json:"advertising_id"`
-	CreatedAt                   time.Time  `gorm:"type:timestamp;default:now()" json:"created_at"`
-	UpdatedAt                   time.Time  `gorm:"type:timestamp;default:now()" json:"updated_at"`
+	// Rata-rata skor respons mitra (skala 0–1) berdasarkan kecepatan mengambil orderan
+	// Diperbarui setiap kali mitra mengambil orderan (tunai, ewallet, VA)
+	ResponseMitraRate    float64   `gorm:"type:float;default:0" json:"response_mitra_rate"`
+	SocketID             string    `gorm:"type:text;default:''" json:"socket_id"`
+	BrowserName          string    `gorm:"type:varchar(20);default:''" json:"browser_name"`
+	IsInCall             string    `gorm:"type:varchar(1);default:'0';check:is_in_call IN ('0','1')" json:"is_in_call"`
+	NonactivateReason    string    `gorm:"type:text;default:''" json:"nonactivate_reason"`
+	ActivateReason       string    `gorm:"type:text;default:''" json:"activate_reason"`
+	RegisteredFromMobile string    `gorm:"type:varchar(1);default:'0';check:registered_from_mobile IN ('0','1')" json:"registered_from_mobile"`
+	DeviceID             string    `gorm:"type:varchar(36);default:''" json:"device_id"`
+	DeviceName           string    `gorm:"type:varchar(255);default:''" json:"device_name"`
+	DeviceOS             string    `gorm:"type:varchar(255);default:''" json:"device_os"`
+	DeviceOSAndroid      string    `gorm:"type:varchar(255);default:''" json:"device_os_android"`
+	AdvertisingID        string    `gorm:"type:varchar(20);default:''" json:"advertising_id"`
+	CreatedAt            time.Time `gorm:"type:timestamp;default:now()" json:"created_at"`
+	UpdatedAt            time.Time `gorm:"type:timestamp;default:now()" json:"updated_at"`
 
 	// Associations
 	UserOTP                   *UserOTP                 `gorm:"foreignKey:users_id;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"user_otp,omitempty"`

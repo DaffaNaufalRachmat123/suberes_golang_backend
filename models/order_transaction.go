@@ -118,8 +118,16 @@ type OrderTransaction struct {
 	OnProgressJobID                  string     `gorm:"type:varchar(36)" json:"on_progress_job_id"`
 	EwalletNotifyJobID               string     `gorm:"type:varchar(255)" json:"ewallet_notify_job_id"`
 	DirectionResponse                string     `gorm:"type:text" json:"direction_response"`
-	CreatedAt                        time.Time  `gorm:"type:timestamp;default:now()" json:"created_at"`
-	UpdatedAt                        time.Time  `gorm:"type:timestamp;default:now()" json:"updated_at"`
+	// Kandidat mitra yang sudah diskor dan diurutkan (JSON array of mitra IDs)
+	// Diisi saat queue pertama kali mencari mitra, dipakai untuk estafet sequential
+	CandidateMitraIDs   string `gorm:"type:text;default:''" json:"candidate_mitra_ids"`
+	CurrentCandidateIdx int    `gorm:"type:integer;default:0" json:"current_candidate_idx"`
+	// Waktu (detik) yang dibutuhkan mitra untuk mengambil orderan sejak notif dikirim
+	ResponseMitraTime *float64 `gorm:"type:float" json:"response_mitra_time"`
+	// Skor respons mitra untuk orderan ini (skala 0–1); dihitung dari ResponseMitraTime / timeout
+	ResponseMitraRate *float64  `gorm:"type:float" json:"response_mitra_rate"`
+	CreatedAt         time.Time `gorm:"type:timestamp;default:now()" json:"created_at"`
+	UpdatedAt         time.Time `gorm:"type:timestamp;default:now()" json:"updated_at"`
 
 	// Virtual computed field — populated by select expressions, never inserted/updated/migrated
 	CountDownCanTakeOrder *int64 `gorm:"column:count_down_can_take_order;-:migration;-:create;-:update" json:"count_down_can_take_order,omitempty"`

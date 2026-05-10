@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"strings"
@@ -617,6 +618,37 @@ func (s *OrderCashService) AcceptOrder(data dtos.AcceptOrderDTO) (int, map[strin
 
 	// Post-commit async: FCM, queue scheduling, Redis cleanup, admin socket
 	go func() {
+		// Hitung dan simpan response_mitra_time + response_mitra_rate
+		var searchTimeComplete time.Time
+		switch v := orderData["search_time_complete"].(type) {
+		case time.Time:
+			searchTimeComplete = v
+		case []byte:
+			searchTimeComplete, _ = time.Parse("2006-01-02 15:04:05", string(v))
+		case string:
+			searchTimeComplete, _ = time.Parse("2006-01-02 15:04:05", v)
+		}
+		if !searchTimeComplete.IsZero() {
+			const timeoutSeconds = 180.0
+			takenSecs := time.Since(searchTimeComplete).Seconds()
+			if takenSecs > timeoutSeconds {
+				takenSecs = timeoutSeconds
+			}
+			orderRate := math.Max(0, 1.0-takenSecs/timeoutSeconds)
+			N := float64(mitra.TotalOrder)
+			var newRate float64
+			if N == 0 {
+				newRate = orderRate
+			} else {
+				newRate = (mitra.ResponseMitraRate*N + orderRate) / (N + 1)
+			}
+			s.DB.Model(&models.OrderTransaction{}).Where("id = ?", data.OrderID).Updates(map[string]interface{}{
+				"response_mitra_time": takenSecs,
+				"response_mitra_rate": orderRate,
+			})
+			s.DB.Model(&models.User{}).Where("id = ?", data.MitraID).Update("response_mitra_rate", newRate)
+		}
+
 		// Notify other mitras (LOST_BROADCAST)
 		if len(playerMitraIDArray) >= 1 {
 			var filteredIDs []string

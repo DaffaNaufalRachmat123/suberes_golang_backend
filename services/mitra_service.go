@@ -14,6 +14,7 @@ import (
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
 	"suberes_golang/models"
+	"suberes_golang/queue"
 	"suberes_golang/realtime"
 	"suberes_golang/repositories"
 	"suberes_golang/service"
@@ -178,6 +179,7 @@ func (s *MitraService) Login(loginDTO dtos.MitraLoginDTO) (*dtos.UserLoginRespon
 			"device_name":       loginDTO.DeviceName,
 			"device_os":         loginDTO.DeviceOS,
 			"device_os_android": loginDTO.DeviceOSAndroid,
+			"is_logged_in":      "1",
 		}).Error; err != nil {
 			tx.Rollback()
 			return nil, err
@@ -705,6 +707,7 @@ func (s *MitraService) Logout(mitraID string) error {
 
 	mitra.FirebaseToken = nil
 	mitra.IsActive = "no"
+	mitra.IsLoggedIn = "0"
 	mitra.IsAutoBid = "no"
 
 	if err := s.MitraRepository.UpdateMitra(tx, mitra); err != nil {
@@ -1637,8 +1640,8 @@ func (s *MitraService) OtpValidatorChangePhoneNumber(dto dtos.OtpValidatorChange
 
 // UpdateRejectionOrderCount handles a mitra rejecting an order offer.
 // It deletes the mitra's offer entry and increments the rejection count on the
-// mitra assigned to the order. If the order status is WAITING_FOR_SELECTED_MITRA,
-// all online admins are notified via socket.
+// mitra who rejected (mitraID parameter). After commit, advances the estafet
+// queue to the next mitra candidate.
 func (s *MitraService) UpdateRejectionOrderCount(orderID, mitraID string) (int, error) {
 	orderData, err := s.OrderTransactionRepository.FindByIDWithStatuses(
 		orderID,
@@ -1664,7 +1667,7 @@ func (s *MitraService) UpdateRejectionOrderCount(orderID, mitraID string) (int, 
 		return 500, tx.Error
 	}
 
-	// Delete order offer for this mitra + temp_id combination
+	// Hapus offer untuk mitra yang menolak
 	if err := s.OrderOfferRepository.DeleteByWhere(tx, map[string]interface{}{
 		"temp_id":  orderData.TempID,
 		"mitra_id": mitraID,
@@ -1673,12 +1676,10 @@ func (s *MitraService) UpdateRejectionOrderCount(orderID, mitraID string) (int, 
 		return 500, err
 	}
 
-	// Increment rejection_count on the mitra who was assigned to the order
-	if orderData.MitraID != nil && *orderData.MitraID != "" {
-		if err := s.MitraRepository.IncrementRejectionCount(tx, *orderData.MitraID); err != nil {
-			tx.Rollback()
-			return 500, err
-		}
+	// Increment rejection_count pada mitra yang menolak (bukan orderData.MitraID)
+	if err := s.MitraRepository.IncrementRejectionCount(tx, mitraID); err != nil {
+		tx.Rollback()
+		return 500, err
 	}
 
 	if err := tx.Commit().Error; err != nil {
@@ -1698,6 +1699,12 @@ func (s *MitraService) UpdateRejectionOrderCount(orderID, mitraID string) (int, 
 				"mitra_name":        mitraData.CompleteName,
 			})
 		}
+	}
+
+	// Estafet: pindah ke kandidat mitra berikutnya (hanya saat FINDING_MITRA)
+	if orderData.OrderStatus == "FINDING_MITRA" {
+		currentIdx := orderData.CurrentCandidateIdx
+		queue.AdvanceToNextMitraCandidate(orderID, currentIdx)
 	}
 
 	return 200, nil

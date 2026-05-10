@@ -56,7 +56,7 @@ func (s *OrderOfferService) GetIncomingOrder(orderID, mitraID string) (*models.O
 	timeoutMinutesStr := os.Getenv("TIMEOUT_CAN_TAKE_ORDER")
 	timeoutMinutes, _ := strconv.Atoi(timeoutMinutesStr)
 	if timeoutMinutes == 0 {
-		timeoutMinutes = 5
+		timeoutMinutes = 3
 	}
 
 	// Build the raw countdown expression (PostgreSQL syntax)
