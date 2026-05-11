@@ -22,7 +22,7 @@ volumes:
 services:
   # ── PostgreSQL ───────────────────────────────────────────────────────────
   postgres:
-    image: postgis/postgis:16-alpine
+    image: postgis/postgis:16-3.4-alpine
     container_name: suberes_postgres_stag
     restart: unless-stopped
 
