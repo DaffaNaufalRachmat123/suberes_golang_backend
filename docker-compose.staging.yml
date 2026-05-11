@@ -15,11 +15,52 @@ networks:
 
 volumes:
   redis_data_stag:
+  redis_data_stag:
+  certbot_www_stag:
+  certbot_conf_stag:
 
 services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: suberes_postgres_stag
+    restart: unless-stopped
+
+    networks:
+      - internal
+
+    environment:
+      POSTGRES_DB: ${STAG_DATABASE}
+      POSTGRES_USER: ${STAG_USERNAME}
+      POSTGRES_PASSWORD: ${STAG_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+
+    volumes:
+      - postgres_data_stag:/var/lib/postgresql/data
+      - ./deploy/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STAG_USERNAME} -d ${STAG_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ── Application ─────────────────────────────────────────────────────────────
   app:
-    image: ${DOCKER_IMAGE:-suberes_app}:${IMAGE_TAG:-staging}
+    image: ghcr.io/daffanaufalrachmat123/suberes-api:${IMAGE_TAG:-staging}
     container_name: suberes_app_stag
     restart: unless-stopped
     networks:

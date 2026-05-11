@@ -99,7 +99,7 @@ services:
 
   # ── Application ─────────────────────────────────────────────────────────────
   app:
-    image: ${DOCKER_IMAGE:-ghcr.io/your-org/suberes-api}:${IMAGE_TAG:-latest}
+    image: ${DOCKER_IMAGE:-ghcr.io/daffanaufalrachmat123/suberes-api}:${IMAGE_TAG:-latest}
     container_name: suberes_app
     restart: unless-stopped
     networks:
