@@ -114,41 +114,33 @@ else
   echo "[provision] Skip production env sync: .env.production not found"
 fi
 
-# -----------------------------------------------------------------------------
-# Bootstrap staging DB
-# -----------------------------------------------------------------------------
-STAG_ENV_FILE="${APP_ROOT}/.env.staging"
-if [[ -f "${STAG_ENV_FILE}" ]]; then
-  # Load staging vars into a subshell so they don't pollute the outer scope
-  STAG_DATABASE_VAL="$(set -a; source "${STAG_ENV_FILE}"; set +a; echo "${STAG_DATABASE:-}")"
-  STAG_USERNAME_VAL="$(set -a; source "${STAG_ENV_FILE}"; set +a; echo "${STAG_USERNAME:-}")"
-  STAG_PASSWORD_VAL="$(set -a; source "${STAG_ENV_FILE}"; set +a; echo "${STAG_PASSWORD:-}")"
+if [[ "${DEPLOY_ENV}" == "staging" ]]; then
+  STAG_ENV_FILE="${APP_ROOT}/.env.staging"
+  if [[ -f "${STAG_ENV_FILE}" ]]; then
+    set -a; source "${STAG_ENV_FILE}"; set +a
 
-  if [[ -n "${STAG_DATABASE_VAL}" && -n "${STAG_USERNAME_VAL}" && -n "${STAG_PASSWORD_VAL}" ]]; then
-    bootstrap_db "suberes_postgres_stag" "${STAG_USERNAME_VAL}" "${STAG_PASSWORD_VAL}" "${STAG_DATABASE_VAL}"
+    if [[ -n "${STAG_DATABASE:-}" && -n "${STAG_USERNAME:-}" && -n "${STAG_PASSWORD:-}" ]]; then
+      bootstrap_db "suberes_postgres_stag" "${STAG_USERNAME}" "${STAG_PASSWORD}" "${STAG_DATABASE}"
+    else
+      echo "[provision] Skip staging DB bootstrap: STAG_DATABASE/STAG_USERNAME/STAG_PASSWORD incomplete"
+    fi
   else
-    echo "[provision] Skip staging DB bootstrap: STAG_DATABASE/STAG_USERNAME/STAG_PASSWORD incomplete"
+    echo "[provision] Skip staging DB bootstrap: ${STAG_ENV_FILE} not found"
   fi
-else
-  echo "[provision] Skip staging DB bootstrap: ${STAG_ENV_FILE} not found"
-fi
 
-# -----------------------------------------------------------------------------
-# Bootstrap production DB
-# -----------------------------------------------------------------------------
-PROD_ENV_FILE="${APP_ROOT}/.env.production"
-if [[ -f "${PROD_ENV_FILE}" ]]; then
-  PROD_DATABASE_VAL="$(set -a; source "${PROD_ENV_FILE}"; set +a; echo "${PROD_DATABASE:-}")"
-  PROD_USERNAME_VAL="$(set -a; source "${PROD_ENV_FILE}"; set +a; echo "${PROD_USERNAME:-}")"
-  PROD_PASSWORD_VAL="$(set -a; source "${PROD_ENV_FILE}"; set +a; echo "${PROD_PASSWORD:-}")"
+elif [[ "${DEPLOY_ENV}" == "production" ]]; then
+  PROD_ENV_FILE="${APP_ROOT}/.env.production"
+  if [[ -f "${PROD_ENV_FILE}" ]]; then
+    set -a; source "${PROD_ENV_FILE}"; set +a
 
-  if [[ -n "${PROD_DATABASE_VAL}" && -n "${PROD_USERNAME_VAL}" && -n "${PROD_PASSWORD_VAL}" ]]; then
-    bootstrap_db "suberes_postgres" "${PROD_USERNAME_VAL}" "${PROD_PASSWORD_VAL}" "${PROD_DATABASE_VAL}"
+    if [[ -n "${PROD_DATABASE:-}" && -n "${PROD_USERNAME:-}" && -n "${PROD_PASSWORD:-}" ]]; then
+      bootstrap_db "suberes_postgres" "${PROD_USERNAME}" "${PROD_PASSWORD}" "${PROD_DATABASE}"
+    else
+      echo "[provision] Skip production DB bootstrap: PROD_DATABASE/PROD_USERNAME/PROD_PASSWORD incomplete"
+    fi
   else
-    echo "[provision] Skip production DB bootstrap: PROD_DATABASE/PROD_USERNAME/PROD_PASSWORD incomplete"
+    echo "[provision] Skip production DB bootstrap: ${PROD_ENV_FILE} not found"
   fi
-else
-  echo "[provision] Skip production DB bootstrap: ${PROD_ENV_FILE} not found"
 fi
 
 # SSL domain depends on DEPLOY_ENV (used below)
