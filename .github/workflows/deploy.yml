@@ -150,7 +150,7 @@ jobs:
         run: |
           if [ -n "$SENTRY_AUTH_TOKEN" ]; then
             npx @sentry/cli releases new "${{ github.sha }}" --org suberes --project suberes-backend
-            npx @sentry/cli releases set-commits "${{ github.sha }}" --auto --org suberes --project suberes-backend
+            npx @sentry/cli releases set-commits "${{ github.sha }}" --auto --org suberes --project suberes-backend --ignore-missing
             npx @sentry/cli releases finalize "${{ github.sha }}" --org suberes --project suberes-backend
             npx @sentry/cli releases deploys "${{ github.sha }}" new -e production --org suberes --project suberes-backend
           else
@@ -167,7 +167,7 @@ jobs:
         run: |
           if [ -n "$SENTRY_AUTH_TOKEN" ]; then
             npx @sentry/cli releases new "${{ github.sha }}" --org suberes --project suberes-backend
-            npx @sentry/cli releases set-commits "${{ github.sha }}" --auto --org suberes --project suberes-backend
+            npx @sentry/cli releases set-commits "${{ github.sha }}" --auto --org suberes --project suberes-backend --ignore-missing
             npx @sentry/cli releases finalize "${{ github.sha }}" --org suberes --project suberes-backend
             npx @sentry/cli releases deploys "${{ github.sha }}" new -e staging --org suberes --project suberes-backend
           else
