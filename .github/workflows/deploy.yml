@@ -128,7 +128,7 @@ jobs:
 
       # ── Sentry release: production ──────────────────────────────────────
       - name: Create Sentry release (production)
-        if: github.ref == 'refs/heads/main' && secrets.SENTRY_PROD_TOKEN != ''
+        if: github.ref == 'refs/heads/main' && env.SENTRY_AUTH_TOKEN != ''
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_PROD_TOKEN }}
         run: |
@@ -139,7 +139,7 @@ jobs:
 
       # ── Sentry release: staging ─────────────────────────────────────────
       - name: Create Sentry release (staging)
-        if: github.ref == 'refs/heads/staging' && secrets.SENTRY_STAGING_TOKEN != ''
+        if: github.ref == 'refs/heads/staging' && env.SENTRY_AUTH_TOKEN != ''
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_STAGING_TOKEN }}
         run: |
