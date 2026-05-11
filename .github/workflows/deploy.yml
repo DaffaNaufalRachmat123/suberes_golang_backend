@@ -149,10 +149,10 @@ jobs:
 
         run: |
           if [ -n "$SENTRY_AUTH_TOKEN" ]; then
-            npx @sentry/cli releases new "${{ github.sha }}"
-            npx @sentry/cli releases set-commits "${{ github.sha }}" --auto
-            npx @sentry/cli releases finalize "${{ github.sha }}"
-            npx @sentry/cli releases deploys "${{ github.sha }}" new -e production
+            npx @sentry/cli releases new "${{ github.sha }}" --org suberes
+            npx @sentry/cli releases set-commits "${{ github.sha }}" --auto --org suberes
+            npx @sentry/cli releases finalize "${{ github.sha }}" --org suberes
+            npx @sentry/cli releases deploys "${{ github.sha }}" new -e production --org suberes
           else
             echo "SENTRY_PROD_TOKEN is empty, skipping..."
           fi
@@ -166,10 +166,10 @@ jobs:
 
         run: |
           if [ -n "$SENTRY_AUTH_TOKEN" ]; then
-            npx @sentry/cli releases new "${{ github.sha }}"
-            npx @sentry/cli releases set-commits "${{ github.sha }}" --auto
-            npx @sentry/cli releases finalize "${{ github.sha }}"
-            npx @sentry/cli releases deploys "${{ github.sha }}" new -e staging
+            npx @sentry/cli releases new "${{ github.sha }}" --org suberes
+            npx @sentry/cli releases set-commits "${{ github.sha }}" --auto --org suberes
+            npx @sentry/cli releases finalize "${{ github.sha }}" --org suberes
+            npx @sentry/cli releases deploys "${{ github.sha }}" new -e staging --org suberes
           else
             echo "SENTRY_STAGING_TOKEN is empty, skipping..."
           fi
