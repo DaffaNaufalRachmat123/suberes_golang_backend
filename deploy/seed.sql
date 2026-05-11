@@ -12,7 +12,7 @@
 -- 0. Seed users
 -- ════════════════════════════════════════════════════════════════════════════
 
-INSERT INTO users (id, complete_name, email, password, country_code, phone_number, user_type)
+INSERT INTO users (id, complete_name, email, password, country_code, phone_number, user_type, color_code_level)
 VALUES (
   '013a8111-0671-46a2-bd79-5ba869dbe07f',
   'naufal daffa',
@@ -20,7 +20,8 @@ VALUES (
   '$2a$10$Xg7hHRyA8Rw.Vdx2YunBOOLmVLcH9hsCMf4wec7be3B7W/n96xOS6',
   '+62',
   '+6285712356777',
-  'superadmin'
+  'superadmin',
+  '#808080'
 )
 ON CONFLICT (id) DO NOTHING;
 
