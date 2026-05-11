@@ -14,7 +14,7 @@ networks:
     driver: bridge
 
 volumes:
-  redis_data_stag:
+  postgres_data_stag:
   redis_data_stag:
   certbot_www_stag:
   certbot_conf_stag:
