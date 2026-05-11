@@ -19,6 +19,59 @@ DEPLOY_ENV="${DEPLOY_ENV:-production}"
 COMPOSE_FILE="${COMPOSE_FILE:-/opt/suberes/docker-compose.production.yml}"
 APP_ROOT="$(cd "$(dirname "$COMPOSE_FILE")" && pwd)"
 
+# -----------------------------------------------------------------------------
+# Prepare isolated env directories
+# -----------------------------------------------------------------------------
+
+STAGING_DIR="/opt/suberes/staging"
+PRODUCTION_DIR="/opt/suberes/production"
+
+# Create staging dir if missing
+if [[ ! -d "$STAGING_DIR" ]]; then
+  mkdir -p "$STAGING_DIR"
+
+  chown deployer:deployer "$STAGING_DIR" || true
+  chmod 755 "$STAGING_DIR"
+fi
+
+# Create production dir if missing
+if [[ ! -d "$PRODUCTION_DIR" ]]; then
+  sudo mkdir -p "$PRODUCTION_DIR"
+
+  sudo chown root:root "$PRODUCTION_DIR"
+  sudo chmod 700 "$PRODUCTION_DIR"
+fi
+
+# -----------------------------------------------------------------------------
+# Sync staging env
+# -----------------------------------------------------------------------------
+
+if [[ -f "${APP_ROOT}/.env.staging" ]]; then
+  cp "${APP_ROOT}/.env.staging" "${STAGING_DIR}/.env"
+
+  chown deployer:deployer "${STAGING_DIR}/.env" || true
+  chmod 640 "${STAGING_DIR}/.env"
+
+  echo "[provision] Synced staging env"
+else
+  echo "[provision] Skip staging env sync: .env.staging not found"
+fi
+
+# -----------------------------------------------------------------------------
+# Sync production env
+# -----------------------------------------------------------------------------
+
+if [[ -f "${APP_ROOT}/.env.production" ]]; then
+  sudo cp "${APP_ROOT}/.env.production" "${PRODUCTION_DIR}/.env"
+
+  sudo chown root:root "${PRODUCTION_DIR}/.env"
+  sudo chmod 600 "${PRODUCTION_DIR}/.env"
+
+  echo "[provision] Synced production env"
+else
+  echo "[provision] Skip production env sync: .env.production not found"
+fi
+
 if [[ "$DEPLOY_ENV" == "staging" ]]; then
   ENV_FILE="${APP_ROOT}/.env.staging"
   DB_HOST_DEFAULT_VAR="STAG_HOST"

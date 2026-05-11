@@ -105,7 +105,7 @@ services:
     networks:
       - internal
     env_file:
-      - .env.production
+      - /opt/suberes/production/.env
     environment:
       APP_ENV:    prod
       REDIS_HOST: redis
