@@ -42,16 +42,23 @@ OLD_CONTAINER=$(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps -q "
 echo "==> [deploy] Restarting ${SERVICE} with new image"
 IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-deps "$SERVICE"
 
+# Derive container name from compose file
+case "$COMPOSE_FILE" in
+  *staging*) APP_CONTAINER="suberes_app_stag" ;;
+  *)         APP_CONTAINER="suberes_app" ;;
+esac
+
 echo "==> [deploy] Waiting for health check..."
 HEALTHY=0
 for i in $(seq 1 "$HEALTH_RETRIES"); do
     sleep "$HEALTH_WAIT"
-    if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "${APP_CONTAINER}" 2>/dev/null || echo "unknown")
+    if [[ "$STATUS" == "healthy" ]]; then
         HEALTHY=1
         echo "==> [deploy] Health check passed after $((i * HEALTH_WAIT))s"
         break
     fi
-    echo "==> [deploy] Attempt $i/${HEALTH_RETRIES} — not healthy yet"
+    echo "==> [deploy] Attempt $i/${HEALTH_RETRIES} — status: ${STATUS}"
 done
 
 if [ "$HEALTHY" -ne 1 ]; then
