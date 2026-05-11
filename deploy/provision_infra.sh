@@ -61,6 +61,13 @@ DEPLOY_ENV="${DEPLOY_ENV:-production}"
 COMPOSE_FILE="${COMPOSE_FILE:-/opt/suberes/docker-compose.production.yml}"
 APP_ROOT="$(cd "$(dirname "$COMPOSE_FILE")" && pwd)"
 
+# Derive the env file for docker compose --env-file (must match DEPLOY_ENV)
+if [[ "${DEPLOY_ENV}" == "staging" ]]; then
+  COMPOSE_ENV_FILE="${APP_ROOT}/.env.staging"
+else
+  COMPOSE_ENV_FILE="${APP_ROOT}/.env.production"
+fi
+
 # -----------------------------------------------------------------------------
 # Prepare isolated env directories
 # -----------------------------------------------------------------------------
@@ -114,6 +121,34 @@ else
   echo "[provision] Skip production env sync: .env.production not found"
 fi
 
+# -----------------------------------------------------------------------------
+# Start postgres so DB bootstrap can connect via docker exec
+# -----------------------------------------------------------------------------
+if [[ -f "${COMPOSE_ENV_FILE}" ]]; then
+  echo "[provision] Starting postgres for ${DEPLOY_ENV}..."
+  docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" up -d postgres
+
+  echo "[provision] Waiting for postgres to become healthy (max 60s)..."
+  POSTGRES_HEALTHY=0
+  for i in $(seq 1 12); do
+    sleep 5
+    if docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" exec -T postgres \
+        pg_isready -U postgres > /dev/null 2>&1; then
+      POSTGRES_HEALTHY=1
+      echo "[provision] Postgres is ready"
+      break
+    fi
+    echo "[provision] Waiting for postgres... attempt ${i}/12"
+  done
+
+  if [[ "${POSTGRES_HEALTHY}" -ne 1 ]]; then
+    echo "[provision] ERROR: postgres did not become healthy in time, aborting"
+    exit 1
+  fi
+else
+  echo "[provision] Skip postgres startup: ${COMPOSE_ENV_FILE} not found"
+fi
+
 if [[ "${DEPLOY_ENV}" == "staging" ]]; then
   STAG_ENV_FILE="${APP_ROOT}/.env.staging"
   if [[ -f "${STAG_ENV_FILE}" ]]; then
@@ -159,15 +194,16 @@ fi
 
 echo "[provision] Ensuring SSL certificate for ${SSL_PRIMARY_DOMAIN} and ${SSL_ALT_DOMAIN}"
 
-docker compose -f "$COMPOSE_FILE" up -d nginx
+docker compose --env-file "${COMPOSE_ENV_FILE}" -f "$COMPOSE_FILE" up -d nginx
 
-docker compose -f "$COMPOSE_FILE" run --rm certbot \
+docker compose --env-file "${COMPOSE_ENV_FILE}" -f "$COMPOSE_FILE" run --rm certbot \
   certonly --webroot -w /var/www/certbot \
   -d "$SSL_PRIMARY_DOMAIN" \
   -d "$SSL_ALT_DOMAIN" \
   --email "$SSL_EMAIL" \
   --agree-tos --no-eff-email --keep-until-expiring
 
-docker compose -f "$COMPOSE_FILE" exec -T nginx nginx -s reload || docker compose -f "$COMPOSE_FILE" restart nginx
+docker compose --env-file "${COMPOSE_ENV_FILE}" -f "$COMPOSE_FILE" exec -T nginx nginx -s reload \
+  || docker compose --env-file "${COMPOSE_ENV_FILE}" -f "$COMPOSE_FILE" restart nginx
 
 echo "[provision] SSL bootstrap completed for ${DEPLOY_ENV}"

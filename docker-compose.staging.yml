@@ -68,11 +68,15 @@ services:
     env_file:
       - /opt/suberes/staging/.env
     environment:
-      APP_ENV:  stag
-      APP_PORT: "8081"
+      APP_ENV:   stag
+      APP_PORT:  "8081"
+      STAG_HOST: postgres
+      STAG_PORT: "5432"
     expose:
       - "8081"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
