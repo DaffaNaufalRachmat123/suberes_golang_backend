@@ -33,27 +33,10 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 2. Fix column types to float (skip if already numeric)
+-- 2. (no-op) Column types are managed by GORM AutoMigrate.
+--    latitude/longitude are varchar(255) by design (model stores string).
+--    Do NOT alter type here — GORM would revert it on the next deploy.
 -- ════════════════════════════════════════════════════════════════════════════
-
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'users' AND column_name = 'longitude'
-      AND data_type IN ('character varying', 'text', 'character')
-  ) THEN
-    ALTER TABLE users ALTER COLUMN longitude TYPE float USING longitude::float;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'users' AND column_name = 'latitude'
-      AND data_type IN ('character varying', 'text', 'character')
-  ) THEN
-    ALTER TABLE users ALTER COLUMN latitude TYPE float USING latitude::float;
-  END IF;
-END $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 3. geom generated column
@@ -86,6 +69,7 @@ BEGIN
       GENERATED ALWAYS AS (
         CASE
           WHEN longitude IS NOT NULL AND latitude IS NOT NULL
+            AND longitude <> '' AND latitude <> ''
             THEN ST_SetSRID(ST_MakePoint(longitude::float, latitude::float), 4326)::geography
         END
       ) STORED;
