@@ -134,8 +134,24 @@ if [[ -f "${COMPOSE_ENV_FILE}" ]]; then
 
   if [[ "${DEPLOY_ENV}" == "staging" ]]; then
     _PG_USER="${STAG_USERNAME:-postgres}"
+    _PG_CONTAINER="suberes_postgres_stag"
+    _PG_VOLUME="suberes_staging_postgres_data_stag"
   else
     _PG_USER="${PROD_USERNAME:-postgres}"
+    _PG_CONTAINER="suberes_postgres"
+    _PG_VOLUME="suberes_production_postgres_data"
+  fi
+
+  # If the running container is NOT using the postgis image, recreate it.
+  # This handles migration from postgres:16-alpine → postgis/postgis:16-alpine.
+  CURRENT_IMAGE=$(docker inspect --format='{{.Config.Image}}' "${_PG_CONTAINER}" 2>/dev/null || echo "")
+  if [[ -n "${CURRENT_IMAGE}" && "${CURRENT_IMAGE}" != postgis/postgis* ]]; then
+    echo "[provision] Detected non-PostGIS postgres image ('${CURRENT_IMAGE}'). Recreating container with postgis/postgis image..."
+    docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" stop postgres || true
+    docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" rm -f postgres || true
+    # Drop the old volume so initdb (which installs extensions) runs fresh
+    docker volume rm "${_PG_VOLUME}" 2>/dev/null || true
+    echo "[provision] Old postgres volume removed — data will be re-provisioned"
   fi
 
   echo "[provision] Starting postgres for ${DEPLOY_ENV}..."
@@ -146,8 +162,7 @@ if [[ -f "${COMPOSE_ENV_FILE}" ]]; then
   for i in $(seq 1 12); do
     sleep 5
     if docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" exec -T postgres \
-        pg_isready -U "${_PG_USER}" > /dev/null 2>&1; then
-      POSTGRES_HEALTHY=1
+        pg_isready -U "${_PG_USER}" > /dev/null 2>&1; then      POSTGRES_HEALTHY=1
       echo "[provision] Postgres is ready"
       break
     fi
