@@ -107,11 +107,12 @@ services:
     env_file:
       - /opt/suberes/production/.env
     environment:
-      APP_ENV:    prod
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      PROD_HOST:  postgres
-      PROD_PORT:  "5432"
+      APP_ENV:      prod
+      REDIS_HOST:   redis
+      REDIS_PORT:   "6379"
+      PROD_HOST:    postgres
+      PROD_PORT:    "5432"
+      PROD_SSLMODE: disable
     expose:
       - "8080"   # visible only on `internal` network
     depends_on:
