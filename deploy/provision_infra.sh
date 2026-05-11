@@ -24,9 +24,12 @@ bootstrap_db() {
 
   echo "[provision] Checking role '${db_user}' and database '${db_name}' in '${container}'"
 
-  # Connect as db_user — when POSTGRES_USER is set, that user IS the superuser
-  # (Docker does not create a separate 'postgres' superuser in this case)
-  docker exec -i "${container}" psql -U "${db_user}" -v ON_ERROR_STOP=1 <<SQL
+  # Connect as db_user to the 'postgres' maintenance database.
+  # When POSTGRES_USER is a custom value, that user IS the superuser —
+  # Docker does not create a separate 'postgres' role.
+  # We must specify -d postgres explicitly; otherwise psql defaults to a
+  # database named after the user (which doesn't exist yet).
+  docker exec -i "${container}" psql -U "${db_user}" -d postgres -v ON_ERROR_STOP=1 <<SQL
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${db_user}') THEN

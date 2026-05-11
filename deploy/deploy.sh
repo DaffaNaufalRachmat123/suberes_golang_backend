@@ -66,4 +66,40 @@ fi
 echo "==> [deploy] Removing dangling images"
 docker image prune -f
 
+# ── Run seed after app is healthy ────────────────────────────────────────────
+# Tables are created by GORM AutoMigrate on first startup, so seed must run
+# AFTER the app is confirmed healthy (not during provision).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SEED_FILE="${SCRIPT_DIR}/seed.sql"
+
+if [[ -f "${SEED_FILE}" ]]; then
+  # Derive container name and db vars from env file
+  set -a; source "$ENV_FILE"; set +a
+
+  case "$COMPOSE_FILE" in
+    *staging*)
+      PG_CONTAINER="suberes_postgres_stag"
+      PG_USER="${STAG_USERNAME:-}"
+      PG_DB="${STAG_DATABASE:-}"
+      ;;
+    *)
+      PG_CONTAINER="suberes_postgres"
+      PG_USER="${PROD_USERNAME:-}"
+      PG_DB="${PROD_DATABASE:-}"
+      ;;
+  esac
+
+  if [[ -n "${PG_USER}" && -n "${PG_DB}" ]] && \
+     docker ps --format '{{.Names}}' | grep -qx "${PG_CONTAINER}"; then
+    echo "==> [deploy] Running seed on '${PG_DB}' in '${PG_CONTAINER}'"
+    docker exec -i "${PG_CONTAINER}" \
+      psql -U "${PG_USER}" -d "${PG_DB}" -v ON_ERROR_STOP=1 < "${SEED_FILE}"
+    echo "==> [deploy] Seed completed"
+  else
+    echo "==> [deploy] Skip seed: postgres container not running or vars missing"
+  fi
+else
+  echo "==> [deploy] Skip seed: ${SEED_FILE} not found"
+fi
+
 echo "==> [deploy] Done. Deployment successful."

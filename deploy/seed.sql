@@ -1,62 +1,114 @@
 -- deploy/seed.sql
 -- ─────────────────────────────────────────────────────────────────────────────
--- Run this AFTER the application performs GORM AutoMigrate (i.e. after the app
--- has started at least once and created all tables).
+-- Run AFTER the application performs GORM AutoMigrate (i.e. after the app has
+-- started at least once and created all tables).
 --
 -- Idempotent: safe to run multiple times.
 --
--- Via Makefile:
---   make db-seed ENV=production
--- Manually:
---   docker exec -i suberes_postgres psql -U suberes_app -d suberes < deploy/seed.sql
+-- Executed automatically by deploy.sh after health check passes.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 1. PostGIS geography column on `users` table
+-- 0. Seed users
 -- ════════════════════════════════════════════════════════════════════════════
 
--- Add the geom column if it does not already exist
-ALTER TABLE users ADD COLUMN IF NOT EXISTS geom geography(Point, 4326);
+INSERT INTO users (id, complete_name, email, password, country_code, phone_number, user_type)
+VALUES (
+  '013a8111-0671-46a2-bd79-5ba869dbe07f',
+  'naufal daffa',
+  'naufalrachmat91@gmail.com',
+  '$2a$10$Xg7hHRyA8Rw.Vdx2YunBOOLmVLcH9hsCMf4wec7be3B7W/n96xOS6',
+  '+62',
+  '+6285712356777',
+  'superadmin'
+)
+ON CONFLICT (id) DO NOTHING;
 
--- Spatial index for fast radius / nearest-neighbour queries
+-- ════════════════════════════════════════════════════════════════════════════
+-- 1. PostGIS extension
+-- ════════════════════════════════════════════════════════════════════════════
+
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 2. Fix column types to float (skip if already numeric)
+-- ════════════════════════════════════════════════════════════════════════════
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'longitude'
+      AND data_type IN ('character varying', 'text', 'character')
+  ) THEN
+    ALTER TABLE users ALTER COLUMN longitude TYPE float USING longitude::float;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'latitude'
+      AND data_type IN ('character varying', 'text', 'character')
+  ) THEN
+    ALTER TABLE users ALTER COLUMN latitude TYPE float USING latitude::float;
+  END IF;
+END $$;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 3. geom generated column
+--    Drop old non-generated column first (if any), then add as STORED generated.
+--    CASE guard prevents error when longitude/latitude are NULL.
+-- ════════════════════════════════════════════════════════════════════════════
+
+DO $$
+BEGIN
+  -- Drop old manually-managed geom column (attgenerated = '' means not generated)
+  IF EXISTS (
+    SELECT 1 FROM pg_attribute a
+    JOIN pg_class c ON c.oid = a.attrelid
+    WHERE c.relname = 'users' AND a.attname = 'geom'
+      AND a.attnum > 0 AND NOT a.attisdropped
+      AND a.attgenerated <> 's'
+  ) THEN
+    ALTER TABLE users DROP COLUMN geom;
+  END IF;
+
+  -- Add as STORED generated column if it doesn't exist yet
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_attribute a
+    JOIN pg_class c ON c.oid = a.attrelid
+    WHERE c.relname = 'users' AND a.attname = 'geom'
+      AND a.attnum > 0 AND NOT a.attisdropped
+  ) THEN
+    ALTER TABLE users
+      ADD COLUMN geom geography(Point, 4326)
+      GENERATED ALWAYS AS (
+        CASE
+          WHEN longitude IS NOT NULL AND latitude IS NOT NULL
+            THEN ST_SetSRID(ST_MakePoint(longitude::float, latitude::float), 4326)::geography
+        END
+      ) STORED;
+  END IF;
+END $$;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 4. Spatial index
+-- ════════════════════════════════════════════════════════════════════════════
+
 CREATE INDEX IF NOT EXISTS idx_users_geom ON users USING GIST(geom);
 
--- Back-fill geom for existing rows that already have valid lat/lon strings
-UPDATE users
-SET    geom = ST_SetSRID(
-                 ST_MakePoint(longitude::double precision, latitude::double precision),
-                 4326
-               )::geography
-WHERE  latitude  <> ''
-  AND  longitude <> ''
-  AND  latitude  IS NOT NULL
-  AND  longitude IS NOT NULL
-  AND  geom      IS NULL;
+-- ════════════════════════════════════════════════════════════════════════════
+-- 5. Partial composite index for active mitra search
+-- ════════════════════════════════════════════════════════════════════════════
 
--- Trigger: keep geom in sync automatically whenever lat/lon are written
-CREATE OR REPLACE FUNCTION sync_user_geom()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.latitude  IS NOT NULL AND NEW.latitude  <> ''
-     AND NEW.longitude IS NOT NULL AND NEW.longitude <> '' THEN
-    BEGIN
-      NEW.geom := ST_SetSRID(
-                    ST_MakePoint(NEW.longitude::double precision, NEW.latitude::double precision),
-                    4326
-                  )::geography;
-    EXCEPTION WHEN others THEN
-      -- Silently ignore malformed lat/lon values; geom stays NULL
-      NEW.geom := NULL;
-    END;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+CREATE INDEX IF NOT EXISTS idx_users_mitra_active
+  ON users(user_gender, is_auto_bid, account_balance)
+  WHERE user_type = 'mitra'
+    AND is_logged_in = '1'
+    AND is_active = 'yes'
+    AND is_busy = 'no'
+    AND is_suspended = '0';
 
-DROP TRIGGER IF EXISTS trg_sync_user_geom ON users;
-CREATE TRIGGER trg_sync_user_geom
-  BEFORE INSERT OR UPDATE OF latitude, longitude ON users
-  FOR EACH ROW EXECUTE FUNCTION sync_user_geom();
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 2. Seed: bank_lists
