@@ -24,8 +24,9 @@ bootstrap_db() {
 
   echo "[provision] Checking role '${db_user}' and database '${db_name}' in '${container}'"
 
-  # Connect to postgres maintenance DB as superuser
-  docker exec -i "${container}" psql -U postgres -v ON_ERROR_STOP=1 <<SQL
+  # Connect as db_user — when POSTGRES_USER is set, that user IS the superuser
+  # (Docker does not create a separate 'postgres' superuser in this case)
+  docker exec -i "${container}" psql -U "${db_user}" -v ON_ERROR_STOP=1 <<SQL
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${db_user}') THEN
@@ -46,7 +47,7 @@ GRANT ALL PRIVILEGES ON DATABASE "${db_name}" TO "${db_user}";
 SQL
 
   # Grant schema-level privileges inside the target database
-  docker exec -i "${container}" psql -U postgres -d "${db_name}" -v ON_ERROR_STOP=1 <<SQL
+  docker exec -i "${container}" psql -U "${db_user}" -d "${db_name}" -v ON_ERROR_STOP=1 <<SQL
 GRANT ALL ON SCHEMA public TO "${db_user}";
 GRANT ALL PRIVILEGES ON ALL TABLES    IN SCHEMA public TO "${db_user}";
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "${db_user}";
@@ -125,6 +126,15 @@ fi
 # Start postgres so DB bootstrap can connect via docker exec
 # -----------------------------------------------------------------------------
 if [[ -f "${COMPOSE_ENV_FILE}" ]]; then
+  # Source env file early so STAG_*/PROD_* vars are available for pg_isready -U
+  set -a; source "${COMPOSE_ENV_FILE}"; set +a
+
+  if [[ "${DEPLOY_ENV}" == "staging" ]]; then
+    _PG_USER="${STAG_USERNAME:-postgres}"
+  else
+    _PG_USER="${PROD_USERNAME:-postgres}"
+  fi
+
   echo "[provision] Starting postgres for ${DEPLOY_ENV}..."
   docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" up -d postgres
 
@@ -133,7 +143,7 @@ if [[ -f "${COMPOSE_ENV_FILE}" ]]; then
   for i in $(seq 1 12); do
     sleep 5
     if docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" exec -T postgres \
-        pg_isready -U postgres > /dev/null 2>&1; then
+        pg_isready -U "${_PG_USER}" > /dev/null 2>&1; then
       POSTGRES_HEALTHY=1
       echo "[provision] Postgres is ready"
       break
@@ -149,32 +159,18 @@ else
   echo "[provision] Skip postgres startup: ${COMPOSE_ENV_FILE} not found"
 fi
 
+# Env vars already sourced above from COMPOSE_ENV_FILE
 if [[ "${DEPLOY_ENV}" == "staging" ]]; then
-  STAG_ENV_FILE="${APP_ROOT}/.env.staging"
-  if [[ -f "${STAG_ENV_FILE}" ]]; then
-    set -a; source "${STAG_ENV_FILE}"; set +a
-
-    if [[ -n "${STAG_DATABASE:-}" && -n "${STAG_USERNAME:-}" && -n "${STAG_PASSWORD:-}" ]]; then
-      bootstrap_db "suberes_postgres_stag" "${STAG_USERNAME}" "${STAG_PASSWORD}" "${STAG_DATABASE}"
-    else
-      echo "[provision] Skip staging DB bootstrap: STAG_DATABASE/STAG_USERNAME/STAG_PASSWORD incomplete"
-    fi
+  if [[ -n "${STAG_DATABASE:-}" && -n "${STAG_USERNAME:-}" && -n "${STAG_PASSWORD:-}" ]]; then
+    bootstrap_db "suberes_postgres_stag" "${STAG_USERNAME}" "${STAG_PASSWORD}" "${STAG_DATABASE}"
   else
-    echo "[provision] Skip staging DB bootstrap: ${STAG_ENV_FILE} not found"
+    echo "[provision] Skip staging DB bootstrap: STAG_DATABASE/STAG_USERNAME/STAG_PASSWORD incomplete"
   fi
-
 elif [[ "${DEPLOY_ENV}" == "production" ]]; then
-  PROD_ENV_FILE="${APP_ROOT}/.env.production"
-  if [[ -f "${PROD_ENV_FILE}" ]]; then
-    set -a; source "${PROD_ENV_FILE}"; set +a
-
-    if [[ -n "${PROD_DATABASE:-}" && -n "${PROD_USERNAME:-}" && -n "${PROD_PASSWORD:-}" ]]; then
-      bootstrap_db "suberes_postgres" "${PROD_USERNAME}" "${PROD_PASSWORD}" "${PROD_DATABASE}"
-    else
-      echo "[provision] Skip production DB bootstrap: PROD_DATABASE/PROD_USERNAME/PROD_PASSWORD incomplete"
-    fi
+  if [[ -n "${PROD_DATABASE:-}" && -n "${PROD_USERNAME:-}" && -n "${PROD_PASSWORD:-}" ]]; then
+    bootstrap_db "suberes_postgres" "${PROD_USERNAME}" "${PROD_PASSWORD}" "${PROD_DATABASE}"
   else
-    echo "[provision] Skip production DB bootstrap: ${PROD_ENV_FILE} not found"
+    echo "[provision] Skip production DB bootstrap: PROD_DATABASE/PROD_USERNAME/PROD_PASSWORD incomplete"
   fi
 fi
 
