@@ -36,9 +36,21 @@ func InitFirebase() {
 	ctx := context.Background()
 	credDir := firebaseCredDir()
 
-	customerOpt := option.WithCredentialsFile(credDir + "/suberes-8b773-firebase-adminsdk-ci9gh-86aa7134d7.json")
-	mitraOpt := option.WithCredentialsFile(credDir + "/suberes-mitra-firebase-adminsdk-vml8u-0977b1d80d.json")
-	adminOpt := option.WithCredentialsFile(credDir + "/suberes-dashboard-firebase-adminsdk-ns1j6-5218ef4faa.json")
+	var customerFile, mitraFile, adminFile string
+
+	if strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))) == "prod" {
+		customerFile = credDir + "/suberes-prod-firebase-adminsdk-fbsvc-fd7a322244.json"
+		mitraFile = credDir + "/suberes-mitra-prod-firebase-adminsdk-fbsvc-425edc434f.json"
+		adminFile = credDir + "/suberes-dashboard-prod-firebase-adminsdk-fbsvc-fcd783ba9d.json"
+	} else {
+		customerFile = credDir + "/suberes-8b773-firebase-adminsdk-ci9gh-1db69d4c51.json"
+		mitraFile = credDir + "/suberes-mitra-firebase-adminsdk-vml8u-072f804693.json"
+		adminFile = credDir + "/suberes-dashboard-firebase-adminsdk-ns1j6-5218ef4faa.json"
+	}
+
+	customerOpt := option.WithCredentialsFile(customerFile)
+	mitraOpt := option.WithCredentialsFile(mitraFile)
+	adminOpt := option.WithCredentialsFile(adminFile)
 
 	var err error
 

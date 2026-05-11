@@ -61,7 +61,68 @@ SQL
   echo "[provision] DB bootstrap done for '${db_name}' in '${container}'"
 }
 
-DEPLOY_ENV="${DEPLOY_ENV:-production}"
+# -----------------------------------------------------------------------------
+# pre_migrate_db <container_name> <db_user> <db_name>
+#   Prepares existing varchar latitude/longitude columns for GORM AutoMigrate's
+#   ALTER TYPE to double precision.
+#
+#   GORM will generate:
+#     ALTER TABLE users ALTER COLUMN latitude TYPE double precision USING latitude::double precision
+#   This fails if the column has DEFAULT '' or rows containing ''.
+#
+#   This function (idempotent):
+#     1. Drops the '' default from latitude/longitude (if column is still varchar)
+#     2. Replaces '' values with NULL so the USING clause succeeds
+# -----------------------------------------------------------------------------
+pre_migrate_db() {
+  local container="$1"
+  local db_user="$2"
+  local db_name="$3"
+
+  if ! docker ps --format '{{.Names}}' | grep -qx "${container}"; then
+    echo "[provision] Skip pre-migrate for '${container}': container not running"
+    return 0
+  fi
+
+  echo "[provision] Running pre-migrate on '${db_name}' in '${container}'..."
+
+  docker exec -i "${container}" psql -U "${db_user}" -d "${db_name}" -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+BEGIN
+  -- Only act when the column is still varchar (before GORM migrates it to double precision).
+  -- Running this on an already-migrated DB is a safe no-op.
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'latitude'
+      AND data_type IN ('character varying', 'text', 'character')
+  ) THEN
+    -- Drop the default '' so PostgreSQL can ALTER TYPE without the "default cannot be cast" error
+    ALTER TABLE users ALTER COLUMN latitude DROP DEFAULT;
+    -- Replace '' with NULL; '' cannot be cast to double precision
+    UPDATE users SET latitude = NULL WHERE latitude = '';
+
+    -- Drop geom generated column (it depends on latitude/longitude, blocks ALTER TYPE)
+    ALTER TABLE users DROP COLUMN IF EXISTS geom;
+
+    RAISE NOTICE 'pre_migrate: latitude default dropped, empty strings set to NULL, geom dropped';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'longitude'
+      AND data_type IN ('character varying', 'text', 'character')
+  ) THEN
+    ALTER TABLE users ALTER COLUMN longitude DROP DEFAULT;
+    UPDATE users SET longitude = NULL WHERE longitude = '';
+    RAISE NOTICE 'pre_migrate: longitude default dropped and empty strings set to NULL';
+  END IF;
+END $$;
+SQL
+
+  echo "[provision] Pre-migrate done for '${db_name}' in '${container}'"
+}
+
+
 COMPOSE_FILE="${COMPOSE_FILE:-/opt/suberes/docker-compose.production.yml}"
 APP_ROOT="$(cd "$(dirname "$COMPOSE_FILE")" && pwd)"
 
@@ -181,12 +242,14 @@ fi
 if [[ "${DEPLOY_ENV}" == "staging" ]]; then
   if [[ -n "${STAG_DATABASE:-}" && -n "${STAG_USERNAME:-}" && -n "${STAG_PASSWORD:-}" ]]; then
     bootstrap_db "suberes_postgres_stag" "${STAG_USERNAME}" "${STAG_PASSWORD}" "${STAG_DATABASE}"
+    pre_migrate_db "suberes_postgres_stag" "${STAG_USERNAME}" "${STAG_DATABASE}"
   else
     echo "[provision] Skip staging DB bootstrap: STAG_DATABASE/STAG_USERNAME/STAG_PASSWORD incomplete"
   fi
 elif [[ "${DEPLOY_ENV}" == "production" ]]; then
   if [[ -n "${PROD_DATABASE:-}" && -n "${PROD_USERNAME:-}" && -n "${PROD_PASSWORD:-}" ]]; then
     bootstrap_db "suberes_postgres" "${PROD_USERNAME}" "${PROD_PASSWORD}" "${PROD_DATABASE}"
+    pre_migrate_db "suberes_postgres" "${PROD_USERNAME}" "${PROD_DATABASE}"
   else
     echo "[provision] Skip production DB bootstrap: PROD_DATABASE/PROD_USERNAME/PROD_PASSWORD incomplete"
   fi

@@ -403,8 +403,8 @@ type SelectedMitraResult struct {
 	ID            string  `json:"id"`
 	CompleteName  string  `json:"complete_name"`
 	UserGender    string  `json:"user_gender"`
-	Latitude      string  `json:"latitude"`
-	Longitude     string  `json:"longitude"`
+	Latitude      float64 `json:"latitude"`
+	Longitude     float64 `json:"longitude"`
 	FirebaseToken *string `json:"firebase_token"`
 	UserStatus    string  `json:"user_status"`
 	IsBusy        string  `json:"is_busy"`

@@ -69,8 +69,8 @@ BEGIN
       GENERATED ALWAYS AS (
         CASE
           WHEN longitude IS NOT NULL AND latitude IS NOT NULL
-            AND longitude <> '' AND latitude <> ''
-            THEN ST_SetSRID(ST_MakePoint(longitude::float, latitude::float), 4326)::geography
+            AND longitude <> 0 AND latitude <> 0
+            THEN ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography
         END
       ) STORED;
   END IF;
