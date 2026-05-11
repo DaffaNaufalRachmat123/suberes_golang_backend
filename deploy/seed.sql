@@ -130,13 +130,13 @@ WHERE NOT EXISTS (
 -- ════════════════════════════════════════════════════════════════════════════
 
 INSERT INTO payments (icon, is_active, title, type, "desc")
-SELECT v.icon, v.is_active, v.title, v.type, v.desc
+SELECT v.icon, v.is_active, v.title, v.type, v."desc"
 FROM (VALUES
   ('/payments/ic_card.png',   '1', 'Virtual Account', 'virtual account', 'Gampang bayarnya'),
   ('/payments/ic_cash.png',   '1', 'Tunai',           'tunai',           'Uang pas ya'),
   ('/payments/ic_cash_2.png', '0', 'Saldo',           'balance',         'Saldo terpotong'),
   ('/payments/wallet.png',    '1', 'E-Wallet',        'ewallet',         'Pakai DANA, OVO, dll')
-) AS v(icon, is_active, title, type, desc)
+) AS v(icon, is_active, title, type, "desc")
 WHERE NOT EXISTS (
   SELECT 1 FROM payments p WHERE p.type = v.type
 );
@@ -150,12 +150,12 @@ WHERE NOT EXISTS (
 
 -- Virtual Account sub-payments
 INSERT INTO sub_payments (payment_id, icon, title, title_payment, enabled, "desc")
-SELECT p.id, v.icon, v.title, v.title_payment, v.enabled, v.desc
+SELECT p.id, v.icon, v.title, v.title_payment, v.enabled, v."desc"
 FROM payments p,
 (VALUES
   ('/payments/SUB_PAY_IMG_2026-05-09_09-54-37_icon_bca.png',     'BCA Virtual Account',     'BCA',     '1', 'BCA VA'),
   ('/payments/SUB_PAY_IMG_2026-05-09_09-48-52_icon_mandiri.png', 'Mandiri Virtual Account', 'MANDIRI', '1', 'Mandiri VA')
-) AS v(icon, title, title_payment, enabled, desc)
+) AS v(icon, title, title_payment, enabled, "desc")
 WHERE p.type = 'virtual account'
   AND NOT EXISTS (
     SELECT 1 FROM sub_payments sp WHERE sp.title_payment = v.title_payment
