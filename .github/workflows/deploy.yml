@@ -119,6 +119,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          passphrase: ${{ secrets.VPS_SSH_PASSPHRASE }}
           port: ${{ secrets.VPS_SSH_PORT }}
 
           envs: IMAGE_TAG,REGISTRY,IMAGE_NAME,DEPLOY_ENV,SSL_EMAIL,STAG_ADMIN_USERNAME,STAG_ADMIN_PASSWORD,PROD_ADMIN_USERNAME,PROD_ADMIN_PASSWORD
