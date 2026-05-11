@@ -62,5 +62,5 @@ func ValidatePasswordStrengthOrError(password string) error {
 	if result.Valid {
 		return nil
 	}
-	return fmt.Errorf(result.Errors[0])
+	return fmt.Errorf("%s", result.Errors[0])
 }

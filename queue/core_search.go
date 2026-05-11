@@ -91,7 +91,7 @@ type nearestMitraQueryParams struct {
 // Queue handler mengirim offer hanya ke kandidat teratas; jika ditolak/timeout 3 menit,
 // order diestafetkan ke kandidat berikutnya.
 func GetNearestMitraProduction(params GetNearestMitraProductionParams) (*MitraResult, error) {
-	log.Printf("[CORE_SEARCH] params | order_type=%s gender=%s lat=%.6f lon=%.6f is_cash=%v is_with_time=%v gross=%d",
+	log.Printf("[CORE_SEARCH] params | order_type=%s gender=%s lat=%.6f lon=%.6f is_cash=%v is_with_time=%v gross=%.2f",
 		params.OrderType, params.UserGender, params.Latitude, params.Longitude,
 		params.IsCash, params.IsWithTime, params.GrossAmountCompany)
 
