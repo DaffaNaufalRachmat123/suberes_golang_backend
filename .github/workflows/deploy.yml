@@ -21,29 +21,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Debug dulu supaya keliatan struktur file di runner
       - name: Debug repository structure
         run: |
           pwd
           ls -la
           echo "----"
-          ls -la suberes_golang || true
-          echo "----"
-          cat suberes_golang/go.mod || true
+          cat go.mod || true
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          # lebih aman hardcode dibanding go-version-file
           go-version: '1.25'
-          cache-dependency-path: suberes_golang/go.sum
+          cache-dependency-path: go.sum
 
       - name: Download dependencies
-        working-directory: suberes_golang
         run: go mod download
 
       - name: Run tests
-        working-directory: suberes_golang
         run: go test ./... -race -coverprofile=coverage.out
 
   # ── 2. Build & Push Docker Image ──────────────────────────────────────────
@@ -83,7 +77,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./suberes_golang
+          context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
