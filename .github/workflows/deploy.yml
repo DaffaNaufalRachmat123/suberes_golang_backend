@@ -1,0 +1,149 @@
+# .github/workflows/deploy.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# CI/CD pipeline: build → push image → deploy to VPS via SSH
+#
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#   VPS_HOST              — IP / hostname VPS (e.g. 103.163.139.69)
+#   VPS_USER              — SSH user: deployer
+#   VPS_SSH_PORT          — SSH port: 22
+#   VPS_SSH_KEY           — Private SSH key (isi file ~/.ssh/suberes_deploy)
+#   GHCR_TOKEN            — GitHub PAT dengan scope packages:write
+#   SENTRY_STAGING_TOKEN  — (opsional) Sentry auth token untuk environment staging
+#   SENTRY_PROD_TOKEN     — (opsional) Sentry auth token untuk environment production
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - main        # production deployment
+      - staging     # staging deployment
+
+env:
+  REGISTRY:    ghcr.io
+  IMAGE_NAME:  ${{ github.repository_owner }}/suberes-api
+
+jobs:
+  # ── 1. Test ──────────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: suberes_golang/go.mod
+          cache-dependency-path: suberes_golang/go.sum
+
+      - name: Run tests
+        working-directory: suberes_golang
+        run: go test ./... -race -coverprofile=coverage.out
+
+  # ── 2. Build & push Docker image ─────────────────────────────────────────────
+  build:
+    name: Build Image
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker meta (tags & labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./suberes_golang
+          push: true
+          tags:   ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to:   type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+  # ── 3. Deploy to VPS ─────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEPLOY_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+          SSL_EMAIL: ${{ secrets.SSL_EMAIL }}
+          STAG_ADMIN_USERNAME: ${{ secrets.STAG_ADMIN_USERNAME }}
+          STAG_ADMIN_PASSWORD: ${{ secrets.STAG_ADMIN_PASSWORD }}
+          PROD_ADMIN_USERNAME: ${{ secrets.PROD_ADMIN_USERNAME }}
+          PROD_ADMIN_PASSWORD: ${{ secrets.PROD_ADMIN_PASSWORD }}
+        with:
+          host:     ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key:      ${{ secrets.VPS_SSH_KEY }}
+          port:     ${{ secrets.VPS_SSH_PORT }}
+          envs:     IMAGE_TAG,REGISTRY,IMAGE_NAME,DEPLOY_ENV,SSL_EMAIL,STAG_ADMIN_USERNAME,STAG_ADMIN_PASSWORD,PROD_ADMIN_USERNAME,PROD_ADMIN_PASSWORD
+          script: |
+            set -euo pipefail
+            cd /opt/suberes
+
+            echo "${{ secrets.GHCR_TOKEN }}" | \
+              docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            DEPLOY_ENV="${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}" \
+            COMPOSE_FILE=/opt/suberes/docker-compose.${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}.yml \
+            bash deploy/provision_infra.sh
+
+            IMAGE_TAG="${{ needs.build.outputs.image_tag }}" \
+            COMPOSE_FILE=/opt/suberes/docker-compose.${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}.yml \
+            bash deploy/deploy.sh
+
+      # ── Sentry release: production ──────────────────────────────────────
+      - name: Create Sentry release (production)
+        if: github.ref == 'refs/heads/main' && secrets.SENTRY_PROD_TOKEN != ''
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_PROD_TOKEN }}
+        run: |
+          npx @sentry/cli releases new "${{ github.sha }}"
+          npx @sentry/cli releases set-commits "${{ github.sha }}" --auto
+          npx @sentry/cli releases finalize "${{ github.sha }}"
+          npx @sentry/cli releases deploys "${{ github.sha }}" new -e production
+
+      # ── Sentry release: staging ─────────────────────────────────────────
+      - name: Create Sentry release (staging)
+        if: github.ref == 'refs/heads/staging' && secrets.SENTRY_STAGING_TOKEN != ''
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_STAGING_TOKEN }}
+        run: |
+          npx @sentry/cli releases new "${{ github.sha }}"
+          npx @sentry/cli releases set-commits "${{ github.sha }}" --auto
+          npx @sentry/cli releases finalize "${{ github.sha }}"
+          npx @sentry/cli releases deploys "${{ github.sha }}" new -e staging

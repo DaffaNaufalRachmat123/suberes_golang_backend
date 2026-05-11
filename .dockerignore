@@ -1,0 +1,53 @@
+# ── Go build artifacts ──────────────────────────────────────────────────────
+suberes_app
+*.exe
+*.test
+*.out
+
+# ── Git ──────────────────────────────────────────────────────────────────────
+.git
+.gitignore
+
+# ── Environment files — NEVER bake secrets into the image ───────────────────
+.env
+.env.*
+*.env
+
+# ── Local development config ─────────────────────────────────────────────────
+docker-compose.yml
+docker-compose.*.yml
+
+# ── Documentation & scripts ──────────────────────────────────────────────────
+README.md
+*.md
+deploy/
+.github/
+
+# ── IDE / OS artefacts ───────────────────────────────────────────────────────
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Test files ────────────────────────────────────────────────────────────────
+*_test.go
+testdata/
+
+# ── Log & runtime files ───────────────────────────────────────────────────────
+logs/
+*.log
+dump.rdb
+
+# ── Backup & migrations (handled separately) ──────────────────────────────────
+backup/
+migrations/
+
+# ── Credential files — injected at runtime, never in image ────────────────────
+credential_files/
+credential_files_prod/
+
+# ── Temporary / database dump ─────────────────────────────────────────────────
+*.sql
+*.rdb
+Screenshot*

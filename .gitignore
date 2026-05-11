@@ -1,2 +1,3 @@
 credential_files/
+credential_files_prod/
 .env

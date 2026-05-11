@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +13,9 @@ import (
 	"suberes_golang/controllers"
 	"suberes_golang/database"
 	"suberes_golang/helpers"
+	"suberes_golang/internal/appenv"
+	"suberes_golang/internal/sentryutil"
+	"suberes_golang/logger"
 	middleware "suberes_golang/middlewares"
 	"suberes_golang/queue"
 	"suberes_golang/realtime"
@@ -27,25 +29,48 @@ import (
 )
 
 func main() {
+	// 1. Load .env file (no-op in production where vars are injected by Docker/systemd)
 	godotenv.Load()
+
+	// 2. Validate required env vars — panic early with a clear message if any are missing
+	appenv.Validate()
+
+	// 3. Structured logger (zerolog) — must be before any log.* call
+	logger.Init()
+
+	// 4. Sentry error tracking
+	sentryutil.Init()
+
 	config.ConnectDB()
 	config.InitFirebase()
 	database.AutoMigrate()
 
 	realtime.InitSocket()
 
-	r := gin.Default()
+	// Use gin.New() instead of gin.Default() so we control Recovery & Logger middleware
+	r := gin.New()
 
 	r.SetTrustedProxies(nil)
+
+	// ── Core middleware stack (order matters) ─────────────────────────────────
+	r.Use(middleware.RecoveryMiddleware())           // panic → 500 + sentry report
+	r.Use(middleware.RequestIDMiddleware())          // inject X-Request-ID
+	r.Use(middleware.LoggerMiddleware())             // structured HTTP access log
+	r.Use(middleware.TimeoutMiddleware(30 * time.Second)) // context deadline
+	r.Use(middleware.SecurityHeadersMiddleware())   // OWASP security headers
+	r.Use(middleware.RequestSizeLimiter(2 << 20))   // 2 MB request size cap
+
+	// ── Probe endpoints (no auth, no rate-limit) ──────────────────────────────
+	healthCtrl := &controllers.HealthController{}
+	r.GET("/health", healthCtrl.Health)
+	r.GET("/live", healthCtrl.Liveness)
+	r.GET("/ready", healthCtrl.Readiness)
 
 	// Serve static files for images (banners, etc)
 	r.Static("/api/images", "./images")
 
 	r.GET("/socket.io/*any", gin.WrapH(realtime.Server))
 	r.POST("/socket.io/*any", gin.WrapH(realtime.Server))
-
-	r.Use(middleware.SecurityHeadersMiddleware())
-	r.Use(middleware.RequestSizeLimiter(2 << 20)) // 2MB default limit
 
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS") // comma-separated: "https://dashboard.suberes.com,https://app.suberes.com"
 	var origins []string
@@ -394,13 +419,18 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:    ":" + port,
-		Handler: r,
+		Addr:         ":" + port,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
+
+	logger.Logger.Info().Str("port", port).Msg("server starting")
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			logger.Logger.Fatal().Err(err).Msg("server listen failed")
 		}
 	}()
 
@@ -408,13 +438,17 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	logger.Logger.Info().Msg("shutdown signal received — draining connections")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	queue.StopWorker()
+	sentryutil.Flush() // flush pending sentry events before exit
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		logger.Logger.Fatal().Err(err).Msg("graceful shutdown failed")
 	}
 
+	logger.Logger.Info().Msg("server exited cleanly")
 }
