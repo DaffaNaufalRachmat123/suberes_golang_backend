@@ -256,6 +256,4 @@ elif [[ "${DEPLOY_ENV}" == "production" ]]; then
 fi
 
 echo ""
-echo "[provision] ✓ SSL bootstrap completed for ${DEPLOY_ENV}"
-echo "[provision] ✓ ${SSL_PRIMARY_DOMAIN} is now served over HTTPS"
-echo "[provision] ✓ ${SSL_ALT_DOMAIN} is now served over HTTPS"
+echo "[provision] ✓ DB and environment provisioning completed for ${DEPLOY_ENV}"
