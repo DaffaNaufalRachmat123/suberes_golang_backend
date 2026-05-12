@@ -229,6 +229,7 @@ if [[ -f "${COMPOSE_ENV_FILE}" ]]; then
 else
   echo "[provision] Skip postgres startup: ${COMPOSE_ENV_FILE} not found"
 fi
+#
 
 # Env vars already sourced above from COMPOSE_ENV_FILE
 if [[ "${DEPLOY_ENV}" == "staging" ]]; then
