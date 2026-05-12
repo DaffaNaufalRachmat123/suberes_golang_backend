@@ -140,21 +140,16 @@ fi
 STAGING_DIR="/opt/suberes/staging"
 PRODUCTION_DIR="/opt/suberes/production"
 
-# Create staging dir if missing
-if [[ ! -d "$STAGING_DIR" ]]; then
-  mkdir -p "$STAGING_DIR"
+# Ensure staging dir exists with correct permissions (idempotent)
+mkdir -p "$STAGING_DIR"
+chown deployer:deployer "$STAGING_DIR" || true
+chmod 755 "$STAGING_DIR"
 
-  chown deployer:deployer "$STAGING_DIR" || true
-  chmod 755 "$STAGING_DIR"
-fi
-
-# Create production dir if missing
-if [[ ! -d "$PRODUCTION_DIR" ]]; then
-  mkdir -p "$PRODUCTION_DIR"
-
-  chown deployer:deployer "$PRODUCTION_DIR" || true
-  chmod 750 "$PRODUCTION_DIR"
-fi
+# Ensure production dir exists with correct permissions (idempotent)
+# Always run — not just on first create — so existing root:root 700 dirs are fixed.
+sudo mkdir -p "$PRODUCTION_DIR"
+sudo chown deployer:deployer "$PRODUCTION_DIR"
+sudo chmod 750 "$PRODUCTION_DIR"
 
 # -----------------------------------------------------------------------------
 # Sync staging env
@@ -175,10 +170,9 @@ fi
 # Sync production env
 # -----------------------------------------------------------------------------
 if [[ -f "${APP_ROOT}/.env.production" ]]; then
-  cp "${APP_ROOT}/.env.production" "${PRODUCTION_DIR}/.env"
-
-  chown deployer:deployer "${PRODUCTION_DIR}/.env" || true
-  chmod 640 "${PRODUCTION_DIR}/.env"
+  sudo cp "${APP_ROOT}/.env.production" "${PRODUCTION_DIR}/.env"
+  sudo chown deployer:deployer "${PRODUCTION_DIR}/.env"
+  sudo chmod 640 "${PRODUCTION_DIR}/.env"
 
   echo "[provision] Synced production env"
 else
