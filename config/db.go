@@ -31,7 +31,14 @@ func BuildDSN() string {
 	port := os.Getenv(prefix + "PORT")
 
 	if port == "" {
-		port = "5432"
+		switch env {
+		case "PROD":
+			port = "5411"
+		case "STAG":
+			port = "5432"
+		default:
+			port = "5432"
+		}
 	}
 
 	sslmode := os.Getenv(prefix + "SSLMODE")
