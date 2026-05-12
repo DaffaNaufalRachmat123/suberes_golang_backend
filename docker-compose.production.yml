@@ -151,8 +151,8 @@ services:
       - public
       - internal
     ports:
-      - "80:80"
-      - "443:443"
+      - "8800:80"
+      - "8443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /opt/suberes/nginx/conf.d/suberes.prod.conf:/etc/nginx/conf.d/suberes.conf:ro
