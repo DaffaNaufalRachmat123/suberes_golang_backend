@@ -150,10 +150,10 @@ fi
 
 # Create production dir if missing
 if [[ ! -d "$PRODUCTION_DIR" ]]; then
-  sudo mkdir -p "$PRODUCTION_DIR"
+  mkdir -p "$PRODUCTION_DIR"
 
-  sudo chown root:root "$PRODUCTION_DIR"
-  sudo chmod 700 "$PRODUCTION_DIR"
+  chown deployer:deployer "$PRODUCTION_DIR" || true
+  chmod 750 "$PRODUCTION_DIR"
 fi
 
 # -----------------------------------------------------------------------------
@@ -175,10 +175,10 @@ fi
 # Sync production env
 # -----------------------------------------------------------------------------
 if [[ -f "${APP_ROOT}/.env.production" ]]; then
-  sudo cp "${APP_ROOT}/.env.production" "${PRODUCTION_DIR}/.env"
+  cp "${APP_ROOT}/.env.production" "${PRODUCTION_DIR}/.env"
 
-  sudo chown root:root "${PRODUCTION_DIR}/.env"
-  sudo chmod 600 "${PRODUCTION_DIR}/.env"
+  chown deployer:deployer "${PRODUCTION_DIR}/.env" || true
+  chmod 640 "${PRODUCTION_DIR}/.env"
 
   echo "[provision] Synced production env"
 else
