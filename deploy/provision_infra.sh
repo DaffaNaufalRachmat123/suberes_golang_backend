@@ -218,20 +218,22 @@ if [[ -f "${COMPOSE_ENV_FILE}" ]]; then
   echo "[provision] Starting postgres for ${DEPLOY_ENV}..."
   docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" up -d postgres
 
-  echo "[provision] Waiting for postgres to become healthy (max 60s)..."
+  echo "[provision] Waiting for postgres to become healthy (max 90s)..."
   POSTGRES_HEALTHY=0
-  for i in $(seq 1 12); do
+  for i in $(seq 1 18); do
     sleep 5
-    if docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" exec -T postgres \
-        pg_isready -U "${_PG_USER}" > /dev/null 2>&1; then      POSTGRES_HEALTHY=1
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "${_PG_CONTAINER}" 2>/dev/null || echo "missing")
+    if [[ "${STATUS}" == "healthy" ]]; then
+      POSTGRES_HEALTHY=1
       echo "[provision] Postgres is ready"
       break
     fi
-    echo "[provision] Waiting for postgres... attempt ${i}/12"
+    echo "[provision] Waiting for postgres... attempt ${i}/18 (status: ${STATUS})"
   done
 
   if [[ "${POSTGRES_HEALTHY}" -ne 1 ]]; then
     echo "[provision] ERROR: postgres did not become healthy in time, aborting"
+    echo "[provision] Last health status: $(docker inspect --format='{{json .State.Health}}' "${_PG_CONTAINER}" 2>/dev/null || echo 'N/A')"
     exit 1
   fi
 else
