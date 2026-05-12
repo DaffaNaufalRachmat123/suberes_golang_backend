@@ -21,6 +21,44 @@ SERVICE="${SERVICE:-app}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-10}"
 HEALTH_WAIT="${HEALTH_WAIT:-5}"
 
+ensure_path_access() {
+  local path="$1"
+  local mode="$2"
+
+  if [[ -e "$path" ]]; then
+    chmod "$mode" "$path" 2>/dev/null || sudo chmod "$mode" "$path"
+  fi
+}
+
+ensure_env_permissions() {
+  local env_path="$1"
+  local runner_user
+  runner_user="$(id -un)"
+  local runner_group
+  runner_group="$(id -gn)"
+
+  local env_dir
+  env_dir="$(dirname "$env_path")"
+
+  # Compose must traverse parent dirs to read env_file.
+  ensure_path_access "/opt" 755
+  ensure_path_access "/opt/suberes" 755
+
+  if [[ ! -d "$env_dir" ]]; then
+    mkdir -p "$env_dir" 2>/dev/null || sudo mkdir -p "$env_dir"
+  fi
+
+  chown "$runner_user:$runner_group" "$env_dir" 2>/dev/null || sudo chown "$runner_user:$runner_group" "$env_dir"
+  ensure_path_access "$env_dir" 750
+
+  if [[ -f "$env_path" ]]; then
+    chown "$runner_user:$runner_group" "$env_path" 2>/dev/null || sudo chown "$runner_user:$runner_group" "$env_path"
+    ensure_path_access "$env_path" 640
+  else
+    echo "==> [deploy] WARNING: env file '${env_path}' not found (compose may fail if service uses env_file)"
+  fi
+}
+
 # Derive env file and default health URL from compose file name
 case "$COMPOSE_FILE" in
   *staging*)  ENV_FILE="${ENV_FILE:-$(dirname "$COMPOSE_FILE")/.env.staging}"
@@ -28,6 +66,14 @@ case "$COMPOSE_FILE" in
   *)          ENV_FILE="${ENV_FILE:-$(dirname "$COMPOSE_FILE")/.env.production}"
               HEALTH_URL="${HEALTH_URL:-http://localhost:8080/health}" ;;
 esac
+
+# Runtime env_file mounted by compose service definitions
+case "$COMPOSE_FILE" in
+  *staging*)  SERVICE_ENV_FILE="/opt/suberes/staging/.env" ;;
+  *)          SERVICE_ENV_FILE="/opt/suberes/production/.env" ;;
+esac
+
+ensure_env_permissions "$SERVICE_ENV_FILE"
 
 echo "==> [deploy] Tag: ${IMAGE_TAG}"
 
