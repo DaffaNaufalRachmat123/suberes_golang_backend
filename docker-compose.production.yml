@@ -104,7 +104,6 @@ services:
   app:
     image: ${DOCKER_IMAGE:-ghcr.io/daffanaufalrachmat123/suberes-api}:${IMAGE_TAG:-latest}
     container_name: suberes_app
-    user: "deployer"
     restart: unless-stopped
     networks:
       - internal
