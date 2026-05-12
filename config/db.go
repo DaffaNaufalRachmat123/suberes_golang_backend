@@ -34,9 +34,9 @@ func BuildDSN() string {
 		port = "5432"
 	}
 
-	sslmode := "disable"
-	if env == "PROD" || env == "STAG" {
-		sslmode = "require"
+	sslmode := os.Getenv(prefix + "SSLMODE")
+	if sslmode == "" {
+		sslmode = "disable"
 	}
 
 	return fmt.Sprintf(

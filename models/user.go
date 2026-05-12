@@ -36,8 +36,8 @@ type User struct {
 	CustomerIDRunning           *string    `gorm:"type:varchar(255)" json:"customer_id_running"`
 	ServiceIDRunning            *int       `gorm:"type:integer" json:"service_id_running"`
 	SubServiceIDRunning         *int       `gorm:"type:integer" json:"sub_service_id_running"`
-	Latitude                    string     `gorm:"type:varchar(255);default:''" json:"latitude"`
-	Longitude                   string     `gorm:"type:varchar(255);default:''" json:"longitude"`
+	Latitude                    float64    `gorm:"type:double precision;default:0" json:"latitude"`
+	Longitude                   float64    `gorm:"type:double precision;default:0" json:"longitude"`
 	FirebaseToken               *string    `gorm:"type:text;default:''" json:"firebase_token"`
 	Age                         string     `gorm:"type:varchar(255);default:'0'" json:"age"`
 	KTPNumber                   string     `gorm:"type:varchar(16);default:''" json:"ktp_number"`

@@ -66,6 +66,15 @@ func main() {
 	r.GET("/live", healthCtrl.Liveness)
 	r.GET("/ready", healthCtrl.Readiness)
 
+	// ── Root endpoint ─────────────────────────────────────────────────────────
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"service": "suberes-api",
+			"status":  "ok",
+			"version": "1.0.0",
+		})
+	})
+
 	// Serve static files for images (banners, etc)
 	r.Static("/api/images", "./images")
 
@@ -359,6 +368,13 @@ func main() {
 	ScheduleController := controllers.NewScheduleController(scheduleService)
 
 	api := r.Group("/api")
+	api.GET("", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"service": "suberes-api",
+			"status":  "ok",
+			"version": "1.0.0",
+		})
+	})
 	routes.CustomerRoutes(api, CustomerController, config.DB)
 	routes.BannerRoutes(api, BannerController, config.DB)
 	routes.LayananServiceRoutes(api, LayananServiceController, config.DB)

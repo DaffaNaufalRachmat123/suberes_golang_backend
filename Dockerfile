@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Build
 # =============================================================================
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install git (needed by some go modules) and build essentials
 RUN apk --no-cache add ca-certificates tzdata git

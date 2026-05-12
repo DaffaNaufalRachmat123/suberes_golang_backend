@@ -91,7 +91,7 @@ type nearestMitraQueryParams struct {
 // Queue handler mengirim offer hanya ke kandidat teratas; jika ditolak/timeout 3 menit,
 // order diestafetkan ke kandidat berikutnya.
 func GetNearestMitraProduction(params GetNearestMitraProductionParams) (*MitraResult, error) {
-	log.Printf("[CORE_SEARCH] params | order_type=%s gender=%s lat=%.6f lon=%.6f is_cash=%v is_with_time=%v gross=%d",
+	log.Printf("[CORE_SEARCH] params | order_type=%s gender=%s lat=%.6f lon=%.6f is_cash=%v is_with_time=%v gross=%.2f",
 		params.OrderType, params.UserGender, params.Latitude, params.Longitude,
 		params.IsCash, params.IsWithTime, params.GrossAmountCompany)
 
@@ -325,7 +325,7 @@ func buildScoringQuery(p nearestMitraQueryParams) (string, []interface{}) {
 
 	// makePointUser pakai COALESCE: utamakan kolom `geom` pre-computed (GiST index) untuk
 	// performa, tapi fallback ke ST_MakePoint jika geom masih NULL (mitra lama sebelum migration).
-	makePointUser := "COALESCE(u.geom, ST_SetSRID(ST_MakePoint(u.longitude::float, u.latitude::float), 4326)::geography)"
+	makePointUser := "COALESCE(u.geom, ST_SetSRID(ST_MakePoint(u.longitude, u.latitude), 4326)::geography)"
 	makePointCustomer := fmt.Sprintf("ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography", lonRef, latRef)
 	distExpr := fmt.Sprintf("ST_Distance(%s, %s)", makePointUser, makePointCustomer)
 
@@ -339,7 +339,7 @@ func buildScoringQuery(p nearestMitraQueryParams) (string, []interface{}) {
 	WHERE tc.mitra_id IN (
 		SELECT u2.id FROM users u2
 		WHERE u2.user_type = 'mitra'
-		  AND ST_DWithin(COALESCE(u2.geom, ST_SetSRID(ST_MakePoint(u2.longitude::float, u2.latitude::float), 4326)::geography), %s, %s)
+		  AND ST_DWithin(COALESCE(u2.geom, ST_SetSRID(ST_MakePoint(u2.longitude, u2.latitude), 4326)::geography), %s, %s)
 	)
 	GROUP BY tc.mitra_id
 )`, makePointCustomer, maxMetersRef))

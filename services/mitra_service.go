@@ -1,7 +1,6 @@
 package services
 
 import (
-	"suberes_golang/i18n"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -14,6 +13,7 @@ import (
 	"suberes_golang/constants"
 	"suberes_golang/dtos"
 	"suberes_golang/helpers"
+	"suberes_golang/i18n"
 	"suberes_golang/models"
 	"suberes_golang/queue"
 	"suberes_golang/realtime"
@@ -1068,8 +1068,8 @@ func (s *MitraService) UpdateMitraCoordinate(mitraID string, latitude, longitude
 		"id":        mitraID,
 		"user_type": "mitra",
 	}, map[string]interface{}{
-		"latitude":  fmt.Sprintf("%g", latitude),
-		"longitude": fmt.Sprintf("%g", longitude),
+		"latitude":  latitude,
+		"longitude": longitude,
 	})
 	if err != nil {
 		tx.Rollback()

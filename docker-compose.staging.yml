@@ -14,24 +14,72 @@ networks:
     driver: bridge
 
 volumes:
+  postgres_data_stag:
   redis_data_stag:
+  certbot_www_stag:
+  certbot_conf_stag:
 
 services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: suberes_postgres_stag
+    restart: unless-stopped
+
+    networks:
+      - internal
+
+    environment:
+      POSTGRES_DB: ${STAG_DATABASE}
+      POSTGRES_USER: ${STAG_USERNAME}
+      POSTGRES_PASSWORD: ${STAG_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+
+    volumes:
+      - postgres_data_stag:/var/lib/postgresql/data
+      - ./deploy/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STAG_USERNAME} -d ${STAG_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ── Application ─────────────────────────────────────────────────────────────
   app:
-    image: ${DOCKER_IMAGE:-suberes_app}:${IMAGE_TAG:-staging}
+    image: ghcr.io/daffanaufalrachmat123/suberes-api:${IMAGE_TAG:-staging}
     container_name: suberes_app_stag
     restart: unless-stopped
     networks:
       - internal
     env_file:
-      - .env.staging
+      - /opt/suberes/staging/.env
     environment:
-      APP_ENV:  stag
-      APP_PORT: "8081"
+      APP_ENV:      stag
+      APP_PORT:     "8081"
+      STAG_HOST:    postgres
+      STAG_PORT:    "5432"
+      STAG_SSLMODE: disable
+      REDIS_HOST:   redis
+      REDIS_PORT:   "6379"
     expose:
       - "8081"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -60,12 +108,15 @@ services:
     restart: unless-stopped
     networks:
       - internal
-    command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD:-}
-      --maxmemory 128mb
-      --maxmemory-policy allkeys-lru
-      --appendonly yes
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$REDIS_PASSWORD" ]; then
+          exec redis-server --requirepass "$REDIS_PASSWORD" --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes;
+        else
+          exec redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes;
+        fi
     volumes:
       - redis_data_stag:/data
     healthcheck:
@@ -91,7 +142,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d/suberes.staging.conf:/etc/nginx/conf.d/suberes.conf:ro
+      - /opt/suberes/nginx/conf.d/suberes.staging.conf:/etc/nginx/conf.d/suberes.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
     depends_on:
