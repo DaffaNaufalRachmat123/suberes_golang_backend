@@ -38,7 +38,8 @@ services:
     restart: unless-stopped
     networks:
       - internal
-    # NO ports: block — database is never reachable from outside Docker
+    ports:
+      - "5411:5432"  # expose 5411 on host, map to 5432 in container
     environment:
       POSTGRES_DB:       ${PROD_DATABASE}
       POSTGRES_USER:     ${PROD_USERNAME}
@@ -113,7 +114,7 @@ services:
       REDIS_HOST:   redis
       REDIS_PORT:   "6379"
       PROD_HOST:    postgres
-      PROD_PORT:    "5432"
+      PROD_PORT:    "5411"
       PROD_SSLMODE: disable
     expose:
       - "8080"   # visible only on `internal` network

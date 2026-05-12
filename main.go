@@ -53,12 +53,12 @@ func main() {
 	r.SetTrustedProxies(nil)
 
 	// ── Core middleware stack (order matters) ─────────────────────────────────
-	r.Use(middleware.RecoveryMiddleware())           // panic → 500 + sentry report
-	r.Use(middleware.RequestIDMiddleware())          // inject X-Request-ID
-	r.Use(middleware.LoggerMiddleware())             // structured HTTP access log
+	r.Use(middleware.RecoveryMiddleware())                // panic → 500 + sentry report
+	r.Use(middleware.RequestIDMiddleware())               // inject X-Request-ID
+	r.Use(middleware.LoggerMiddleware())                  // structured HTTP access log
 	r.Use(middleware.TimeoutMiddleware(30 * time.Second)) // context deadline
-	r.Use(middleware.SecurityHeadersMiddleware())   // OWASP security headers
-	r.Use(middleware.RequestSizeLimiter(2 << 20))   // 2 MB request size cap
+	r.Use(middleware.SecurityHeadersMiddleware())         // OWASP security headers
+	r.Use(middleware.RequestSizeLimiter(2 << 20))         // 2 MB request size cap
 
 	// ── Probe endpoints (no auth, no rate-limit) ──────────────────────────────
 	healthCtrl := &controllers.HealthController{}
