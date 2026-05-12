@@ -134,49 +134,46 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Prepare isolated env directories
+# Prepare isolated env directories — only for the active DEPLOY_ENV
 # -----------------------------------------------------------------------------
 
 STAGING_DIR="/opt/suberes/staging"
 PRODUCTION_DIR="/opt/suberes/production"
 
-# Ensure staging dir exists with correct permissions (idempotent)
-mkdir -p "$STAGING_DIR"
-chown deployer:deployer "$STAGING_DIR" || true
-chmod 755 "$STAGING_DIR"
+if [[ "${DEPLOY_ENV}" == "staging" ]]; then
+  # ── Staging dir & env ──────────────────────────────────────────────────────
+  mkdir -p "$STAGING_DIR"
+  chown deployer:deployer "$STAGING_DIR" || true
+  chmod 755 "$STAGING_DIR"
 
-# Ensure production dir exists with correct permissions (idempotent)
-# Always run — not just on first create — so existing root:root 700 dirs are fixed.
-sudo mkdir -p "$PRODUCTION_DIR"
-sudo chown deployer:deployer "$PRODUCTION_DIR"
-sudo chmod 750 "$PRODUCTION_DIR"
+  if [[ -f "${APP_ROOT}/.env.staging" ]]; then
+    cp "${APP_ROOT}/.env.staging" "${STAGING_DIR}/.env"
+    chown deployer:deployer "${STAGING_DIR}/.env" || true
+    chmod 640 "${STAGING_DIR}/.env"
+    echo "[provision] Synced staging env → ${STAGING_DIR}/.env"
+  else
+    echo "[provision] Skip staging env sync: ${APP_ROOT}/.env.staging not found"
+  fi
 
-# -----------------------------------------------------------------------------
-# Sync staging env
-# -----------------------------------------------------------------------------
+elif [[ "${DEPLOY_ENV}" == "production" ]]; then
+  # ── Production dir & env ───────────────────────────────────────────────────
+  # Use sudo — script may run as deployer but production dir could be owned by root.
+  sudo mkdir -p "$PRODUCTION_DIR"
+  sudo chown deployer:deployer "$PRODUCTION_DIR"
+  sudo chmod 750 "$PRODUCTION_DIR"
 
-if [[ -f "${APP_ROOT}/.env.staging" ]]; then
-  cp "${APP_ROOT}/.env.staging" "${STAGING_DIR}/.env"
+  if [[ -f "${APP_ROOT}/.env.production" ]]; then
+    sudo cp "${APP_ROOT}/.env.production" "${PRODUCTION_DIR}/.env"
+    sudo chown deployer:deployer "${PRODUCTION_DIR}/.env"
+    sudo chmod 640 "${PRODUCTION_DIR}/.env"
+    echo "[provision] Synced production env → ${PRODUCTION_DIR}/.env"
+  else
+    echo "[provision] Skip production env sync: ${APP_ROOT}/.env.production not found"
+  fi
 
-  chown deployer:deployer "${STAGING_DIR}/.env" || true
-  chmod 640 "${STAGING_DIR}/.env"
-
-  echo "[provision] Synced staging env"
 else
-  echo "[provision] Skip staging env sync: .env.staging not found"
-fi
-
-# -----------------------------------------------------------------------------
-# Sync production env
-# -----------------------------------------------------------------------------
-if [[ -f "${APP_ROOT}/.env.production" ]]; then
-  sudo cp "${APP_ROOT}/.env.production" "${PRODUCTION_DIR}/.env"
-  sudo chown deployer:deployer "${PRODUCTION_DIR}/.env"
-  sudo chmod 640 "${PRODUCTION_DIR}/.env"
-
-  echo "[provision] Synced production env"
-else
-  echo "[provision] Skip production env sync: .env.production not found"
+  echo "[provision] ERROR: DEPLOY_ENV must be 'staging' or 'production' (got: '${DEPLOY_ENV}')"
+  exit 1
 fi
 
 # -----------------------------------------------------------------------------
