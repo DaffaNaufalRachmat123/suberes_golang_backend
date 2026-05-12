@@ -176,9 +176,11 @@ fi
 # -----------------------------------------------------------------------------
 
 if [[ -f "${APP_ROOT}/.env.production" ]]; then
-  cp "${APP_ROOT}/.env.production" "${PRODUCTION_DIR}/.env"
-  chown deployer:deployer "${PRODUCTION_DIR}/.env" || true
-  chmod 640 "${PRODUCTION_DIR}/.env"
+  sudo cp "${APP_ROOT}/.env.production" "${PRODUCTION_DIR}/.env"
+
+  sudo chown root:root "${PRODUCTION_DIR}/.env"
+  sudo chmod 600 "${PRODUCTION_DIR}/.env"
+
   echo "[provision] Synced production env"
 else
   echo "[provision] Skip production env sync: .env.production not found"
