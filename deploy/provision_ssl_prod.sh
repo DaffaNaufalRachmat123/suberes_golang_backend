@@ -29,6 +29,7 @@ certbot certonly \
   --agree-tos \
   --no-eff-email \
   --keep-until-expiring \
+  --expand \
   --non-interactive
 
 echo "[ssl-prod] Certificate issued successfully."
