@@ -18,6 +18,14 @@ SSL_EMAIL="support@suberes.com"
 DOMAIN="suberes.com"
 ALT_DOMAIN="www.suberes.com"
 
+# ── Remove dummy self-signed cert so certbot can create a fresh one ──────────
+if [[ -d "/etc/letsencrypt/live/${DOMAIN}" ]]; then
+  echo "[ssl-prod] Removing dummy cert for ${DOMAIN}..."
+  rm -rf "/etc/letsencrypt/live/${DOMAIN}"
+  rm -rf "/etc/letsencrypt/archive/${DOMAIN}"
+  rm -f  "/etc/letsencrypt/renewal/${DOMAIN}.conf"
+fi
+
 echo "[ssl-prod] Requesting Let's Encrypt certificate for ${DOMAIN}..."
 
 certbot certonly \
