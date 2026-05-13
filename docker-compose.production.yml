@@ -39,7 +39,7 @@ services:
     networks:
       - internal
     ports:
-      - "5411:5432"  # expose 5411 on host, map to 5432 in container
+      - "5432:5432"
     environment:
       POSTGRES_DB:       ${PROD_DATABASE}
       POSTGRES_USER:     ${PROD_USERNAME}
