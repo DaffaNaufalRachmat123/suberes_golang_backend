@@ -139,7 +139,6 @@ services:
       - internal
     ports:
       - "8900:80"
-      - "8943:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /opt/suberes/nginx/conf.d/suberes.staging.conf:/etc/nginx/conf.d/suberes.conf:ro
