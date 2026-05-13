@@ -71,6 +71,8 @@ services:
     restart: unless-stopped
     networks:
       - internal
+    env_file:
+      - /opt/suberes/production/.env
     command:
       - sh
       - -c
@@ -172,6 +174,9 @@ services:
   certbot:
     image: certbot/certbot:latest
     container_name: suberes_certbot
+    restart: unless-stopped
+    networks:
+      - public
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - /var/www/certbot:/var/www/certbot
