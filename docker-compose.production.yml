@@ -72,7 +72,7 @@ services:
     networks:
       - internal
     env_file:
-      - /opt/suberes/.env.production
+      - /opt/suberes/production/.env
     command:
       - sh
       - -c
