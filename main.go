@@ -81,7 +81,7 @@ func main() {
 	r.GET("/socket.io/*any", gin.WrapH(realtime.Server))
 	r.POST("/socket.io/*any", gin.WrapH(realtime.Server))
 
-	allowedOrigins := os.Getenv("ALLOWED_ORIGINS") // comma-separated: "https://dashboard.suberes.com,https://app.suberes.com"
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	var origins []string
 	if allowedOrigins != "" {
 		for _, o := range strings.Split(allowedOrigins, ",") {
